@@ -12,3 +12,12 @@ if __name__ == "__main__":
     cases = [-1.0, 0.0, 1.0]
     for c in cases:
         print(f"relu({c}) = {relu(c)}")
+
+    @fn.func
+    def should_fail(a: fn.scalar) -> fn.scalar:
+        if a.to_bool():
+            return 0.0
+        else:
+            return 1.0
+
+    print(f"should_fail({1.0}) = {should_fail(1.0)}")

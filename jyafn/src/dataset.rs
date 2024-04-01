@@ -1,6 +1,7 @@
 use super::layout::{Decode, Decoder, Encode, Layout, Visitor, ZeroDecoder};
-use super::{Error, Function};
+use super::{Error, Function, FunctionData};
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct Dataset {
@@ -11,6 +12,10 @@ pub struct Dataset {
 }
 
 impl Dataset {
+    pub fn len(&self) -> usize {
+        self.n_items
+    }
+
     pub fn try_build<I, E, Err, C>(layout: Layout, mut conv_err: C, it: I) -> Result<Dataset, Err>
     where
         I: IntoIterator<Item = Result<E, Err>>,
@@ -70,6 +75,55 @@ impl Dataset {
         Ok(Dataset {
             layout: func.output_layout().clone(),
             byte_size: func.output_size(),
+            n_items: self.n_items,
+            raw: output,
+        })
+    }
+
+    pub fn par_map(&self, func: &Function) -> Result<Dataset, Error> {
+        if &self.layout != func.input_layout() {
+            return Err(Error::WrongLayout {
+                expected: self.layout.clone(),
+                got: func.input_layout().clone(),
+            });
+        }
+
+        let data: Arc<FunctionData> = func.into();
+        let output_size = func.output_size();
+        let mut output = vec![0; self.len() * output_size];
+        let stride = (self.len() as f64 / num_cpus::get() as f64).ceil() as usize;
+        let error = Mutex::new(None);
+
+        rayon::scope(|s| {
+            self.raw
+                .chunks(stride * self.byte_size)
+                .zip(output.chunks_mut(stride * output_size))
+                .for_each(|(input_slice, output_slice)| {
+                    s.spawn(|_| {
+                        let func: Function = data.clone().into();
+                        let input_outputs = input_slice
+                            .chunks(self.byte_size)
+                            .zip(output_slice.chunks_mut(output_size));
+
+                        for (input, output) in input_outputs {
+                            let status = func.call_raw(input, output);
+                            if status != 0 {
+                                *error.lock().expect("poisoned") =
+                                    Some(Error::StatusRaised(status));
+                                return;
+                            }
+                        }
+                    })
+                })
+        });
+
+        if let Some(e) = error.into_inner().expect("poisoned") {
+            return Err(e);
+        }
+
+        Ok(Dataset {
+            layout: func.output_layout().clone(),
+            byte_size: output_size,
             n_items: self.n_items,
             raw: output,
         })

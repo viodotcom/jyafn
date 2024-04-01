@@ -6,8 +6,9 @@ mod pfunc;
 
 use pyo3::exceptions;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyString, PyTuple};
+use pyo3::types::{PyBytes, PyDict, PyList, PyNone, PyString, PyTuple};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 #[pymodule]
@@ -15,14 +16,16 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graph>()?;
     m.add_class::<Ref>()?;
     m.add_class::<Type>()?;
+    m.add_class::<Layout>()?;
     m.add_class::<Function>()?;
     m.add_function(wrap_pyfunction!(current_graph, m)?)?;
     m.add_function(wrap_pyfunction!(r#const, m)?)?;
     m.add_function(wrap_pyfunction!(input, m)?)?;
     m.add_function(wrap_pyfunction!(list_input, m)?)?;
     m.add_function(wrap_pyfunction!(enum_input, m)?)?;
-    m.add_function(wrap_pyfunction!(ret, m)?)?;
+    m.add_function(wrap_pyfunction!(scalar_ret, m)?)?;
     m.add_function(wrap_pyfunction!(list_ret, m)?)?;
+    m.add_function(wrap_pyfunction!(ret, m)?)?;
 
     pfunc::init(m)?;
     dataset::init(m)?;
@@ -76,9 +79,7 @@ impl Graph {
         let leaked = Box::leak(data.into_boxed_slice());
         // Safety: leaking the box from rust and giving it to Python. Therefore, no
         // double free.
-        unsafe {
-            PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())
-        }
+        unsafe { PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len()) }
     }
 
     #[staticmethod]
@@ -104,7 +105,12 @@ impl Graph {
     }
 
     fn render_assembly(&self) -> PyResult<String> {
-        Ok(self.0.lock().expect("poisoned").render_assembly().map_err(ToPyErr)?)
+        Ok(self
+            .0
+            .lock()
+            .expect("poisoned")
+            .render_assembly()
+            .map_err(ToPyErr)?)
     }
 
     fn compile(&self) -> PyResult<Function> {
@@ -174,12 +180,18 @@ impl Ref {
 impl Ref {
     fn __repr__(&self) -> String {
         match self.0 {
-            rust::Ref::Input(input_id) => format!("Ref({:?}, {input_id})", "input"),
+            rust::Ref::Input(input_id) => format!("Ref(input={input_id})"),
             rust::Ref::Const(ty, rendered) => {
-                format!("Ref({:?}, ty={ty:?}, rendered={rendered})", "const",)
+                format!("Ref(ty={ty:?}, rendered={rendered})",)
             }
-            rust::Ref::Node(node_id) => format!("Ref({:?}, {node_id})", "node"),
+            rust::Ref::Node(node_id) => format!("Ref(node={node_id})"),
         }
+    }
+
+    fn __bool__(&self) -> PyResult<bool> {
+        Err(exceptions::PyTypeError::new_err(
+            "Cannot assert the truthiness of a Ref",
+        ))
     }
 
     fn __add__(&self, py: Python, other: PyObject) -> PyResult<Ref> {
@@ -306,6 +318,73 @@ impl Ref {
     fn to_float(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::ToFloat, vec![self.0])
     }
+
+    // Reimplementing pfuncs as methods allows us to take advantage of numpy's ufuncs.
+
+    fn sqrt(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("sqrt".to_string()), vec![self.0])
+    }
+
+    fn exp(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("exp".to_string()), vec![self.0])
+    }
+
+    fn ln(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("ln".to_string()), vec![self.0])
+    }
+
+    /// To make numpy happy.
+    fn log(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("ln".to_string()), vec![self.0])
+    }
+
+    fn sin(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("sin".to_string()), vec![self.0])
+    }
+
+    fn cos(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("cos".to_string()), vec![self.0])
+    }
+
+    fn tan(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("tan".to_string()), vec![self.0])
+    }
+
+    fn asin(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("asin".to_string()), vec![self.0])
+    }
+
+    fn acos(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("acos".to_string()), vec![self.0])
+    }
+
+    fn atan(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("atan".to_string()), vec![self.0])
+    }
+
+    fn sinh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("sinh".to_string()), vec![self.0])
+    }
+
+    fn cosh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("cosh".to_string()), vec![self.0])
+    }
+
+    fn tanh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("tanh".to_string()), vec![self.0])
+    }
+
+    fn asinh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("asinh".to_string()), vec![self.0])
+    }
+
+    fn acosh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("acosh".to_string()), vec![self.0])
+    }
+
+    fn atanh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("atanh".to_string()), vec![self.0])
+    }
 }
 
 #[pyfunction]
@@ -322,9 +401,74 @@ fn r#const(py: Python, val: PyObject) -> PyResult<Ref> {
     }
 }
 
+fn pythonize_ref_value(py: Python, val: rust::layout::RefValue) -> PyResult<PyObject> {
+    Ok(match val {
+        rust::layout::RefValue::Unit => PyNone::get_bound(py).to_owned().unbind().into(),
+        rust::layout::RefValue::Scalar(s) => Ref(s).into_py(py),
+        rust::layout::RefValue::Struct(fields) => {
+            let dict = PyDict::new_bound(py);
+            for (name, val) in fields {
+                dict.set_item(name, pythonize_ref_value(py, val)?)?;
+            }
+            dict.unbind().into()
+        }
+        rust::layout::RefValue::Enum(e) => Ref(e).into_py(py),
+        rust::layout::RefValue::List(l) => PyTuple::new_bound(
+            py,
+            l.into_iter()
+                .map(|el| pythonize_ref_value(py, el))
+                .collect::<PyResult<Vec<_>>>()?,
+        )
+        .unbind()
+        .into(),
+    })
+}
+
+fn depythonize_ref_value(py: Python, obj: &PyAny) -> PyResult<rust::layout::RefValue> {
+    if obj.is_none() {
+        return Ok(rust::layout::RefValue::Unit);
+    }
+
+    if let Ok(scalar) = obj.extract::<Ref>() {
+        return Ok(rust::layout::RefValue::Scalar(scalar.0));
+    }
+
+    if let Ok(dict) = obj.downcast::<PyDict>() {
+        let vals = dict
+            .iter()
+            .map(|(key, val)| Ok((key.extract::<String>()?, depythonize_ref_value(py, val)?)))
+            .collect::<PyResult<HashMap<String, rust::layout::RefValue>>>()?;
+        return Ok(rust::layout::RefValue::Struct(vals));
+    }
+
+    if let Ok(list) = obj.downcast::<PyList>() {
+        let vals = list
+            .iter()
+            .map(|val| depythonize_ref_value(py, val))
+            .collect::<PyResult<Vec<rust::layout::RefValue>>>()?;
+        return Ok(rust::layout::RefValue::List(vals));
+    }
+
+    if let Ok(tuple) = obj.downcast::<PyTuple>() {
+        let vals = tuple
+            .iter()
+            .map(|val| depythonize_ref_value(py, val))
+            .collect::<PyResult<Vec<rust::layout::RefValue>>>()?;
+        return Ok(rust::layout::RefValue::List(vals));
+    }
+
+    Err(exceptions::PyTypeError::new_err(format!(
+        "Cannot make {obj} into a RefValue"
+    )))
+}
+
 #[pyfunction]
-fn input(name: String) -> PyResult<Ref> {
-    with_current(|g| Ref(g.input(name)))
+fn input(py: Python, name: String, layout: Option<Layout>) -> PyResult<PyObject> {
+    if let Some(layout) = layout {
+        try_with_current(|g| pythonize_ref_value(py, g.input(name, layout.0)))
+    } else {
+        with_current(|g| Ref(g.scalar_input(name)).into_py(py))
+    }
 }
 
 #[pyfunction]
@@ -343,14 +487,20 @@ fn enum_input(name: String, options: Vec<String>) -> PyResult<Ref> {
 }
 
 #[pyfunction]
-fn ret(py: Python, r#ref: PyObject) -> PyResult<()> {
+fn scalar_ret(py: Python, r#ref: PyObject) -> PyResult<()> {
     let r#ref = Ref::make(py, r#ref)?;
-    with_current(|g| g.output(r#ref.0))
+    with_current(|g| g.scalar_output(r#ref.0))
 }
 
 #[pyfunction]
-fn list_ret(r#refs: Vec<Ref>) -> PyResult<()> {
-    with_current(|g| g.slice_output(&r#refs.into_iter().map(|r| r.0).collect::<Vec<_>>()))
+fn list_ret(refs: Vec<Ref>) -> PyResult<()> {
+    with_current(|g| g.slice_output(&refs.into_iter().map(|r| r.0).collect::<Vec<_>>()))
+}
+
+#[pyfunction]
+fn ret(py: Python, val: PyObject, layout: Layout) -> PyResult<()> {
+    let val = depythonize_ref_value(py, val.bind(py).as_gil_ref())?;
+    try_with_current(|g| Ok(g.output(val, layout.0).map_err(ToPyErr)?))
 }
 
 #[pyclass]
@@ -393,9 +543,7 @@ impl Function {
         let leaked = Box::leak(data.into_boxed_slice());
         // Safety: leaking the box from rust and giving it to Python. Therefore, no
         // double free.
-        unsafe {
-            PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())
-        }
+        unsafe { PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len()) }
     }
 
     pub fn to_json(&self) -> String {
@@ -456,10 +604,18 @@ impl Function {
 }
 
 #[pyclass]
+#[derive(Clone)]
 struct Layout(rust::layout::Layout);
 
 #[pymethods]
 impl Layout {
+    fn __repr__(&self) -> String {
+        format!(
+            "Layout({})",
+            serde_json::to_string(&self.0).expect("can always serialize")
+        )
+    }
+
     fn is_unit(&self) -> bool {
         self.0 == rust::layout::Layout::Unit
     }
@@ -484,5 +640,40 @@ impl Layout {
         };
 
         Some(s.clone())
+    }
+
+    #[staticmethod]
+    fn unit() -> Layout {
+        Layout(rust::layout::Layout::Unit)
+    }
+
+    #[staticmethod]
+    fn scalar() -> Layout {
+        Layout(rust::layout::Layout::Scalar)
+    }
+
+    #[staticmethod]
+    fn r#enum(options: Vec<String>) -> Layout {
+        Layout(rust::layout::Layout::Enum(options))
+    }
+
+    #[staticmethod]
+    fn list_of(element: &Layout, size: usize) -> Layout {
+        Layout(rust::layout::Layout::List(
+            Box::new(element.0.clone()),
+            size,
+        ))
+    }
+
+    #[staticmethod]
+    fn struct_of(fields: &Bound<'_, PyDict>) -> PyResult<Layout> {
+        let fields = fields
+            .iter()
+            .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<Layout>()?.0)))
+            .collect::<PyResult<Vec<(String, rust::layout::Layout)>>>()?;
+
+        Ok(Layout(rust::layout::Layout::Struct(rust::layout::Struct(
+            fields,
+        ))))
     }
 }

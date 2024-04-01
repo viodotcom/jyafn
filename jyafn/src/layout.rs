@@ -2,6 +2,8 @@ use byte_slice_cast::*;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use super::Ref;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Struct(pub Vec<(String, Layout)>);
 
@@ -19,14 +21,14 @@ impl Struct {
 pub enum Layout {
     Unit,
     Scalar,
-    Struct(Box<Struct>),
+    Struct(Struct),
     Enum(Vec<String>),
     List(Box<Layout>, usize),
 }
 
 impl From<Struct> for Layout {
     fn from(fields: Struct) -> Layout {
-        Layout::Struct(Box::new(fields))
+        Layout::Struct(fields)
     }
 }
 
@@ -39,6 +41,61 @@ impl Layout {
             Layout::Enum(_) => 1,
             Layout::List(element, size) => size * element.size(),
         }
+    }
+}
+
+pub enum RefValue {
+    Unit,
+    Scalar(Ref),
+    Struct(HashMap<String, RefValue>),
+    Enum(Ref),
+    List(Vec<RefValue>),
+}
+
+impl RefValue {
+    pub fn putatory_layout(&self) -> Layout {
+        match self {
+            Self::Unit => Layout::Unit,
+            Self::Scalar(_) => Layout::Scalar,
+            Self::Struct(fields) => Struct(
+                fields
+                    .iter()
+                    .map(|(name, val)| (name.clone(), val.putatory_layout()))
+                    .collect::<Vec<_>>(),
+            )
+            .into(),
+            Self::Enum(_) => todo!(),
+            Self::List(list) if list.len() > 0 => {
+                Layout::List(Box::new(list[0].putatory_layout()), list.len())
+            }
+            Self::List(_) => Layout::List(Box::new(Layout::Scalar), 0),
+        }
+    }
+
+    pub fn output_vec(&self, layout: &Layout) -> Option<Vec<Ref>> {
+        let mut buffer = vec![];
+        self.build_output_vec(layout, &mut buffer)?;
+        Some(buffer)
+    }
+
+    fn build_output_vec(&self, layout: &Layout, buf: &mut Vec<Ref>) -> Option<()> {
+        match (self, layout) {
+            (Self::Unit, Layout::Unit) => {}
+            (Self::Scalar(s), Layout::Scalar) => buf.push(*s),
+            (Self::Struct(vals), Layout::Struct(fields)) => {
+                for (name, field) in &fields.0 {
+                    vals.get(name)?.build_output_vec(field, buf);
+                }
+            }
+            (Self::List(list), Layout::List(element, size)) if list.len() == *size => {
+                for item in list {
+                    item.build_output_vec(element, buf)?;
+                }
+            }
+            _ => return None,
+        }
+
+        Some(())
     }
 }
 

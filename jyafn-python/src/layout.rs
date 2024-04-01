@@ -21,6 +21,21 @@ impl<'py> Encode for Obj<'py> {
                     Obj(item).visit(field, visitor)?;
                 }
             }
+            Layout::Enum(_) => todo!(),
+            Layout::List(element, size) => {
+                let mut n_items = 0;
+                for item in self.0.iter().map_err(|_| ())? {
+                    let item = item.map_err(|_| ())?;
+
+                    Obj(item).visit(element, visitor)?;
+
+                    n_items += 1;
+                }
+
+                if n_items != *size {
+                    return Err(());
+                }
+            }
             _ => return Err(()),
         }
 

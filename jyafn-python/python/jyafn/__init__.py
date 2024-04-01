@@ -5,54 +5,126 @@ import inspect
 import types
 import typing
 
+from abc import ABC, abstractmethod
 from typing import Any
 
 
-class Annotations:
-    class scalar:
+class BaseAnnotation(ABC):
+    @classmethod
+    @abstractmethod
+    def __class_getitem__(cls, args) -> types.GenericAlias:
         pass
 
-    class list:
-        def __class_getitem__(cls, size: int) -> None:
-            return types.GenericAlias(cls, (size,))
+    @classmethod
+    @abstractmethod
+    def make_input(cls, name: str, args: tuple[Any, ...]):
+        pass
 
-    class enum:
-        def __class_getitem__(cls, options: tuple[str]) -> None:
-            return types.GenericAlias(cls, options)
+    @classmethod
+    @abstractmethod
+    def make_ret(cls, ret: Any, args: tuple[Any, ...]):
+        pass
+
+
+class scalar(BaseAnnotation):
+    @classmethod
+    def __class_getitem__(cls, ty: float | bool = float) -> None:
+        return types.GenericAlias(cls, (ty,))
+
+    @classmethod
+    def make_input(cls, name: str, args: tuple[Any, ...]):
+        return fn.input(name)
+
+    @classmethod
+    def make_ret(cls, ret: Any, args: tuple[Any, ...]):
+        return fn.scalar_ret(ret)
+
+
+class list(BaseAnnotation):
+    @classmethod
+    def __class_getitem__(cls, size: int) -> None:
+        return types.GenericAlias(cls, (size,))
+
+    @classmethod
+    def make_input(cls, name: str, args: tuple[Any, ...]):
+        (size,) = args
+        return fn.list_input(name, size)
+
+    @classmethod
+    def make_ret(cls, ret: Any, args: tuple[Any, ...]):
+        match args:
+            case ():
+                pass
+            case (size,):
+                if len(ret) != size:
+                    raise ValueError(
+                        f"Incompatible size returned: got {len(ret)}, expected {size}"
+                    )
+            case _:
+                raise TypeError(f"Invalid args for list annotation: {args}")
+
+        return fn.list_ret(ret)
+
+
+class enum(BaseAnnotation):
+    @classmethod
+    def __class_getitem__(cls, options: tuple[str]) -> None:
+        return types.GenericAlias(cls, options)
+
+    @classmethod
+    def make_input(cls, name: str, args: tuple[Any, ...]):
+        return fn.enum_input(name, args)
+
+    @classmethod
+    def make_ret(cls, ret: Any, args: tuple[Any, ...]):
+        raise NotImplementedError()
+
+
+class tensor(BaseAnnotation):
+    @classmethod
+    def __class_getitem__(cls, shape: tuple[int]) -> None:
+        return types.GenericAlias(cls, shape)
+
+    @classmethod
+    def make_input(cls, name: str, args: tuple[Any, ...]):
+        import numpy as np
+
+        layout = fn.Layout.scalar()
+        for dim_size in reversed(args):
+            layout = fn.Layout.list_of(layout, dim_size)
+
+        return np.array(fn.input(name, layout))
+
+    @classmethod
+    def make_ret(cls, ret: Any, args: tuple[Any, ...]):
+        import numpy as np
+
+        layout = fn.Layout.scalar()
+        for dim_size in reversed(args):
+            layout = fn.Layout.list_of(layout, dim_size)
+
+        if isinstance(ret, np.ndarray):
+            return fn.ret(ret.tolist(), layout)
+        else:
+            return fn.ret(ret, layout)
 
 
 def input_from_annotation(name: str, a: Any) -> fn.Ref:
     match a:
-        case Annotations.scalar:
-            return fn.input(name)
+        case type():
+            return a.make_input(name, ())
         case types.GenericAlias():
-            # Urgh... no __match_args__ in GenericAlias!
-            match (typing.get_origin(a), typing.get_args(a)):
-                case (list, (size,)):
-                    return fn.list_input(name, size)
-                case (enum, options):
-                    return fn.enum_input(name, options)
+            return typing.get_origin(a).make_input(name, typing.get_args(a))
 
     raise Exception(f"Invalid jyafn annotation for {name}: {a}")
 
 
-def ret_from_annotation(ref: Any, a: Any) -> None:
+def ret_from_annotation(ret: Any, a: Any) -> None:
     match a:
-        case Annotations.scalar:
-            return fn.ret(ref)
-        case Annotations.list:
-            return fn.list_ret(size)
+        case type():
+            return a.make_ret(ret, ())
         case types.GenericAlias():
-            # Urgh... no __match_args__ in GenericAlias!
-            match (typing.get_origin(a), typing.get_args(a)):
-                case (list, (size,)):
-                    if len(ref) != size:
-                        raise ValueError(
-                            f"Incompatible size returned: got {len(ref)}, expected {size}"
-                        )
-                    return fn.list_ret(list)
-                case (enum, options):
-                    raise NotImplementedError
+            return typing.get_origin(a).make_ret(ret, typing.get_args(a))
 
     raise Exception(f"Invalid return annotation for jyafn: {a}")
 
@@ -67,9 +139,3 @@ def func(f) -> fn.Function:
         ret_from_annotation(f(**inputs), signature.return_annotation)
 
     return g.compile()
-
-
-# To not pollute the namespace, we leave these for last:
-scalar = Annotations.scalar
-list = Annotations.list
-enum = Annotations.enum

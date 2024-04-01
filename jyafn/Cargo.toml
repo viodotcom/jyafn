@@ -16,8 +16,11 @@ byte-slice-cast = "1.2.2"
 lazy_static = "1.4.0"
 maplit = "1.0.2"
 memmap = "0.7.0"
+num_cpus = "1.16.0"
 object = "0.34.0"
 qbe = { path = "../vendored/qbe-rs" }
+rayon = "1.10.0"
+scoped_threadpool = "0.1.9"
 serde = { version = "1.0.197", features = ["rc"] }
 serde_derive = "1.0.197"
 serde_json = "1.0.115"

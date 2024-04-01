@@ -23,8 +23,14 @@ impl Dataset {
         )?))
     }
 
-    fn map(&self, func: &Function) -> PyResult<Dataset> {
-        Ok(Dataset(self.0.map(&func.0).map_err(ToPyErr)?))
+    fn map(&self, py: Python, func: &Function) -> PyResult<Dataset> {
+        let data = func.0.as_data();
+        py.allow_threads(|| Ok(Dataset(self.0.map(&data.into()).map_err(ToPyErr)?)))
+    }
+
+    fn par_map(&self, py: Python, func: &Function) -> PyResult<Dataset> {
+        let data = func.0.as_data();
+        py.allow_threads(|| Ok(Dataset(self.0.par_map(&data.into()).map_err(ToPyErr)?)))
     }
 
     fn decode(&self, py: Python) -> Py<PyList> {

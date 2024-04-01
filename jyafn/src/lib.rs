@@ -8,6 +8,8 @@ pub use dataset::Dataset;
 pub use op::Op;
 pub use r#const::Const;
 
+mod optimize;
+
 use serde_derive::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
@@ -203,7 +205,25 @@ impl Graph {
         Ref::Input(current_id)
     }
 
-    pub fn input(&mut self, name: String) -> Ref {
+    fn alloc_input(&mut self, layout: &layout::Layout) -> layout::RefValue {
+        match layout {
+            layout::Layout::Unit => layout::RefValue::Unit,
+            layout::Layout::Scalar => layout::RefValue::Scalar(self.push_input(Type::Float)),
+            layout::Layout::Struct(fields) => layout::RefValue::Struct(
+                fields
+                    .0
+                    .iter()
+                    .map(|(name, field)| (name.clone(), self.alloc_input(field)))
+                    .collect(),
+            ),
+            layout::Layout::Enum(_) => todo!(),
+            layout::Layout::List(element, size) => {
+                layout::RefValue::List((0..*size).map(|_| self.alloc_input(element)).collect())
+            }
+        }
+    }
+
+    pub fn scalar_input(&mut self, name: String) -> Ref {
         self.input_layout.insert(name, layout::Layout::Scalar);
         self.push_input(Type::Float)
     }
@@ -222,7 +242,13 @@ impl Graph {
         self.push_input(Type::Float)
     }
 
-    pub fn output(&mut self, scalar: Ref) {
+    pub fn input(&mut self, name: String, layout: layout::Layout) -> layout::RefValue {
+        let val = self.alloc_input(&layout);
+        self.input_layout.insert(name, layout);
+        val
+    }
+
+    pub fn scalar_output(&mut self, scalar: Ref) {
         self.outputs = vec![scalar];
         self.output_layout = layout::Layout::Scalar;
     }
@@ -232,7 +258,20 @@ impl Graph {
         self.output_layout = layout::Layout::List(Box::new(layout::Layout::Scalar), slice.len());
     }
 
+    pub fn output(&mut self, value: layout::RefValue, layout: layout::Layout) -> Result<(), Error> {
+        self.outputs = value
+            .output_vec(&layout)
+            .ok_or_else(|| Error::WrongLayout {
+                expected: layout.clone(),
+                got: value.putatory_layout(),
+            })?;
+        self.output_layout = layout;
+        Ok(())
+    }
+
     pub fn render(&self) -> qbe::Module {
+        let reachable = optimize::find_reachable(&self.outputs, &self.nodes);
+
         let mut module = qbe::Module::new();
         let main = module.add_function(qbe::Function::new(
             qbe::Linkage::public(),
@@ -262,9 +301,11 @@ impl Graph {
         }
 
         // Supposes that the nodes were already declared in topological order:
-        for (id, node) in self.nodes.iter().enumerate() {
-            node.op
-                .render_into(Ref::Node(id).render(), &node.args, main)
+        for (id, (node, is_reachable)) in self.nodes.iter().zip(reachable).enumerate() {
+            if is_reachable {
+                node.op
+                    .render_into(Ref::Node(id).render(), &node.args, main)
+            }
         }
 
         for output in &self.outputs {
@@ -402,7 +443,7 @@ fn link(unlinked: &[u8]) -> Result<Vec<u8>, Error> {
 type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> u64;
 
 #[derive(Debug)]
-struct FunctionData {
+pub struct FunctionData {
     graph: Graph,
     _code: memmap::Mmap,
     input_layout: layout::Layout,
@@ -429,6 +470,24 @@ impl Clone for Function {
     }
 }
 
+impl From<Arc<FunctionData>> for Function {
+    fn from(data: Arc<FunctionData>) -> Function {
+        let input = RefCell::new(layout::Visitor::new(data.input_size / 8));
+        let output = RefCell::new(layout::Visitor::new(data.input_size / 8));
+        Function {
+            data,
+            input,
+            output,
+        }
+    }
+}
+
+impl<'a> From<&'a Function> for Arc<FunctionData> {
+    fn from(func: &'a Function) -> Arc<FunctionData> {
+        func.data.clone()
+    }
+}
+
 impl Function {
     pub fn input_size(&self) -> usize {
         self.data.input_size
@@ -452,6 +511,10 @@ impl Function {
 
     pub fn fn_ptr(&self) -> RawFn {
         self.data.fn_ptr
+    }
+
+    pub fn as_data(&self) -> Arc<FunctionData> {
+        self.into()
     }
 
     pub fn load(bytes: &[u8]) -> Result<Function, Error> {
@@ -565,8 +628,8 @@ mod test {
 
     fn create_simple_graph() -> Graph {
         let mut graph = Graph::new();
-        let a = graph.input("a".to_string());
-        let b = graph.input("b".to_string());
+        let a = graph.scalar_input("a".to_string());
+        let b = graph.scalar_input("b".to_string());
         let c = graph.insert(op::Add, vec![a, b]).unwrap();
         let one = graph.r#const(1.0);
         let d = graph.insert(op::Add, vec![c, one]).unwrap();
@@ -611,7 +674,7 @@ mod test {
 
     fn create_pfunc_graph() -> Graph {
         let mut g = Graph::new();
-        let a = g.input("a".to_string());
+        let a = g.scalar_input("a".to_string());
         let s = g.insert(op::Call("sqrt".to_string()), vec![a]).unwrap();
         g.output(s);
 
@@ -642,7 +705,7 @@ mod test {
 
     fn create_abs_graph() -> Graph {
         let mut g = Graph::new();
-        let a = g.input("a".to_string());
+        let a = g.scalar_input("a".to_string());
         let aa = g.insert(op::Abs, vec![a]).unwrap();
         g.output(aa);
 

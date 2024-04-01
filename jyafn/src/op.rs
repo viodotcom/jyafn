@@ -269,10 +269,7 @@ impl Op for Not {
         func.assign_instr(
             output,
             Type::Bool.render(),
-            qbe::Instr::Xor(
-                args[0].render(),
-                qbe::Value::Const(1),
-            ),
+            qbe::Instr::Xor(args[0].render(), qbe::Value::Const(1)),
         )
     }
 }
@@ -293,10 +290,7 @@ impl Op for And {
         func.assign_instr(
             output,
             Type::Bool.render(),
-            qbe::Instr::And(
-                args[0].render(),
-                args[1].render(),
-            ),
+            qbe::Instr::And(args[0].render(), args[1].render()),
         )
     }
 }
@@ -317,10 +311,7 @@ impl Op for Or {
         func.assign_instr(
             output,
             Type::Bool.render(),
-            qbe::Instr::Or(
-                args[0].render(),
-                args[1].render(),
-            ),
+            qbe::Instr::Or(args[0].render(), args[1].render()),
         )
     }
 }
