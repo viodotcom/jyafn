@@ -246,7 +246,7 @@ impl Op for Choose {
         func.assign_instr(
             output,
             Type::Float.render(),
-            qbe::Instr::Neg(args[1].render()),
+            qbe::Instr::Copy(args[2].render()),
         );
 
         func.add_block(end_side);

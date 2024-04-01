@@ -378,6 +378,11 @@ impl Function {
         Layout(self.0.output_layout().clone())
     }
 
+    #[getter]
+    fn fn_ptr(&self) -> usize {
+        self.0.fn_ptr() as *const () as usize
+    }
+
     #[staticmethod]
     pub fn load(bytes: &[u8]) -> PyResult<Function> {
         Ok(Function(rust::Function::load(bytes).map_err(ToPyErr)?))

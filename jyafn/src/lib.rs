@@ -450,6 +450,10 @@ impl Function {
         &self.data.graph
     }
 
+    pub fn fn_ptr(&self) -> RawFn {
+        self.data.fn_ptr
+    }
+
     pub fn load(bytes: &[u8]) -> Result<Function, Error> {
         let graph = Graph::load(bytes)?;
         graph.compile()

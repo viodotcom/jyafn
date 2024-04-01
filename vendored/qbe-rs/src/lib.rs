@@ -114,7 +114,7 @@ impl<'a> fmt::Display for Instr<'a> {
                         Cmp::Sge => "sge",
                         Cmp::Lt => "lt",
                         Cmp::Le => "le",
-                        Cmp::Gt => "ft",
+                        Cmp::Gt => "gt",
                         Cmp::Ge => "ge",
                         Cmp::Eq => "eq",
                         Cmp::Ne => "ne",

@@ -1,4 +1,4 @@
 [workspace]
 
 resolver = "2"
-members = ["qbe-rs", "jyafn", "jyafn-python"]
+members = ["vendored/qbe-rs", "jyafn", "jyafn-python"]
