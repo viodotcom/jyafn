@@ -7,6 +7,11 @@ use std::fmt::Debug;
 pub trait Op: 'static + Debug + Send + Sync {
     fn annotate(&self, args: &[Type]) -> Option<Type>;
     fn render_into(&self, output: qbe::Value, args: &[Ref], func: &mut qbe::Function);
+
+    #[allow(unused_variables)]
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        None
+    }
 }
 
 fn unique_for(v: qbe::Value, prefix: &str) -> String {
@@ -36,6 +41,18 @@ impl Op for Add {
             qbe::Instr::Add(args[0].render(), args[1].render()),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let Ref::Const(Type::Float, 0) = args[0] {
+            return Some(args[1])
+        }
+
+        if let Ref::Const(Type::Float, 0) = args[1] {
+            return Some(args[0])
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +73,14 @@ impl Op for Sub {
             Type::Float.render(),
             qbe::Instr::Sub(args[0].render(), args[1].render()),
         )
+    }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let Ref::Const(Type::Float, 0) = args[1] {
+            return Some(args[0])
+        }
+
+        None
     }
 }
 
@@ -78,6 +103,18 @@ impl Op for Mul {
             qbe::Instr::Mul(args[0].render(), args[1].render()),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if Ref::from(1.0) == args[0] {
+            return Some(args[1])
+        }
+
+        if Ref::from(1.0) == args[1] {
+            return Some(args[0])
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -99,6 +136,14 @@ impl Op for Div {
             qbe::Instr::Div(args[0].render(), args[1].render()),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if Ref::from(1.0) == args[1] {
+            return Some(args[0])
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -119,6 +164,15 @@ impl Op for Neg {
             Type::Float.render(),
             qbe::Instr::Neg(args[0].render()),
         )
+    }
+
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if Ref::from(0.0) == args[0] {
+            return Some(Ref::from(0.0))
+        }
+
+        None
     }
 }
 
@@ -151,6 +205,18 @@ impl Op for Call {
                     .collect(),
             ),
         )
+    }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if Ref::from(true) == args[0] {
+            return Some(args[1])
+        }
+
+        if Ref::from(false) == args[1] {
+            return Some(args[2])
+        }
+
+        None
     }
 }
 
@@ -251,6 +317,19 @@ impl Op for Choose {
 
         func.add_block(end_side);
     }
+
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if Ref::from(true) == args[0] {
+            return Some(args[1])
+        }
+
+        if Ref::from(false) == args[1] {
+            return Some(args[2])
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -271,6 +350,18 @@ impl Op for Not {
             Type::Bool.render(),
             qbe::Instr::Xor(args[0].render(), qbe::Value::Const(1)),
         )
+    }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if Ref::from(true) == args[0] {
+            return Some(Ref::from(false))
+        }
+
+        if Ref::from(false) == args[1] {
+            return Some(Ref::from(true))
+        }
+
+        None
     }
 }
 

@@ -1,1 +1,6 @@
 /target
+
+# Ignored extensions:
+
+**/*.pyc
+**/*.jyafn

@@ -37,7 +37,7 @@ pub enum Error {
     Linker { status: ExitStatus, err: String },
     #[error("loader error: {0}")]
     Loader(object::Error),
-    #[error("unction raised status {0}")]
+    #[error("function raised status {0}")]
     StatusRaised(u64),
     #[error("encode error")]
     EncodeError,
@@ -50,6 +50,8 @@ pub enum Error {
     Deserialization(bincode::Error),
     #[error("JSON deserialization error: {0}")]
     JsonDeserialization(serde_json::Error),
+    #[error("error: {0}")]
+    Other(String),
 }
 
 impl From<std::io::Error> for Error {
@@ -61,6 +63,12 @@ impl From<std::io::Error> for Error {
 impl From<object::Error> for Error {
     fn from(err: object::Error) -> Error {
         Error::Loader(err)
+    }
+}
+
+impl From<String> for Error {
+    fn from(err: String) -> Error {
+        Error::Other(err)
     }
 }
 
@@ -86,11 +94,23 @@ impl Type {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Ref {
     Input(usize),
     Const(Type, u64),
     Node(usize),
+}
+
+impl From<f64> for Ref {
+    fn from(v: f64) -> Ref {
+        Ref::Const(Type::Float, u64::from_ne_bytes(v.to_ne_bytes()))
+    }
+}
+
+impl From<bool> for Ref {
+    fn from(v: bool) -> Ref {
+        Ref::Const(Type::Bool, if v { 1 } else { 0 })
+    }
 }
 
 impl Ref {
@@ -116,7 +136,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn init<O: Op>(graph: &Graph, op: O, args: Vec<Ref>) -> Result<Node, Error> {
+    fn init<O: Op>(graph: &Graph, op: O, args: Vec<Ref>) -> Result<Node, Error> {
         let arg_types = args.iter().map(|r| graph.type_of(*r)).collect::<Vec<_>>();
         let Some(ty) = op.annotate(&arg_types) else {
             return Err(Error::Type(Box::new(op), arg_types));

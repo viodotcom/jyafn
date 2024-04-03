@@ -6,7 +6,7 @@ import types
 import typing
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Iterable
 
 
 class BaseAnnotation(ABC):
@@ -109,7 +109,7 @@ class tensor(BaseAnnotation):
             return fn.ret(ret, layout)
 
 
-def input_from_annotation(name: str, a: Any) -> fn.Ref:
+def _input_from_annotation(name: str, a: Any) -> fn.Ref:
     match a:
         case type():
             return a.make_input(name, ())
@@ -119,7 +119,7 @@ def input_from_annotation(name: str, a: Any) -> fn.Ref:
     raise Exception(f"Invalid jyafn annotation for {name}: {a}")
 
 
-def ret_from_annotation(ret: Any, a: Any) -> None:
+def _ret_from_annotation(ret: Any, a: Any) -> None:
     match a:
         case type():
             return a.make_ret(ret, ())
@@ -133,9 +133,37 @@ def func(f) -> fn.Function:
     signature = inspect.signature(f)
     with fn.Graph(name=f"{f.__qualname__}@{id(f)}") as g:
         inputs = {
-            arg: input_from_annotation(arg, param.annotation)
+            arg: _input_from_annotation(arg, param.annotation)
             for arg, param in signature.parameters.items()
         }
-        ret_from_annotation(f(**inputs), signature.return_annotation)
+        _ret_from_annotation(f(**inputs), signature.return_annotation)
 
     return g.compile()
+
+
+def min(x: Iterable[fn.Ref]) -> fn.Ref:
+    it = iter(x)
+
+    try:
+        el = next(it)
+    except StopIteration:
+        raise TypeError("min expected at least 1 argument, got 0")
+
+    for item in it:
+        el = (el > item).choose(item, el)
+
+    return el
+
+
+def max(x: Iterable[fn.Ref]) -> fn.Ref:
+    it = iter(x)
+
+    try:
+        el = next(it)
+    except StopIteration:
+        raise TypeError("min expected at least 1 argument, got 0")
+
+    for item in it:
+        el = (el > item).choose(el, item)
+
+    return el

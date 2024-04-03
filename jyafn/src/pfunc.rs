@@ -21,6 +21,7 @@ pub struct PFunc {
     fn_ptr: ThreadsafePointer,
     signature: &'static [Type],
     returns: Type,
+    // const_eval: &'static Fn(&[f64]) -> Option<Vec<f64>>,
 }
 
 impl PFunc {
@@ -157,6 +158,11 @@ fn init() -> HashMap<&'static str, PFunc> {
         },
     }
 }
+
+// fn call1(f: fn(f64) -> f64, args: &[f64]) -> Option<Vec<f64>> {
+//     assert_eq!(args.len(), 1);
+//     Some(vec![f(args[0])])
+// }
 
 fn sqrt(x: f64) -> f64 {
     x.sqrt()

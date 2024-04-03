@@ -12,3 +12,6 @@ if __name__ == "__main__":
 
     other_fun = fn.Function.load(a_fun.dump())
     print(other_fun(5, 6))
+
+    with open("a_fun.jyafn", "wb") as f:
+        f.write(a_fun.dump())
