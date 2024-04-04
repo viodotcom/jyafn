@@ -43,12 +43,12 @@ impl Op for Add {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let Ref::Const(Type::Float, 0) = args[0] {
-            return Some(args[1])
+        if Ref::from(0.0) == args[0] {
+            return Some(args[1]);
         }
 
-        if let Ref::Const(Type::Float, 0) = args[1] {
-            return Some(args[0])
+        if Ref::from(0.0) == args[1] {
+            return Some(args[0]);
         }
 
         None
@@ -77,7 +77,7 @@ impl Op for Sub {
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
         if let Ref::Const(Type::Float, 0) = args[1] {
-            return Some(args[0])
+            return Some(args[0]);
         }
 
         None
@@ -106,11 +106,11 @@ impl Op for Mul {
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
         if Ref::from(1.0) == args[0] {
-            return Some(args[1])
+            return Some(args[1]);
         }
 
         if Ref::from(1.0) == args[1] {
-            return Some(args[0])
+            return Some(args[0]);
         }
 
         None
@@ -139,7 +139,7 @@ impl Op for Div {
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
         if Ref::from(1.0) == args[1] {
-            return Some(args[0])
+            return Some(args[0]);
         }
 
         None
@@ -166,10 +166,9 @@ impl Op for Neg {
         )
     }
 
-
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
         if Ref::from(0.0) == args[0] {
-            return Some(Ref::from(0.0))
+            return Some(Ref::from(0.0));
         }
 
         None
@@ -208,15 +207,13 @@ impl Op for Call {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if Ref::from(true) == args[0] {
-            return Some(args[1])
-        }
-
-        if Ref::from(false) == args[1] {
-            return Some(args[2])
-        }
-
-        None
+        let pfunc = pfunc::get(&self.0).expect("pfunc existence already checked");
+        let const_args = args
+            .iter()
+            .copied()
+            .map(Ref::as_f64)
+            .collect::<Option<Vec<_>>>()?;
+        (pfunc.const_eval.0)(&const_args).map(|v| v.into())
     }
 }
 
@@ -318,14 +315,13 @@ impl Op for Choose {
         func.add_block(end_side);
     }
 
-
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
         if Ref::from(true) == args[0] {
-            return Some(args[1])
+            return Some(args[1]);
         }
 
         if Ref::from(false) == args[1] {
-            return Some(args[2])
+            return Some(args[2]);
         }
 
         None
@@ -354,11 +350,11 @@ impl Op for Not {
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
         if Ref::from(true) == args[0] {
-            return Some(Ref::from(false))
+            return Some(Ref::from(false));
         }
 
         if Ref::from(false) == args[1] {
-            return Some(Ref::from(true))
+            return Some(Ref::from(true));
         }
 
         None
@@ -384,6 +380,14 @@ impl Op for And {
             qbe::Instr::And(args[0].render(), args[1].render()),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_bool(), args[1].as_bool()) {
+            Some(Ref::from(a && b))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -404,6 +408,14 @@ impl Op for Or {
             Type::Bool.render(),
             qbe::Instr::Or(args[0].render(), args[1].render()),
         )
+    }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_bool(), args[1].as_bool()) {
+            Some(Ref::from(a || b))
+        } else {
+            None
+        }
     }
 }
 
@@ -431,6 +443,14 @@ impl Op for Eq {
             ),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
+            Some(Ref::from(a == b))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -456,6 +476,14 @@ impl Op for Gt {
                 args[1].render(),
             ),
         )
+    }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
+            Some(Ref::from(a > b))
+        } else {
+            None
+        }
     }
 }
 
@@ -483,6 +511,14 @@ impl Op for Lt {
             ),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
+            Some(Ref::from(a < b))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -509,6 +545,14 @@ impl Op for Ge {
             ),
         )
     }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
+            Some(Ref::from(a >= b))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -534,6 +578,14 @@ impl Op for Le {
                 args[1].render(),
             ),
         )
+    }
+
+    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
+            Some(Ref::from(a <= b))
+        } else {
+            None
+        }
     }
 }
 

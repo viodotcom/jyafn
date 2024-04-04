@@ -24,8 +24,11 @@ tic = time()
 
 
 @fn.func
-def from_components(comps: fn.tensor[model.state_size]) -> fn.tensor[model.output_size]:
-    return comps @ model.transform.T + model.mean
+def from_components(
+    comps: fn.tensor[model.state_size],
+) -> fn.tensor[model.output_size]:
+    total = comps @ model.transform.T + model.mean
+    return total
 
 
 toc = time()

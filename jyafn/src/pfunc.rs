@@ -16,12 +16,45 @@ impl From<ThreadsafePointer> for *const () {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ConstEval(pub(crate) &'static (dyn Send + Sync + Fn(&[f64]) -> Option<f64>));
+
+impl ConstEval {
+    fn no_eval() -> ConstEval {
+        ConstEval(&|_| None)
+    }
+
+    fn call1(f: fn(f64) -> f64) -> ConstEval {
+        let closure = move |args: &[f64]| {
+            assert_eq!(args.len(), 1);
+            Some(f(args[0]))
+        };
+
+        ConstEval(Box::leak(Box::new(closure)))
+    }
+
+    fn call2(f: fn(f64, f64) -> f64) -> ConstEval {
+        let closure = move |args: &[f64]| {
+            assert_eq!(args.len(), 2);
+            Some(f(args[0], args[1]))
+        };
+
+        ConstEval(Box::leak(Box::new(closure)))
+    }
+}
+
+impl std::fmt::Debug for ConstEval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ConstEval")
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct PFunc {
     fn_ptr: ThreadsafePointer,
     signature: &'static [Type],
     returns: Type,
-    // const_eval: &'static Fn(&[f64]) -> Option<Vec<f64>>,
+    pub(crate) const_eval: ConstEval,
 }
 
 impl PFunc {
@@ -35,6 +68,24 @@ impl PFunc {
 
     pub fn location(self) -> usize {
         self.fn_ptr.0 as usize
+    }
+
+    pub fn call1(f: fn(f64) -> f64) -> PFunc {
+        PFunc {
+            fn_ptr: ThreadsafePointer(f as *const ()),
+            signature: &[Type::Float],
+            returns: Type::Float,
+            const_eval: ConstEval::call1(f),
+        }
+    }
+
+    pub fn call2(f: fn(f64, f64) -> f64) -> PFunc {
+        PFunc {
+            fn_ptr: ThreadsafePointer(f as *const ()),
+            signature: &[Type::Float],
+            returns: Type::Float,
+            const_eval: ConstEval::call2(f),
+        }
     }
 }
 
@@ -65,6 +116,7 @@ pub unsafe fn inscribe(name: &str, fn_ptr: *const (), signature: &[Type], return
             fn_ptr: ThreadsafePointer(fn_ptr),
             signature: Box::leak(signature.to_vec().into_boxed_slice()),
             returns,
+            const_eval: ConstEval::no_eval(),
         },
     );
 }
@@ -76,93 +128,24 @@ pub fn get(name: &str) -> Option<PFunc> {
 
 fn init() -> HashMap<&'static str, PFunc> {
     maplit::hashmap! {
-        "sqrt" => PFunc {
-            fn_ptr: ThreadsafePointer(sqrt as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "exp" => PFunc {
-            fn_ptr: ThreadsafePointer(exp as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "ln" => PFunc {
-            fn_ptr: ThreadsafePointer(ln as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "pow" => PFunc {
-            fn_ptr: ThreadsafePointer(pow as *const ()),
-            signature: &[Type::Float, Type::Float],
-            returns: Type::Float,
-        },
-        "sin" => PFunc {
-            fn_ptr: ThreadsafePointer(sin as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "cos" => PFunc {
-            fn_ptr: ThreadsafePointer(cos as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "tan" => PFunc {
-            fn_ptr: ThreadsafePointer(tan as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "asin" => PFunc {
-            fn_ptr: ThreadsafePointer(asin as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "acos" => PFunc {
-            fn_ptr: ThreadsafePointer(acos as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "atan" => PFunc {
-            fn_ptr: ThreadsafePointer(atan as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "sinh" => PFunc {
-            fn_ptr: ThreadsafePointer(sinh as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "cosh" => PFunc {
-            fn_ptr: ThreadsafePointer(cosh as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "tanh" => PFunc {
-            fn_ptr: ThreadsafePointer(tanh as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "asinh" => PFunc {
-            fn_ptr: ThreadsafePointer(asinh as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "acosh" => PFunc {
-            fn_ptr: ThreadsafePointer(acosh as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
-        "atanh" => PFunc {
-            fn_ptr: ThreadsafePointer(atanh as *const ()),
-            signature: &[Type::Float],
-            returns: Type::Float,
-        },
+        "sqrt" => PFunc::call1(sqrt),
+        "exp" => PFunc::call1(exp),
+        "ln" => PFunc::call1(ln),
+        "pow" => PFunc::call2(pow),
+        "sin" => PFunc::call1(sin),
+        "cos" => PFunc::call1(cos),
+        "tan" => PFunc::call1(tan),
+        "asin" => PFunc::call1(asin),
+        "acos" => PFunc::call1(acos),
+        "atan" => PFunc::call1(atan),
+        "sinh" => PFunc::call1(sinh),
+        "cosh" => PFunc::call1(cosh),
+        "tanh" => PFunc::call1(tanh),
+        "asinh" => PFunc::call1(asinh),
+        "acosh" => PFunc::call1(acosh),
+        "atanh" => PFunc::call1(atanh),
     }
 }
-
-// fn call1(f: fn(f64) -> f64, args: &[f64]) -> Option<Vec<f64>> {
-//     assert_eq!(args.len(), 1);
-//     Some(vec![f(args[0])])
-// }
 
 fn sqrt(x: f64) -> f64 {
     x.sqrt()

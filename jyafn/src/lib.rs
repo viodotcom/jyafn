@@ -121,6 +121,22 @@ impl Ref {
             Ref::Node(node_id) => qbe::Value::Temporary(format!("n{node_id}")),
         }
     }
+
+    fn as_f64(self) -> Option<f64> {
+        if let Self::Const(Type::Float, c) = self {
+            Some(f64::from_ne_bytes(u64::to_ne_bytes(c)))
+        } else {
+            None
+        }
+    }
+
+    fn as_bool(self) -> Option<bool> {
+        if let Self::Const(Type::Bool, c) = self {
+            Some(if c == 1 { true } else { false })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -289,9 +305,16 @@ impl Graph {
         Ok(())
     }
 
-    pub fn render(&self) -> qbe::Module {
+    pub fn render(&self) -> qbe::Module<'static> {
+        self.clone().do_render()
+    }
+
+    fn do_render(mut self) -> qbe::Module<'static> {
+        // Optimizations:
+        optimize::const_eval(&mut self);
         let reachable = optimize::find_reachable(&self.outputs, &self.nodes);
 
+        // Rendering:
         let mut module = qbe::Module::new();
         let main = module.add_function(qbe::Function::new(
             qbe::Linkage::public(),
@@ -379,12 +402,7 @@ impl Graph {
         let unlinked = assemble(&assembly)?;
         let shared_object = link(&unlinked)?;
 
-        Function::init(
-            Graph::clone(self),
-            self.input_layout.clone(),
-            self.output_layout.clone(),
-            shared_object,
-        )
+        Function::init(self.clone(), shared_object)
     }
 }
 
@@ -542,17 +560,14 @@ impl Function {
         graph.compile()
     }
 
-    fn init(
-        graph: Graph,
-        input_layout: layout::Struct,
-        output_layout: layout::Layout,
-        shared_object: Vec<u8>,
-    ) -> Result<Function, Error> {
+    fn init(graph: Graph, shared_object: Vec<u8>) -> Result<Function, Error> {
         use object::{Object, ObjectSection, ObjectSymbol};
         let mut mmap = memmap::MmapMut::map_anon(shared_object.len())?;
         mmap.clone_from_slice(&shared_object);
         let code = mmap.make_exec()?;
 
+        let input_layout = graph.input_layout.clone();
+        let output_layout = graph.output_layout.clone();
         let obj = object::read::File::parse(code.as_ref())?;
         let symbol = obj.symbol_by_name("_run").unwrap();
         let section = obj.section_by_index(symbol.section_index().unwrap())?;
@@ -563,13 +578,13 @@ impl Function {
 
         Ok(Function {
             data: Arc::new(FunctionData {
-                graph,
                 _code: code,
                 input_size: input_size_in_floats * Type::Float.size(),
                 input_layout: input_layout.into(),
                 output_size: output_size_in_floats * Type::Float.size(),
                 output_layout,
                 fn_ptr,
+                graph,
             }),
             input: RefCell::new(layout::Visitor::new(input_size_in_floats)),
             output: RefCell::new(layout::Visitor::new(output_size_in_floats)),

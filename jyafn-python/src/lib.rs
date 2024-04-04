@@ -389,10 +389,10 @@ impl Ref {
 
 #[pyfunction]
 fn r#const(py: Python, val: PyObject) -> PyResult<Ref> {
-    if let Ok(float) = val.extract::<f64>(py) {
-        with_current(|g| Ref(g.r#const(float)))
-    } else if let Ok(b) = val.extract::<bool>(py) {
+    if let Ok(b) = val.extract::<bool>(py) {
         with_current(|g| Ref(g.r#const(b)))
+    } else if let Ok(float) = val.extract::<f64>(py) {
+        with_current(|g| Ref(g.r#const(float)))
     } else {
         return Err(exceptions::PyValueError::new_err(format!(
             "Cannot make constant out of a {}",
