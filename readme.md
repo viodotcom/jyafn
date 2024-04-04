@@ -66,7 +66,7 @@ fmt.Println(result, "==", 8.0)
 
 ### There is something going on!
 
-Yes, there is _definitely_ something going on. What you see is basically a mini-JIT (just-in-time compiler). Your Python instructions (add this! multiply that!) are recorded in a (computational graph)[https://www.sciencedirect.com/topics/computer-science/computation-graph], which is then compiled to machine code thanks to (QBE)[https://c9x.me/compile/], which does all the heavy-lifting, "compilery stuff". This code is exposed as a function pointer in the running program.
+Yes, there is _definitely_ something going on. What you see is basically a mini-JIT (just-in-time compiler). Your Python instructions (add this! multiply that!) are recorded in a [computational graph](https://www.sciencedirect.com/topics/computer-science/computation-graph), which is then compiled to machine code thanks to [QBE](https://c9x.me/compile/), which does all the heavy-lifting, "compilery stuff". This code is exposed as a function pointer in the running program.
 
 ### Isn't loading arbitrary code just a security hazard?
 
