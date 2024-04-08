@@ -57,6 +57,7 @@ pub enum Instr<'a> {
     Xor(Value, Value),
     /// Copies either a temporary or a literal value
     Copy(Value),
+    Cast(Value),
     /// Return from a function, optionally with a value
     Ret(Option<Value>),
     /// Jumps to first label if a value is nonzero or to the second one otherwise
@@ -128,6 +129,7 @@ impl<'a> fmt::Display for Instr<'a> {
             Self::Or(lhs, rhs) => write!(f, "or {}, {}", lhs, rhs),
             Self::Xor(lhs, rhs) => write!(f, "xor {}, {}", lhs, rhs),
             Self::Copy(val) => write!(f, "copy {}", val),
+            Self::Cast(val) => write!(f, "cast {}", val),
             Self::Ret(val) => match val {
                 Some(val) => write!(f, "ret {}", val),
                 None => write!(f, "ret"),

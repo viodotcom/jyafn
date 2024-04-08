@@ -1,3 +1,6 @@
+#![cfg(feature = "map-reduce")]
+#![allow(unused_variables)]
+
 use super::layout::{Decode, Decoder, Encode, Layout, Visitor, ZeroDecoder};
 use super::{Error, Function, FunctionData};
 use std::cell::RefCell;
@@ -22,27 +25,28 @@ impl Dataset {
         E: Encode,
         C: FnMut(Error) -> Err,
     {
-        let mut visitor = Visitor::new(layout.size());
-        let iter = it.into_iter();
-        let mut raw = Vec::with_capacity(usize::max(10, iter.size_hint().0));
-        let mut n_items = 0;
+        // let mut visitor = Visitor::new(layout.size());
+        // let iter = it.into_iter();
+        // let mut raw = Vec::with_capacity(usize::max(10, iter.size_hint().0));
+        // let mut n_items = 0;
 
-        for item in iter {
-            let item = item?;
-            visitor.reset();
-            item.visit(&layout, &mut visitor)
-                .map_err(|_| Error::EncodeError)
-                .map_err(&mut conv_err)?;
-            raw.extend_from_slice(visitor.as_ref());
-            n_items += 1;
-        }
+        // for item in iter {
+        //     let item = item?;
+        //     visitor.reset();
+        //     item.visit(&layout, &mut visitor)
+        //         .map_err(|err| Error::EncodeError(Box::new(err)))
+        //         .map_err(&mut conv_err)?;
+        //     raw.extend_from_slice(visitor.as_ref());
+        //     n_items += 1;
+        // }
 
-        Ok(Dataset {
-            layout,
-            byte_size: visitor.as_ref().len(),
-            raw,
-            n_items,
-        })
+        // Ok(Dataset {
+        //     layout,
+        //     byte_size: visitor.as_ref().len(),
+        //     raw,
+        //     n_items,
+        // })
+        unimplemented!()
     }
 
     pub fn build<I, E>(layout: Layout, it: I) -> Result<Dataset, Error>
@@ -67,7 +71,14 @@ impl Dataset {
         for item in self.raw.chunks(self.byte_size) {
             let status = func.call_raw(item, &mut output_buffer);
             if status != 0 {
-                return Err(Error::StatusRaised(status));
+                return if let Some(error) = func.graph().errors.get((status - 1) as usize) {
+                    Err(Error::StatusRaised(error.to_string()))
+                } else {
+                    Err(Error::StatusRaised(format!(
+                        "unknown error of id {}",
+                        status - 1
+                    )))
+                };
             }
             output.extend_from_slice(&output_buffer);
         }
@@ -108,8 +119,18 @@ impl Dataset {
                         for (input, output) in input_outputs {
                             let status = func.call_raw(input, output);
                             if status != 0 {
-                                *error.lock().expect("poisoned") =
-                                    Some(Error::StatusRaised(status));
+                                *error.lock().expect("poisoned") = Some(
+                                    if let Some(error) =
+                                        func.graph().errors.get((status - 1) as usize)
+                                    {
+                                        Error::StatusRaised(error.to_string())
+                                    } else {
+                                        Error::StatusRaised(format!(
+                                            "unknown error of id {}",
+                                            status - 1
+                                        ))
+                                    },
+                                );
                                 return;
                             }
                         }
@@ -164,19 +185,20 @@ impl<'a, D: Decoder> Iterator for DecodeIter<'a, D> {
     }
 
     fn next(&mut self) -> Option<D::Target> {
-        if self.item_pos >= self.dataset.raw.len() {
-            return None;
-        }
-        let item = &self.dataset.raw[self.item_pos..self.item_pos + self.dataset.byte_size];
-        self.item_pos += self.dataset.byte_size;
+        // if self.item_pos >= self.dataset.raw.len() {
+        //     return None;
+        // }
+        // let item = &self.dataset.raw[self.item_pos..self.item_pos + self.dataset.byte_size];
+        // self.item_pos += self.dataset.byte_size;
 
-        // NOTE: this is a kinda unnecessary copy. Can be avoided with rethinking the
-        // Visitor API to work with slices.
-        let mut visitor = self.visitor.borrow_mut();
-        visitor.0.copy_from_slice(item);
-        visitor.reset();
+        // // NOTE: this is a kinda unnecessary copy. Can be avoided with rethinking the
+        // // Visitor API to work with slices.
+        // let mut visitor = self.visitor.borrow_mut();
+        // visitor.0.copy_from_slice(item);
+        // visitor.reset();
 
-        Some(self.decoder.build(&self.dataset.layout, &mut visitor))
+        // Some(self.decoder.build(&self.dataset.layout, &mut visitor))
+        unimplemented!()
     }
 }
 

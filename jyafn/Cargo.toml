@@ -9,20 +9,28 @@ edition = "2021"
 name = "jyafn"
 path = "src/lib.rs"
 
+[features]
+default = ["map-reduce"]
+map-reduce = ["dep:num_cpus", "dep:rayon"]
 
 [dependencies]
 bincode = "1.3.3"
 byte-slice-cast = "1.2.2"
+downcast-rs = "1.2.1"
 lazy_static = "1.4.0"
 maplit = "1.0.2"
 memmap = "0.7.0"
-num_cpus = "1.16.0"
+num_cpus = { version = "1.16.0", optional = true }
 object = "0.34.0"
 qbe = { path = "../vendored/qbe-rs" }
-rayon = "1.10.0"
+rand = "0.8.5"
+rayon = { version = "1.10.0", optional = true }
 serde = { version = "1.0.197", features = ["rc"] }
 serde_derive = "1.0.197"
 serde_json = "1.0.115"
+smallvec = { version = "1.13.2", features = ["serde"] }
+special-fun = "0.3.0"
 tempfile = "3.10.1"
 thiserror = "1.0.58"
+thread_local = "1.1.8"
 typetag = "0.2.16"

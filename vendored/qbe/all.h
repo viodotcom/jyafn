@@ -540,6 +540,8 @@ void loadopt(Fn *);
 
 /* ssa.c */
 void filluse(Fn *);
+void fillpreds(Fn *);
+void fillrpo(Fn *);
 void ssa(Fn *);
 void ssacheck(Fn *);
 

@@ -1,7 +1,10 @@
-use super::Type;
 use lazy_static::lazy_static;
+use special_fun::FloatSpecial;
 use std::collections::HashMap;
+use std::ops::Rem;
 use std::sync::RwLock;
+
+use super::{Error, Type};
 
 /// Only use with function pointers and _nothing_ else.
 #[derive(Debug, Clone, Copy)]
@@ -82,9 +85,18 @@ impl PFunc {
     pub fn call2(f: fn(f64, f64) -> f64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
-            signature: &[Type::Float],
+            signature: &[Type::Float, Type::Float],
             returns: Type::Float,
             const_eval: ConstEval::call2(f),
+        }
+    }
+
+    pub fn call1bool(f: fn(f64) -> bool) -> PFunc {
+        PFunc {
+            fn_ptr: ThreadsafePointer(f as *const ()),
+            signature: &[Type::Float],
+            returns: Type::Bool,
+            const_eval: ConstEval::no_eval(),
         }
     }
 }
@@ -101,13 +113,20 @@ lazy_static! {
 /// # Panics
 ///
 /// This function panics if a pfunc of the given name has already been inscribed.
-pub unsafe fn inscribe(name: &str, fn_ptr: *const (), signature: &[Type], returns: Type) {
+pub unsafe fn inscribe(
+    name: &str,
+    fn_ptr: *const (),
+    signature: &[Type],
+    returns: Type,
+) -> Result<(), Error> {
     let mut guard = P_FUNCS.write().expect("poisoned");
 
     if guard.contains_key(name) {
         // This avoids poisoning the global lock.
         drop(guard);
-        panic!("Function of name {name} already inscribed");
+        return Err("Function of name {name} already inscribed"
+            .to_string()
+            .into());
     }
 
     guard.insert(
@@ -119,6 +138,8 @@ pub unsafe fn inscribe(name: &str, fn_ptr: *const (), signature: &[Type], return
             const_eval: ConstEval::no_eval(),
         },
     );
+
+    Ok(())
 }
 
 pub fn get(name: &str) -> Option<PFunc> {
@@ -126,87 +147,31 @@ pub fn get(name: &str) -> Option<PFunc> {
     guard.get(name).copied()
 }
 
+#[allow(unstable_name_collisions)]
 fn init() -> HashMap<&'static str, PFunc> {
-    maplit::hashmap! {
-        "sqrt" => PFunc::call1(sqrt),
-        "exp" => PFunc::call1(exp),
-        "ln" => PFunc::call1(ln),
-        "pow" => PFunc::call2(pow),
-        "sin" => PFunc::call1(sin),
-        "cos" => PFunc::call1(cos),
-        "tan" => PFunc::call1(tan),
-        "asin" => PFunc::call1(asin),
-        "acos" => PFunc::call1(acos),
-        "atan" => PFunc::call1(atan),
-        "sinh" => PFunc::call1(sinh),
-        "cosh" => PFunc::call1(cosh),
-        "tanh" => PFunc::call1(tanh),
-        "asinh" => PFunc::call1(asinh),
-        "acosh" => PFunc::call1(acosh),
-        "atanh" => PFunc::call1(atanh),
+    let mut map = HashMap::new();
+
+    macro_rules! pfuncs {
+        ($($method:ident : $($f:ident),*);*) => { $($(
+            map.insert(stringify!($f), PFunc::$method(f64::$f));
+        )*)* }
     }
-}
 
-fn sqrt(x: f64) -> f64 {
-    x.sqrt()
-}
+    pfuncs! {
+        call1:
+            floor, ceil, round, trunc,
+            sqrt, exp, ln,
+            sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh,
+            gamma, loggamma, factorial, rgamma, digamma,
+            erf, erfc, norm, norm_inv,
+            riemann_zeta;
+        call2:
+            powf, rem,
+            beta, logbeta, gammainc, gammac, gammac_inv,
+            besselj, bessely, besseli;
+        call1bool:
+            is_nan, is_finite, is_infinite
+    }
 
-fn exp(x: f64) -> f64 {
-    x.exp()
-}
-
-fn ln(x: f64) -> f64 {
-    x.ln()
-}
-
-fn pow(base: f64, exponent: f64) -> f64 {
-    base.powf(exponent)
-}
-
-fn sin(x: f64) -> f64 {
-    x.sin()
-}
-
-fn cos(x: f64) -> f64 {
-    x.cos()
-}
-
-fn tan(x: f64) -> f64 {
-    x.tan()
-}
-
-fn asin(x: f64) -> f64 {
-    x.asin()
-}
-
-fn acos(x: f64) -> f64 {
-    x.acos()
-}
-
-fn atan(x: f64) -> f64 {
-    x.atan()
-}
-
-fn sinh(x: f64) -> f64 {
-    x.sin()
-}
-
-fn cosh(x: f64) -> f64 {
-    x.cos()
-}
-
-fn tanh(x: f64) -> f64 {
-    x.tan()
-}
-
-fn asinh(x: f64) -> f64 {
-    x.asin()
-}
-
-fn acosh(x: f64) -> f64 {
-    x.acos()
-}
-
-fn atanh(x: f64) -> f64 {
-    x.atan()
+    map
 }

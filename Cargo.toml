@@ -2,3 +2,10 @@
 
 resolver = "2"
 members = ["vendored/qbe-rs", "jyafn", "jyafn-python", "cjyafn"]
+default-members = ["cjyafn"]
+
+[profile.release]
+# Aggressive for size (but keeping debug info; I'm not crazy!)
+lto = true
+opt-level = "z"
+codegen-units = 1

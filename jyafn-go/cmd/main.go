@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 
-	"../pkg/jyafn"
+	"github.com/FindHotel/jyafn/jyafn-go/pkg/jyafn"
 )
 
 func main() {
 	// Read exported data:
-	code, err := os.ReadFile("../../jyafn-python/a_fun.jyafn")
+	code, err := os.ReadFile("../jyafn-python/a_fun.jyafn")
 	if err != nil {
 		log.Fatal(err)
 	}

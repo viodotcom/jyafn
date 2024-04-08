@@ -61,6 +61,34 @@ if err != nil {
 fmt.Println(result, "==", 8.0)
 ```
 
+## How to use it
+
+For all cases, unfortuately you will need `gcc` or `clang` installed (they are _not_ build dependencies!), since we need an assembler and a linker to finish QBE's job. Also, `jyafn` is guaranteed not to work in Windows. For your specific programming language, see below:
+
+### Python
+
+Clone the repo, then
+```sh
+make install
+```
+This should do the trick. You can set the specific target Python version like so:
+```sh
+make install py=3.12
+```
+The default version is 3.11 at the moment.
+
+At the moment, the Python version depends on the Rust compiler to work. It will compile `jyafn` from source. As such, you will need `cargo`, Rust's package manager, as well as `maturin`, the tool for building Python packages from Rust code. Maturin can be easily installed with `pip`:
+```shell
+pip install maturin
+```
+
+### Go
+
+You can use this as a Go module:
+```go
+import "github.com/FindHotel/jyafn/jyafn-go/pkg/jyafn"
+```
+Please note that this package depends on CGO under the hood.
 
 ## FAQ
 

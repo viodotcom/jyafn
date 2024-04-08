@@ -1,7 +1,7 @@
 package jyafn
 
-// #cgo CFLAGS: -I../../../cjyafn
-// #cgo LDFLAGS: -L../../../target/release -lcjyafn
+// #cgo CFLAGS: -I./
+// #cgo LDFLAGS: -L./ -lcjyafn
 // #include "cjyafn.h"
 //
 import "C"
@@ -55,9 +55,12 @@ func (g *Graph) ToJSON() string {
 	return C.GoString(json)
 }
 
-func (g *Graph) Render() string {
-	rendered := C.graph_render(g.ptr)
-	return C.GoString(rendered)
+func (g *Graph) Render() (string, error) {
+	rendered, err := Outcome(C.graph_render(g.ptr)).get()
+	if err != nil {
+		return "", err
+	}
+	return C.GoString((*C.char)(rendered)), nil
 }
 
 func (g *Graph) Compile() (*Function, error) {
@@ -129,12 +132,16 @@ func (l *Layout) IsScalar() bool {
 	return bool(C.layout_is_scalar(l.ptr))
 }
 
+func (l *Layout) IsBool() bool {
+	return bool(C.layout_is_bool(l.ptr))
+}
+
 func (l *Layout) IsStruct() bool {
 	return bool(C.layout_is_struct(l.ptr))
 }
 
-func (l *Layout) IsEnum() bool {
-	return bool(C.layout_is_enum(l.ptr))
+func (l *Layout) IsSymbol() bool {
+	return bool(C.layout_is_symbol(l.ptr))
 }
 
 func (l *Layout) IsList() bool {
@@ -187,35 +194,20 @@ func (s *Struct) GetItemLayout(index uint) *Layout {
 }
 
 type Visitor struct {
-	ptr     unsafe.Pointer
-	ownedBy interface{}
-}
-
-func (v *Visitor) Push(value float64) {
-	C.visitor_push(v.ptr, C.double(value))
-}
-
-func (v *Visitor) Pop() float64 {
-	return float64(C.visitor_pop(v.ptr))
-}
-
-type GoVisitor struct {
 	buf []uint64
 }
 
-func (v *GoVisitor) Push(value float64) {
+func (v *Visitor) Push(value float64) {
 	v.buf = append(v.buf, math.Float64bits(value))
 }
 
-func (v *GoVisitor) Pop() float64 {
+func (v *Visitor) Pop() float64 {
 	top := v.buf[len(v.buf)-1]
 	v.buf = v.buf[:len(v.buf)-1]
 	return math.Float64frombits(top)
 }
 
-func encodeValue(value reflect.Value, layout *Layout, visitor *GoVisitor) error {
-	fmt.Println(value)
-	fmt.Println(layout.ToJSON())
+func encodeValue(value reflect.Value, layout *Layout, visitor *Visitor) error {
 	if layout.IsUnit() {
 		return nil
 	}
@@ -257,7 +249,7 @@ func encodeValue(value reflect.Value, layout *Layout, visitor *GoVisitor) error 
 		return nil
 	}
 
-	if layout.IsEnum() {
+	if layout.IsSymbol() {
 		panic("unimplemented")
 	}
 
@@ -282,7 +274,7 @@ func encodeValue(value reflect.Value, layout *Layout, visitor *GoVisitor) error 
 	return fmt.Errorf("no layout rules to match %v to %v", value.Type(), layout)
 }
 
-func decodeValue(ty reflect.Type, layout *Layout, visitor *GoVisitor) reflect.Value {
+func decodeValue(ty reflect.Type, layout *Layout, visitor *Visitor) reflect.Value {
 	if layout.IsUnit() {
 		return reflect.New(ty)
 	}
@@ -312,7 +304,7 @@ func decodeValue(ty reflect.Type, layout *Layout, visitor *GoVisitor) reflect.Va
 		return obj
 	}
 
-	if layout.IsEnum() {
+	if layout.IsSymbol() {
 		panic("unimplemented")
 	}
 
@@ -329,7 +321,7 @@ func decodeValue(ty reflect.Type, layout *Layout, visitor *GoVisitor) reflect.Va
 }
 
 func Call[O any](f *Function, arg any) (O, error) {
-	visitor := &GoVisitor{buf: make([]uint64, 0)}
+	visitor := &Visitor{buf: make([]uint64, 0)}
 	err := encodeValue(reflect.ValueOf(arg), f.InputLayout(), visitor)
 
 	if err != nil {
@@ -342,7 +334,7 @@ func Call[O any](f *Function, arg any) (O, error) {
 			)
 	}
 
-	out := make([]uint64, f.OutputSize()/8, f.OutputSize()/8)
+	out := make([]uint64, f.OutputSize()/8)
 	status := C.function_call_raw(
 		f.ptr,
 		(*C.uchar)(unsafe.Pointer(&visitor.buf[0])),
@@ -353,7 +345,7 @@ func Call[O any](f *Function, arg any) (O, error) {
 			fmt.Errorf("function raised status %v", status)
 	}
 
-	decoded := decodeValue(reflect.TypeFor[O](), f.OutputLayout(), &GoVisitor{buf: out})
+	decoded := decodeValue(reflect.TypeFor[O](), f.OutputLayout(), &Visitor{buf: out})
 	output, isOk := decoded.Interface().(O)
 	if !isOk {
 		return *reflect.New(reflect.TypeFor[O]()).Interface().(*O),

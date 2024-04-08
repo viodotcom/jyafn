@@ -5,6 +5,7 @@ import inspect
 import types
 import typing
 
+from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import Any, Iterable
 
@@ -26,6 +27,20 @@ class BaseAnnotation(ABC):
         pass
 
 
+class unit:
+    @classmethod
+    def __class_getitem__(cls, args) -> types.GenericAlias:
+        return types.GenericAlias(cls, ())
+
+    @classmethod
+    def make_input(cls, name: str, args: tuple[Any, ...]):
+        return fn.input(name, fn.Layout.unit())
+
+    @classmethod
+    def make_ret(cls, ret: Any, args: tuple[Any, ...]):
+        return fn.ret(ret, fn.Layout.unit())
+
+
 class scalar(BaseAnnotation):
     @classmethod
     def __class_getitem__(cls, ty: float | bool = float) -> None:
@@ -37,7 +52,7 @@ class scalar(BaseAnnotation):
 
     @classmethod
     def make_ret(cls, ret: Any, args: tuple[Any, ...]):
-        return fn.scalar_ret(ret)
+        return fn.ret(ret, fn.Layout.scalar())
 
 
 class list(BaseAnnotation):
@@ -63,21 +78,21 @@ class list(BaseAnnotation):
             case _:
                 raise TypeError(f"Invalid args for list annotation: {args}")
 
-        return fn.list_ret(ret)
+        return fn.ret(ret, fn.Layout.list_of(fn.Layout.scalar(), size))
 
 
-class enum(BaseAnnotation):
+class symbol(BaseAnnotation):
     @classmethod
-    def __class_getitem__(cls, options: tuple[str]) -> None:
-        return types.GenericAlias(cls, options)
+    def __class_getitem__(cls, args) -> None:
+        return types.GenericAlias(cls, ())
 
     @classmethod
     def make_input(cls, name: str, args: tuple[Any, ...]):
-        return fn.enum_input(name, args)
+        return fn.symbol_input(name)
 
     @classmethod
     def make_ret(cls, ret: Any, args: tuple[Any, ...]):
-        raise NotImplementedError()
+        raise fn.ret(ret, fn.Layout.symbol())
 
 
 class tensor(BaseAnnotation):
@@ -121,24 +136,32 @@ def _input_from_annotation(name: str, a: Any) -> fn.Ref:
 
 def _ret_from_annotation(ret: Any, a: Any) -> None:
     match a:
+        case inspect._empty:
+            return fn.ret(ret, fn.putative_layout(ret))
         case type():
             return a.make_ret(ret, ())
         case types.GenericAlias():
             return typing.get_origin(a).make_ret(ret, typing.get_args(a))
+        case None:
+            return unit.make_ret(ret, ())
 
     raise Exception(f"Invalid return annotation for jyafn: {a}")
 
 
 def func(f) -> fn.Function:
     signature = inspect.signature(f)
-    with fn.Graph(name=f"{f.__qualname__}@{id(f)}") as g:
+    with fn.Graph(name=f"{f.__qualname__}") as g:
         inputs = {
             arg: _input_from_annotation(arg, param.annotation)
             for arg, param in signature.parameters.items()
         }
         _ret_from_annotation(f(**inputs), signature.return_annotation)
 
-    return g.compile()
+    g.set_metadata("jyafn.created_at", datetime.now().isoformat())
+    compiled = g.compile()
+    compiled.original = f
+
+    return compiled
 
 
 def min(x: Iterable[fn.Ref]) -> fn.Ref:

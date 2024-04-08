@@ -5,9 +5,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"testing"
 )
 
-func Test_Simple() {
+func Test_Simple(t *testing.T) {
 	f, err := os.Open("../jyafn-python/a_fun.jyafn")
 	if err != nil {
 		log.Fatal(err)
@@ -45,7 +46,7 @@ func Test_Simple() {
 	fmt.Println(result)
 }
 
-func Test_JSON() {
+func Test_JSON(t *testing.T) {
 	f, err := os.Open("../jyafn-python/a_fun.jyafn")
 	if err != nil {
 		log.Fatal(err)
@@ -70,7 +71,7 @@ func Test_JSON() {
 	fmt.Println(result)
 }
 
-func Test_Showcase() {
+func Test_Showcase(t *testing.T) {
 	f, err := os.Open("../jyafn-python/from_components.jyafn")
 	if err != nil {
 		log.Fatal(err)
