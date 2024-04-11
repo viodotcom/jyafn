@@ -1,8 +1,13 @@
 mod murmur;
 
+use get_size::GetSize;
+use hashbrown::HashMap;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::hash::{BuildHasher, Hasher};
+use std::sync::Arc;
+use zip::read::ZipFile;
+
+use crate::Error;
 
 use super::layout::{Buffer, Layout};
 
@@ -60,29 +65,133 @@ fn hash(line: &Buffer) -> u64 {
     hash
 }
 
+#[typetag::serde(tag = "type")]
+pub trait StorageType: std::fmt::Debug + Send + Sync {
+    fn init(&self) -> Result<Box<dyn Storage>, Error>;
+    fn read(&self, f: ZipFile<'_>) -> Result<Box<dyn Storage>, Error>;
+}
+
+pub trait Storage: std::fmt::Debug + Send + Sync {
+    fn insert(&mut self, hash: u64, value: Buffer);
+    fn get(&self, hash: u64) -> Option<&Buffer>;
+    /// The ammount of heap used by this storage.
+    fn size(&self) -> usize;
+    fn dump(&self) -> Result<Vec<u8>, Error>;
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HashMapStorage;
+
+#[typetag::serde]
+impl StorageType for HashMapStorage {
+    fn init(&self) -> Result<Box<dyn Storage>, Error> {
+        Ok(Box::new(HashTable::default()))
+    }
+
+    fn read(&self, f: ZipFile<'_>) -> Result<Box<dyn Storage>, Error> {
+        let map = bincode::deserialize_from(f).map_err(Error::Deserialization)?;
+        Ok(Box::new(HashTable(map)))
+    }
+}
+
+#[derive(Debug, Default)]
+struct HashTable(HashMap<u64, Buffer, UnHash>);
+
+impl Storage for HashTable {
+    fn insert(&mut self, hash: u64, value: Buffer) {
+        self.0.insert(hash, value);
+    }
+
+    fn get(&self, hash: u64) -> Option<&Buffer> {
+        self.0.get(&hash)
+    }
+
+    fn size(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + std::mem::size_of::<(u64, Buffer)>() * self.0.raw_table().capacity()
+            + self
+                .0
+                .iter()
+                .map(|(_, buf)| buf.get_heap_size())
+                .sum::<usize>()
+    }
+
+    fn dump(&self) -> Result<Vec<u8>, Error> {
+        Ok(bincode::serialize(&self.0).expect("serialization never fails"))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Mapping {
     key_layout: Layout,
     value_layout: Layout,
-    table: HashMap<u64, Buffer, UnHash>,
+    storage_type: Arc<dyn StorageType>,
     #[serde(skip_serializing)]
     #[serde(skip_deserializing)]
-    #[serde(default = "new_pin")]
+    #[serde(default)]
+    storage: Option<Box<dyn Storage>>,
+    /// We need this field because we _hardcode_ the pointer to this struct in the
+    /// function code. If this moves anywhere, we get the pleasure of accessing bad
+    /// memory and The Most Horrible Things™ ensue.
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    #[serde(default = "new_pinned")]
     _pin: std::marker::PhantomPinned,
 }
 
-fn new_pin() -> std::marker::PhantomPinned {
+fn new_pinned() -> std::marker::PhantomPinned {
     std::marker::PhantomPinned
 }
 
+impl GetSize for Mapping {
+    fn get_heap_size(&self) -> usize {
+        if let Some(storage) = &self.storage {
+            storage.size()
+        } else {
+            0
+        }
+    }
+}
+
 impl Mapping {
-    pub(crate) fn new(key_layout: Layout, value_layout: Layout) -> Mapping {
-        Mapping {
+    pub(crate) fn new<S>(
+        key_layout: Layout,
+        value_layout: Layout,
+        storage_type: S,
+    ) -> Result<Mapping, Error>
+    where
+        S: 'static + StorageType,
+    {
+        let storage = storage_type.init()?;
+        Ok(Mapping {
             key_layout,
             value_layout,
-            table: HashMap::<_, _, UnHash>::default(),
+            storage_type: Arc::new(storage_type),
+            storage: Some(storage),
             _pin: std::marker::PhantomPinned,
-        }
+        })
+    }
+
+    pub(crate) fn read(&self, f: ZipFile<'_>) -> Result<Self, Error> {
+        let storage = self.storage_type.read(f)?;
+        Ok(Mapping {
+            key_layout: self.key_layout.clone(),
+            value_layout: self.value_layout.clone(),
+            storage_type: self.storage_type.clone(),
+            storage: Some(storage),
+            _pin: std::marker::PhantomPinned,
+        })
+    }
+
+    pub(crate) fn dump(&self) -> Result<Vec<u8>, Error> {
+        self.storage
+            .as_ref()
+            .expect("storage not initialized")
+            .dump()
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.storage.is_some()
     }
 
     pub fn key_layout(&self) -> &Layout {
@@ -94,16 +203,19 @@ impl Mapping {
     }
 
     pub(crate) fn insert(&mut self, key: Buffer, value: Buffer) {
-        self.table.insert(hash(&key), value);
+        self.storage
+            .as_mut()
+            .expect("storage not initialized")
+            .insert(hash(&key), value);
     }
 
-    pub fn get_by_hash(&self, hash: u64) -> Option<&Buffer> {
-        self.table.get(&hash)
+    pub fn get(&self, key: Buffer) -> Option<&Buffer> {
+        self.storage.as_ref().and_then(|s| s.get(hash(&key)))
     }
 
     unsafe fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {
         let mapping = &*mapping;
-        if let Some(line) = mapping.table.get(&hash) {
+        if let Some(line) = mapping.storage.as_ref().and_then(|s| s.get(hash)) {
             line.as_ptr()
         } else {
             std::ptr::null()
@@ -125,7 +237,7 @@ impl Mapping {
         );
         func.add_block("start");
 
-        let hash = qbe::Value::Temporary(format!("hash"));
+        let hash = qbe::Value::Temporary("hash".to_string());
 
         func.assign_instr(
             hash.clone(),
@@ -148,7 +260,7 @@ impl Mapping {
                 hash.clone(),
                 qbe::Type::Long,
                 qbe::Instr::Call(
-                    qbe::Value::Const(update_hash as u64),
+                    qbe::Value::Const(update_hash as usize as u64),
                     vec![
                         (qbe::Type::Long, hash.clone()),
                         (qbe::Type::Long, qbe::Value::Temporary(format!("cast_i{i}"))),
@@ -159,10 +271,10 @@ impl Mapping {
 
         let mapping_ptr = self as *const Mapping;
         func.assign_instr(
-            qbe::Value::Temporary(format!("slice")),
+            qbe::Value::Temporary("slice".to_string()),
             qbe::Type::Long,
             qbe::Instr::Call(
-                qbe::Value::Const(Mapping::call_mapping as u64),
+                qbe::Value::Const(Mapping::call_mapping as usize as u64),
                 vec![
                     (qbe::Type::Long, qbe::Value::Const(mapping_ptr as u64)),
                     (qbe::Type::Long, hash.clone()),
@@ -170,9 +282,9 @@ impl Mapping {
             ),
         );
 
-        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Temporary(format!(
-            "slice"
-        )))));
+        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Temporary(
+            "slice".to_string(),
+        ))));
 
         func
     }

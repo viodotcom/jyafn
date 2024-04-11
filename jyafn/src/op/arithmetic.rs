@@ -171,11 +171,8 @@ impl Op for Rem {
         args: &[Ref],
         func: &mut qbe::Function,
     ) {
-        func.assign_instr(
-            output,
-            Type::Float.render(),
-            qbe::Instr::Rem(args[0].render(), args[1].render()),
-        )
+        // `rem` does not work for floats in QBE. So, we need to resort to pfuncs!
+        super::call::Call("rem".to_string()).render_into(graph, output, args, func)
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {

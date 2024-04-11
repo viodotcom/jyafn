@@ -11,6 +11,7 @@ use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyNone, PyTuple};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use function::Function;
 use graph::{Graph, Ref};
@@ -22,6 +23,8 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Ref>()?;
     m.add_class::<Type>()?;
     m.add_class::<Function>()?;
+    m.add_function(wrap_pyfunction!(read_graph, m)?)?;
+    m.add_function(wrap_pyfunction!(read_fn, m)?)?;
     m.add_function(wrap_pyfunction!(graph::current_graph, m)?)?;
     m.add_function(wrap_pyfunction!(r#const, m)?)?;
     m.add_function(wrap_pyfunction!(input, m)?)?;
@@ -36,7 +39,6 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<dataset::Dataset>()?;
 
     m.add_class::<mapping::LazyMapping>()?;
-    m.add_function(wrap_pyfunction!(mapping::mapping, m)?)?;
 
     pfunc::init(m)?;
 
@@ -54,6 +56,21 @@ impl From<ToPyErr> for PyErr {
 #[pyclass]
 #[derive(Clone)]
 struct Type(rust::Type);
+
+#[pymethods]
+impl Type {
+    fn __repr__(&self) -> String {
+        format!("Type({:?}", self.0)
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}", self.0)
+    }
+
+    fn __eq__(&self, other: Type) -> bool {
+        self.0 == other.0
+    }
+}
 
 fn const_from_py(g: &mut rust::Graph, val: &Bound<PyAny>) -> PyResult<Ref> {
     if let Ok(b) = val.extract::<bool>() {
@@ -79,6 +96,7 @@ fn value_from_ref(g: &rust::Graph, scalar: Ref) -> PyResult<rust::layout::RefVal
     Ok(match g.type_of(scalar.0) {
         rust::Type::Float => rust::layout::RefValue::Scalar(scalar.0),
         rust::Type::Bool => rust::layout::RefValue::Bool(scalar.0),
+        rust::Type::DateTime => rust::layout::RefValue::DateTime(scalar.0),
         rust::Type::Symbol => rust::layout::RefValue::Symbol(scalar.0),
         _ => {
             return Err(exceptions::PyException::new_err(format!(
@@ -94,6 +112,8 @@ fn pythonize_ref_value(py: Python, val: rust::layout::RefValue) -> PyResult<PyOb
         rust::layout::RefValue::Unit => PyNone::get_bound(py).to_owned().unbind().into(),
         rust::layout::RefValue::Scalar(s) => Ref(s).into_py(py),
         rust::layout::RefValue::Bool(s) => Ref(s).into_py(py),
+        rust::layout::RefValue::DateTime(s) => Ref(s).into_py(py),
+        rust::layout::RefValue::Symbol(e) => Ref(e).into_py(py),
         rust::layout::RefValue::Struct(fields) => {
             let dict = PyDict::new_bound(py);
             for (name, val) in fields {
@@ -101,7 +121,6 @@ fn pythonize_ref_value(py: Python, val: rust::layout::RefValue) -> PyResult<PyOb
             }
             dict.unbind().into()
         }
-        rust::layout::RefValue::Symbol(e) => Ref(e).into_py(py),
         rust::layout::RefValue::List(l) => PyTuple::new_bound(
             py,
             l.into_iter()
@@ -163,6 +182,28 @@ fn depythonize_ref_value(obj: &Bound<PyAny>) -> PyResult<rust::layout::RefValue>
 }
 
 #[pyfunction]
+fn read_graph(file: &str, initialize: Option<bool>) -> PyResult<Graph> {
+    let initialize = initialize.unwrap_or(true);
+    let file = std::fs::File::open(file)?;
+    let inner = if initialize {
+        rust::Graph::load(file)
+    } else {
+        rust::Graph::load_uninitialized(file)
+    };
+    Ok(Graph(Arc::new(Mutex::new(inner.map_err(ToPyErr)?))))
+}
+
+#[pyfunction]
+fn read_fn(file: &str) -> PyResult<Function> {
+    let file = std::fs::File::open(file)?;
+    let inner = rust::Function::load(file).map_err(ToPyErr)?;
+    Ok(Function {
+        inner,
+        original: None,
+    })
+}
+
+#[pyfunction]
 fn putative_layout(obj: &Bound<PyAny>) -> PyResult<Layout> {
     Ok(Layout(depythonize_ref_value(obj)?.putative_layout()))
 }
@@ -178,12 +219,7 @@ fn input(py: Python, name: String, layout: Option<Layout>) -> PyResult<PyObject>
 
 #[pyfunction]
 fn list_input(name: String, size: usize) -> PyResult<Vec<Ref>> {
-    graph::with_current(|g| {
-        g.vec_input(name, size)
-            .into_iter()
-            .map(|r| Ref(r))
-            .collect()
-    })
+    graph::with_current(|g| g.vec_input(name, size).into_iter().map(Ref).collect())
 }
 
 #[pyfunction]

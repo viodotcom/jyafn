@@ -1,17 +1,45 @@
 use std::collections::HashMap;
+use std::fmt::{self, Display};
 
 use crate::Ref;
 
-use super::{Layout, Struct};
+use super::{Layout, Struct, ISOFORMAT};
 
 #[derive(Debug)]
 pub enum RefValue {
     Unit,
     Scalar(Ref),
     Bool(Ref),
+    DateTime(Ref),
     Symbol(Ref),
     Struct(HashMap<String, RefValue>),
     List(Vec<RefValue>),
+}
+
+impl Display for RefValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unit => write!(f, "unit"),
+            Self::Scalar(s) => write!(f, "scalar {s}"),
+            Self::Bool(s) => write!(f, "bool {s}"),
+            Self::DateTime(s) => write!(f, "datetime {s}"),
+            Self::Symbol(s) => write!(f, "symbol {s}"),
+            Self::Struct(fields) => {
+                write!(f, "{{ ")?;
+                for (name, field) in fields {
+                    write!(f, "{name}: {field}, ")?;
+                }
+                write!(f, "}}")
+            }
+            Self::List(list) => {
+                write!(f, "[ ")?;
+                for field in list {
+                    write!(f, "{field}, ")?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
 }
 
 impl RefValue {
@@ -20,6 +48,7 @@ impl RefValue {
             Self::Unit => Layout::Unit,
             Self::Scalar(_) => Layout::Scalar,
             Self::Bool(_) => Layout::Bool,
+            Self::DateTime(_) => Layout::DateTime(ISOFORMAT.to_string()),
             Self::Symbol(_) => Layout::Symbol,
             Self::Struct(fields) => Layout::Struct(Struct({
                 let mut strct = fields
@@ -30,7 +59,7 @@ impl RefValue {
                 strct
             })),
             Self::List(list) => {
-                if let Some(first) = list.get(0) {
+                if let Some(first) = list.first() {
                     Layout::List(Box::new(first.putative_layout()), list.len())
                 } else {
                     Layout::List(Box::new(Layout::Scalar), 0)
@@ -50,6 +79,7 @@ impl RefValue {
             (Self::Unit, Layout::Unit) => {}
             (Self::Scalar(s), Layout::Scalar) => buf.push(*s),
             (Self::Bool(s), Layout::Bool) => buf.push(*s),
+            (Self::DateTime(s), Layout::DateTime(_)) => buf.push(*s),
             (Self::Symbol(s), Layout::Symbol) => buf.push(*s),
             (Self::Struct(vals), Layout::Struct(fields)) => {
                 for (name, field) in &fields.0 {

@@ -35,7 +35,13 @@ pub fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
         sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh,
         gamma, loggamma, factorial, rgamma, digamma,
         erf, erfc, norm, norm_inv,
-        riemann_zeta
+        riemann_zeta,
+
+        // dt -> f64
+        timestamp,
+
+        // f64 -> dt
+        fromtimestamp
     }
 
     pfunc1s! {

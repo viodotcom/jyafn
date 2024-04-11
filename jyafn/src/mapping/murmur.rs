@@ -27,7 +27,7 @@ pub const fn murmur_hash64a(key: &[u8], seed: u64) -> u64 {
     while i != endpos {
         let mut k: u64;
 
-        k = key[i + 0] as u64;
+        k = key[i] as u64;
         k |= (key[i + 1] as u64) << 8;
         k |= (key[i + 2] as u64) << 16;
         k |= (key[i + 3] as u64) << 24;
@@ -65,7 +65,7 @@ pub const fn murmur_hash64a(key: &[u8], seed: u64) -> u64 {
         h ^= (key[i + 1] as u64) << 8;
     }
     if over >= 1 {
-        h ^= key[i + 0] as u64;
+        h ^= key[i] as u64;
     }
     if over > 0 {
         h = h.wrapping_mul(m);

@@ -1,6 +1,7 @@
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyTuple};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::{Graph, Layout, ToPyErr};
@@ -11,7 +12,6 @@ pub struct Function {
     /// The original python function that created this function
     pub(crate) original: Option<PyObject>,
 }
-
 
 #[pymethods]
 impl Function {
@@ -33,6 +33,11 @@ impl Function {
             self.inner.output_layout(),
             self.fn_ptr(),
         )
+    }
+
+    #[getter]
+    fn name(&self) -> String {
+        self.inner.graph().name().to_string()
     }
 
     #[getter]
@@ -66,24 +71,38 @@ impl Function {
     }
 
     #[setter]
-    fn set_original(&mut self, original: PyObject)  {
+    fn set_original(&mut self, original: PyObject) {
         self.original = Some(original);
+    }
+
+    fn get_size(&self) -> usize {
+        get_size::GetSize::get_size(&self.inner)
     }
 
     #[staticmethod]
     pub fn load(bytes: &[u8]) -> PyResult<Function> {
         Ok(Function {
-            inner: rust::Function::load(bytes).map_err(ToPyErr)?,
-            original: None, 
+            inner: rust::Function::load(std::io::Cursor::new(bytes)).map_err(ToPyErr)?,
+            original: None,
         })
     }
 
-    pub fn dump<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let data = self.inner.graph().dump();
-        let leaked = Box::leak(data.into_boxed_slice());
-        // Safety: leaking the box from rust and giving it to Python. Therefore, no
-        // double free.
-        unsafe { PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len()) }
+    // pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    //     let mut bytes = Vec::<u8>::new();
+    //     self.inner
+    //         .graph()
+    //         .dump(std::io::Cursor::new(&mut bytes))
+    //         .map_err(ToPyErr)?;
+    //     let leaked = Box::leak(bytes.into_boxed_slice());
+    //     // Safety: leaking the box from rust and giving it to Python. Therefore, no
+    //     // double free.
+    //     unsafe { Ok(PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())) }
+    // }
+
+    pub fn write(&self, path: &str) -> PyResult<()> {
+        let file = std::fs::File::create(path)?;
+        self.inner.graph().dump(file).map_err(ToPyErr)?;
+        Ok(())
     }
 
     pub fn to_json(&self) -> String {
@@ -92,6 +111,11 @@ impl Function {
 
     fn get_graph(&self) -> Graph {
         Graph(Arc::new(Mutex::new(self.inner.graph().clone())))
+    }
+
+    #[getter]
+    fn metadata(&self) -> HashMap<String, String> {
+        self.inner.graph().metadata().clone()
     }
 
     fn eval_raw(&self, args: &[u8]) -> PyResult<Vec<u8>> {
@@ -103,13 +127,18 @@ impl Function {
     }
 
     fn eval(&self, val: &Bound<'_, PyAny>) -> PyResult<PyObject> {
-        Ok(self
-            .inner
-            .eval_with_decoder(
-                &crate::layout::Obj(val.clone()),
-                crate::layout::PyDecoder(val.py()),
-            )
-            .map_err(ToPyErr)?)
+        let outcome = self.inner.eval_with_decoder(
+            &crate::layout::Obj(val.clone()),
+            crate::layout::PyDecoder(val.py()),
+        );
+
+        if let Err(rust::Error::EncodeError(inner)) = &outcome {
+            if let Some(err) = inner.downcast_ref::<PyErr>() {
+                return Err(err.clone_ref(val.py()));
+            }
+        }
+
+        Ok(outcome.map_err(ToPyErr)?)
     }
 
     #[pyo3(signature = (*args, **kwargs))]

@@ -1,11 +1,13 @@
+use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
+use std::convert::AsRef;
 
 pub trait Sym {
     fn find(&mut self, name: &str) -> Option<usize>;
     fn get(&self, id: usize) -> Option<&str>;
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, GetSize)]
 pub struct Symbols(Vec<String>);
 
 impl Sym for Symbols {
@@ -24,6 +26,12 @@ impl Sym for Symbols {
     }
 }
 
+impl AsRef<[String]> for Symbols {
+    fn as_ref(&self) -> &[String] {
+        &self.0
+    }
+}
+
 impl Symbols {
     pub fn push(&mut self, symbol: String) -> usize {
         if let Some(symbol_id) = self.0.iter().position(|e| e == &symbol) {
@@ -33,10 +41,6 @@ impl Symbols {
             self.0.push(symbol);
             symbol_id
         }
-    }
-
-    pub fn as_ref(&self) -> &[String] {
-        &self.0
     }
 }
 

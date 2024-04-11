@@ -1,10 +1,11 @@
+use chrono::prelude::*;
 use lazy_static::lazy_static;
 use special_fun::FloatSpecial;
 use std::collections::HashMap;
 use std::ops::Rem;
 use std::sync::RwLock;
 
-use super::{Error, Type};
+use super::{utils, Error, Type};
 
 /// Only use with function pointers and _nothing_ else.
 #[derive(Debug, Clone, Copy)]
@@ -73,7 +74,7 @@ impl PFunc {
         self.fn_ptr.0 as usize
     }
 
-    pub fn call1(f: fn(f64) -> f64) -> PFunc {
+    fn call1(f: fn(f64) -> f64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
             signature: &[Type::Float],
@@ -82,7 +83,7 @@ impl PFunc {
         }
     }
 
-    pub fn call2(f: fn(f64, f64) -> f64) -> PFunc {
+    fn call2(f: fn(f64, f64) -> f64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
             signature: &[Type::Float, Type::Float],
@@ -91,11 +92,29 @@ impl PFunc {
         }
     }
 
-    pub fn call1bool(f: fn(f64) -> bool) -> PFunc {
+    fn call_bool_to_f64(f: fn(f64) -> bool) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
             signature: &[Type::Float],
             returns: Type::Bool,
+            const_eval: ConstEval::no_eval(),
+        }
+    }
+
+    pub fn call_dt_to_f64(f: fn(i64) -> f64) -> PFunc {
+        PFunc {
+            fn_ptr: ThreadsafePointer(f as *const ()),
+            signature: &[Type::DateTime],
+            returns: Type::Float,
+            const_eval: ConstEval::no_eval(),
+        }
+    }
+
+    pub fn call_f64_to_dt(f: fn(f64) -> i64) -> PFunc {
+        PFunc {
+            fn_ptr: ThreadsafePointer(f as *const ()),
+            signature: &[Type::Float],
+            returns: Type::DateTime,
             const_eval: ConstEval::no_eval(),
         }
     }
@@ -105,6 +124,8 @@ lazy_static! {
     static ref P_FUNCS: RwLock<HashMap<&'static str, PFunc>> = RwLock::new(init());
 }
 
+/// # Safety
+///
 /// This function is unsafe because _anything_ can be passed as a function pointer,
 /// including stuff that are note function. Its the caller responsibility to check that
 /// `fn_ptr` is in fact a function pointer and that the arguments match the signature
@@ -151,13 +172,13 @@ pub fn get(name: &str) -> Option<PFunc> {
 fn init() -> HashMap<&'static str, PFunc> {
     let mut map = HashMap::new();
 
-    macro_rules! pfuncs {
+    macro_rules! pfuncs_f64 {
         ($($method:ident : $($f:ident),*);*) => { $($(
             map.insert(stringify!($f), PFunc::$method(f64::$f));
         )*)* }
     }
 
-    pfuncs! {
+    pfuncs_f64! {
         call1:
             floor, ceil, round, trunc,
             sqrt, exp, ln,
@@ -169,9 +190,71 @@ fn init() -> HashMap<&'static str, PFunc> {
             powf, rem,
             beta, logbeta, gammainc, gammac, gammac_inv,
             besselj, bessely, besseli;
-        call1bool:
+        call_bool_to_f64:
             is_nan, is_finite, is_infinite
     }
 
+    macro_rules! pfuncs {
+        ($($method:ident : $($f:ident),*);*) => { $($(
+            map.insert(stringify!($f), PFunc::$method($f));
+        )*)* }
+    }
+
+    pfuncs! {
+        call_f64_to_dt:
+            fromtimestamp;
+        call_dt_to_f64:
+            timestamp, year, month, day, hour, minute, second, microsecond,
+            weekday, week, dayofyear
+    }
+
     map
+}
+
+fn fromtimestamp(x: f64) -> i64 {
+    (x * 1e6) as i64
+}
+
+fn timestamp(dt: i64) -> f64 {
+    dt as f64 / 1e6
+}
+
+fn year(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).year() as f64
+}
+
+fn month(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).month() as f64
+}
+
+fn day(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).day() as f64
+}
+
+fn hour(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).hour() as f64
+}
+
+fn minute(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).minute() as f64
+}
+
+fn second(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).second() as f64
+}
+
+fn microsecond(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).timestamp_subsec_micros() as f64
+}
+
+fn weekday(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).weekday() as i64 as f64
+}
+
+fn week(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).iso_week().week() as i64 as f64
+}
+
+fn dayofyear(dt: i64) -> f64 {
+    utils::int_to_datetime(dt).ordinal() as f64
 }

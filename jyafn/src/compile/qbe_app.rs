@@ -17,7 +17,7 @@ fn load() -> Result<PathBuf, io::Error> {
     let rand = random::<u32>();
     let temp_qbe = env::temp_dir().join(format!("qbe-{rand}"));
     fs::write(&temp_qbe, BIN)?;
-    fs::set_permissions(&temp_qbe, fs::Permissions::from_mode(0755))?;
+    fs::set_permissions(&temp_qbe, fs::Permissions::from_mode(0o755))?;
 
     Ok(temp_qbe)
 }

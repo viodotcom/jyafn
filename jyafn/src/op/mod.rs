@@ -44,6 +44,10 @@ pub trait Op: 'static + Debug + Send + Sync + RefUnwindSafe + Downcast {
     fn is_illegal(&self, args: &[Ref]) -> bool {
         false
     }
+
+    fn get_size(&self) -> usize {
+        0
+    }
 }
 
 impl_downcast!(Op);

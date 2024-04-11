@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::{Graph, Node, Ref, Type};
+use crate::{Graph, Node, Ref};
 
 /// Even though QBE can make a good job of finding unused data, sometimes it cannot
 /// optimize everything out. One example are pfuncs. Since, fot QBE, the call might as
@@ -219,7 +219,7 @@ impl Statements {
             while let Some(node_id) = node_ids.pop_last() {
                 if nodes[node_id].op.as_any().is::<crate::op::Choose>() {
                     let condition = nodes[node_id].args[0];
-                    let (true_side, false_side) = find_branches(nodes, &reversed, node_id);
+                    let (true_side, false_side) = find_branches(nodes, reversed, node_id);
 
                     true_side.iter().chain(false_side.iter()).for_each(|n| {
                         node_ids.remove(n);

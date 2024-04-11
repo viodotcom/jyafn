@@ -40,5 +40,4 @@ with open("from_components.ssa", "w") as f:
 with open("from_components.s", "w") as f:
     f.write(from_components.get_graph().render_assembly())
 
-with open("from_components.jyafn", "wb") as f:
-    f.write(from_components.dump())
+from_components.write("from_components.jyafn")

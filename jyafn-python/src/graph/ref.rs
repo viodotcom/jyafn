@@ -67,14 +67,26 @@ impl Ref {
         insert_in_current(rust::op::Mul, vec![other.0, self.0])
     }
 
-    fn __div__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+    fn __truediv__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
         let other = Ref::make(other)?;
         insert_in_current(rust::op::Div, vec![self.0, other.0])
     }
 
-    fn __rdiv__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+    fn __rtruediv__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
         let other = Ref::make(other)?;
         insert_in_current(rust::op::Div, vec![other.0, self.0])
+    }
+
+    fn __floordiv__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+        let other = Ref::make(other)?;
+        let divided = insert_in_current(rust::op::Div, vec![self.0, other.0])?;
+        insert_in_current(rust::op::Call("floor".to_string()), vec![divided.0])
+    }
+
+    fn __rfloordiv__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+        let other = Ref::make(other)?;
+        let divided = insert_in_current(rust::op::Div, vec![other.0, self.0])?;
+        insert_in_current(rust::op::Call("floor".to_string()), vec![divided.0])
     }
 
     fn __mod__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
@@ -172,7 +184,8 @@ impl Ref {
         insert_in_current(rust::op::ToFloat, vec![self.0])
     }
 
-    // Reimplementing pfuncs as methods allows us to take advantage of numpy's ufuncs.
+    // Reimplementing pfuncs as methods allows us to take advantage of numpy
+    // functionalities.
 
     fn sqrt(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("sqrt".to_string()), vec![self.0])
@@ -237,5 +250,51 @@ impl Ref {
 
     fn atanh(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("atanh".to_string()), vec![self.0])
+    }
+
+    // Datetime functions:
+
+    fn timestamp(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("timestamp".to_string()), vec![self.0])
+    }
+
+    fn year(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("year".to_string()), vec![self.0])
+    }
+
+    fn month(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("month".to_string()), vec![self.0])
+    }
+
+    fn day(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("day".to_string()), vec![self.0])
+    }
+
+    fn hour(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("hour".to_string()), vec![self.0])
+    }
+
+    fn minute(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("minute".to_string()), vec![self.0])
+    }
+
+    fn second(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("second".to_string()), vec![self.0])
+    }
+
+    fn microsecond(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("microsecond".to_string()), vec![self.0])
+    }
+
+    fn weekday(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("weekday".to_string()), vec![self.0])
+    }
+
+    fn week(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("week".to_string()), vec![self.0])
+    }
+
+    fn dayofyear(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("dayofyear".to_string()), vec![self.0])
     }
 }

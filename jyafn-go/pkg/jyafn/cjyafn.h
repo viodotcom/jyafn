@@ -67,3 +67,9 @@ uint64_t function_call_raw(const void *func, const uint8_t *input, uint8_t *outp
 struct Outcome function_eval_raw(const void *func, const uint8_t *input);
 
 struct Outcome function_eval_json(const void *func, char *input);
+
+struct Outcome pfunc_inscribe(const char *name,
+                              const void *fn_ptr,
+                              const uint8_t *signature,
+                              uintptr_t signature_len,
+                              uint8_t returns);

@@ -1,4 +1,10 @@
-use std::{cell::RefCell, fmt::Debug, sync::Arc};
+use get_size::GetSize;
+use std::{
+    cell::RefCell,
+    fmt::Debug,
+    io::{Read, Seek},
+    sync::Arc,
+};
 use thread_local::ThreadLocal;
 
 use super::{layout, Error, Graph, Type};
@@ -8,7 +14,7 @@ pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> u64;
 #[derive(Debug)]
 pub struct FunctionData {
     graph: Graph,
-    _code: memmap::Mmap,
+    code: memmap::Mmap,
     input_layout: layout::Layout,
     output_layout: layout::Layout,
     input_size: usize,
@@ -18,7 +24,26 @@ pub struct FunctionData {
     output: ThreadLocal<RefCell<layout::Visitor>>,
 }
 
-#[derive(Debug, Clone)]
+impl GetSize for FunctionData {
+    fn get_heap_size(&self) -> usize {
+        self.graph.get_heap_size()
+            + self.code.len()
+            + self.input_layout.get_heap_size()
+            + self.output_layout.get_heap_size()
+            + self
+                .input
+                .get()
+                .map(|i| i.borrow().as_ref().get_size())
+                .unwrap_or(0)
+            + self
+                .output
+                .get()
+                .map(|o| o.borrow().as_ref().get_size())
+                .unwrap_or(0)
+    }
+}
+
+#[derive(Debug, Clone, GetSize)]
 pub struct Function {
     data: Arc<FunctionData>,
 }
@@ -64,8 +89,8 @@ impl Function {
         self.into()
     }
 
-    pub fn load(bytes: &[u8]) -> Result<Function, Error> {
-        let graph = Graph::load(bytes)?;
+    pub fn load<R: Read + Seek>(reader: R) -> Result<Function, Error> {
+        let graph = Graph::load(reader)?;
         graph.compile()
     }
 
@@ -87,7 +112,7 @@ impl Function {
 
         Ok(Function {
             data: Arc::new(FunctionData {
-                _code: code,
+                code,
                 input_size: input_size_in_floats * Type::Float.size(),
                 input_layout: input_layout.into(),
                 output_size: output_size_in_floats * Type::Float.size(),
@@ -113,14 +138,14 @@ impl Function {
 
         // Safety: input and output sizes are checked and function pinky-promisses not to
         // accesses anything out of bounds.
-        unsafe { (self.data.fn_ptr)(input.as_ptr() as *const u8, output.as_mut_ptr() as *mut u8) }
+        unsafe { (self.data.fn_ptr)(input.as_ptr(), output.as_mut_ptr()) }
     }
 
     pub fn eval_raw<I>(&self, input: I) -> Result<Box<[u8]>, Error>
     where
         I: AsRef<[u8]>,
     {
-        let mut output = vec![0; self.data.output_size as usize].into_boxed_slice();
+        let mut output = vec![0; self.data.output_size].into_boxed_slice();
         let status = self.call_raw(input, &mut output);
         if status == 0 {
             Ok(output)

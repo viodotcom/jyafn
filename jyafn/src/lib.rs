@@ -7,6 +7,7 @@ pub mod layout;
 pub mod mapping;
 pub mod op;
 pub mod pfunc;
+pub mod utils;
 
 mod compile;
 mod function;
@@ -19,7 +20,11 @@ pub use graph::{Graph, Node, Ref, Type};
 pub use op::Op;
 pub use r#const::Const;
 
-use std::{error::Error as StdError, fmt::Debug, process::ExitStatus};
+use std::{
+    error::Error as StdError,
+    fmt::{self, Debug, Display},
+    process::ExitStatus,
+};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -44,12 +49,12 @@ pub enum Error {
     StatusRaised(String),
     #[error("encode error: {0}")]
     EncodeError(Box<dyn StdError + Send>),
-    #[error("wrong layout: expected {expected:?}, got {got:?}")]
+    #[error("wrong layout: expected {expected}, got {got}")]
     WrongLayout {
         expected: layout::Layout,
         got: layout::Layout,
     },
-    #[error("bad value: expected layout {expected:?}, got value {got:?}")]
+    #[error("bad value: expected layout {expected}, got value {got}")]
     BadValue {
         expected: layout::Layout,
         got: layout::RefValue,
@@ -58,8 +63,12 @@ pub enum Error {
     Deserialization(bincode::Error),
     #[error("JSON deserialization error: {0}")]
     JsonDeserialization(serde_json::Error),
+    #[error("zip error: {0}")]
+    Zip(zip::result::ZipError),
     #[error("{0}")]
     Other(String),
+    #[error("{error}\n\n{context}")]
+    WithContext { error: Box<Error>, context: Ctx },
 }
 
 impl From<std::io::Error> for Error {
@@ -74,14 +83,64 @@ impl From<object::Error> for Error {
     }
 }
 
+impl From<zip::result::ZipError> for Error {
+    fn from(err: zip::result::ZipError) -> Error {
+        Error::Zip(err)
+    }
+}
+
 impl From<String> for Error {
     fn from(err: String) -> Error {
         Error::Other(err)
     }
 }
 
+pub trait Context: Sized {
+    fn with_context<F>(self, ctx: F) -> Self
+    where
+        F: FnOnce() -> String;
+
+    fn context(self, ctx: &str) -> Self {
+        self.with_context(|| ctx.to_string())
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Ctx(Vec<String>);
+
+impl Display for Ctx {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Context (most recent last):")?;
+        for cause in &self.0 {
+            writeln!(f, "    - {cause}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<T> Context for Result<T, Error> {
+    fn with_context<F>(self, ctx: F) -> Self
+    where
+        F: FnOnce() -> String,
+    {
+        self.map_err(|err| {
+            if let Error::WithContext { error, mut context } = err {
+                context.0.push(ctx());
+                Error::WithContext { error, context }
+            } else {
+                Error::WithContext {
+                    error: Box::new(err),
+                    context: Ctx(vec![ctx()]),
+                }
+            }
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use super::layout::{Layout, RefValue};
     use super::*;
     use byte_slice_cast::*;
 
@@ -92,7 +151,7 @@ mod test {
         let c = graph.insert(op::Add, vec![a, b]).unwrap();
         let one = graph.r#const(1.0);
         let d = graph.insert(op::Add, vec![c, one]).unwrap();
-        graph.scalar_output(d);
+        graph.output(RefValue::Scalar(d), Layout::Scalar).unwrap();
 
         graph
     }
@@ -141,7 +200,7 @@ mod test {
         let mut g = Graph::new();
         let a = g.scalar_input("a".to_string());
         let s = g.insert(op::Call("sqrt".to_string()), vec![a]).unwrap();
-        g.scalar_output(s);
+        g.output(RefValue::Scalar(s), Layout::Scalar).unwrap();
 
         g
     }
@@ -160,9 +219,7 @@ mod test {
 
         let num = 4.0;
         let sqrt: f64 = func
-            .eval(&layout::Value::Struct(maplit::hashmap! {
-                "a".to_string() => layout::Value::Scalar(num),
-            }))
+            .eval(&serde_json::to_value(format!("{{ \"a\": {num} }}")).unwrap())
             .unwrap();
 
         println!("sqrt({num}) = {sqrt}");
@@ -172,7 +229,7 @@ mod test {
         let mut g = Graph::new();
         let a = g.scalar_input("a".to_string());
         let aa = g.insert(op::Abs, vec![a]).unwrap();
-        g.scalar_output(aa);
+        g.output(RefValue::Scalar(aa), Layout::Scalar).unwrap();
 
         g
     }
@@ -191,18 +248,14 @@ mod test {
 
         let num = 4.0;
         let abs: f64 = func
-            .eval(&layout::Value::Struct(maplit::hashmap! {
-                "a".to_string() => layout::Value::Scalar(num),
-            }))
+            .eval(&serde_json::to_value(format!("{{ \"a\": {num} }}")).unwrap())
             .unwrap();
 
         println!("abs({num}) = {abs}");
 
         let num = -4.0;
         let abs: f64 = func
-            .eval(&layout::Value::Struct(maplit::hashmap! {
-                "a".to_string() => layout::Value::Scalar(num),
-            }))
+            .eval(&serde_json::to_value(format!("{{ \"a\": {num} }}")).unwrap())
             .unwrap();
 
         println!("abs({num}) = {abs}");

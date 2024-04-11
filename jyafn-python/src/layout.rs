@@ -19,8 +19,9 @@ impl<'py> Encode for Obj<'py> {
                     visitor.push(float);
                 } else {
                     return Err(exceptions::PyTypeError::new_err(format!(
-                        "expected {layout}, got {}",
-                        self.0
+                        "expected {layout}, got value {}, of type {}",
+                        self.0,
+                        self.0.get_type(),
                     )));
                 }
             }
@@ -29,10 +30,37 @@ impl<'py> Encode for Obj<'py> {
                     visitor.push_int(float as i64);
                 } else {
                     return Err(exceptions::PyTypeError::new_err(format!(
-                        "expected {layout}, got {}",
+                        "expected {layout}, got value {}, of type {}",
+                        self.0,
+                        self.0.get_type()
+                    )));
+                }
+            }
+            RustLayout::DateTime(format) => {
+                if let Ok(datetime) = self.0.extract::<String>() {
+                    match rust::utils::parse_datetime(&datetime, format) {
+                        Ok(d) => visitor.push_int(rust::utils::Timestamp::from(d.to_utc()).into()),
+                        Err(err) => {
+                            return Err(exceptions::PyTypeError::new_err(format!(
+                                "could not parse {datetime} as {format}: {err}",
+                            )));
+                        }
+                    }
+                } else {
+                    return Err(exceptions::PyTypeError::new_err(format!(
+                        "expected {layout}, got value {}",
                         self.0
                     )));
                 }
+            }
+            RustLayout::Symbol => {
+                let e = self.0.extract::<String>()?;
+                let Some(index) = symbols.find(&e) else {
+                    return Err(exceptions::PyTypeError::new_err(format!(
+                        "symbol {e:?} not found",
+                    )));
+                };
+                visitor.push_int(index as i64);
             }
             RustLayout::Struct(fields) => {
                 for (name, field) in &fields.0 {
@@ -44,15 +72,6 @@ impl<'py> Encode for Obj<'py> {
                     };
                     Obj(item).visit(field, symbols, visitor)?;
                 }
-            }
-            RustLayout::Symbol => {
-                let e = self.0.extract::<String>()?;
-                let Some(index) = symbols.find(&*e) else {
-                    return Err(exceptions::PyTypeError::new_err(format!(
-                        "symbol {e:?} not found",
-                    )));
-                };
-                visitor.push_int(index as i64);
             }
             RustLayout::List(element, size) => {
                 let mut n_items = 0;
@@ -96,6 +115,16 @@ impl<'py> Decoder for PyDecoder<'py> {
             RustLayout::Unit => ().to_object(self.0),
             RustLayout::Scalar => visitor.pop().to_object(self.0),
             RustLayout::Bool => (visitor.pop_int() != 0).to_object(self.0),
+            RustLayout::DateTime(format) => chrono::DateTime::<chrono::Utc>::from(
+                rust::utils::Timestamp::from(visitor.pop_int()),
+            )
+            .format(format)
+            .to_string()
+            .to_object(self.0),
+            RustLayout::Symbol => symbols
+                .get(visitor.pop_int() as usize)
+                .unwrap()
+                .to_object(self.0),
             RustLayout::Struct(fields) => {
                 let dict = pyo3::types::PyDict::new_bound(self.0);
 
@@ -106,10 +135,6 @@ impl<'py> Decoder for PyDecoder<'py> {
 
                 dict.to_object(self.0)
             }
-            RustLayout::Symbol => symbols
-                .get(visitor.pop_int() as usize)
-                .unwrap()
-                .to_object(self.0),
             RustLayout::List(element, size) => pyo3::types::PyList::new_bound(
                 self.0,
                 (0..*size).map(|_| self.build(element, symbols, visitor)),
@@ -136,12 +161,24 @@ impl Layout {
         self.0.to_string()
     }
 
+    fn pretty(&self) -> String {
+        self.0.pretty()
+    }
+
     fn is_unit(&self) -> bool {
         self.0 == rust::layout::Layout::Unit
     }
 
     fn is_scalar(&self) -> bool {
         self.0 == rust::layout::Layout::Scalar
+    }
+
+    fn is_bool(&self) -> bool {
+        matches!(&self.0, rust::layout::Layout::Bool)
+    }
+
+    fn is_datetime(&self) -> bool {
+        matches!(&self.0, rust::layout::Layout::DateTime(_))
     }
 
     fn is_symbol(&self) -> bool {
@@ -166,6 +203,18 @@ impl Layout {
     #[staticmethod]
     fn scalar() -> Layout {
         Layout(rust::layout::Layout::Scalar)
+    }
+
+    #[staticmethod]
+    fn bool() -> Layout {
+        Layout(rust::layout::Layout::Bool)
+    }
+
+    #[staticmethod]
+    fn datetime(format: Option<String>) -> Layout {
+        Layout(rust::layout::Layout::DateTime(
+            format.unwrap_or_else(|| rust::layout::ISOFORMAT.to_string()),
+        ))
     }
 
     #[staticmethod]

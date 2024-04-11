@@ -12,8 +12,7 @@ impl Graph {
     fn find_illegal(&self) -> Option<&Node> {
         self.nodes
             .iter()
-            .filter(|node| node.op.is_illegal(&node.args))
-            .next()
+            .find(|node| node.op.is_illegal(&node.args))
     }
 
     pub fn render(&self) -> qbe::Module<'static> {
@@ -116,7 +115,7 @@ impl Graph {
 
     pub fn render_assembly(&self) -> Result<String, Error> {
         let rendered = self.render();
-        Ok(create_assembly(rendered)?)
+        create_assembly(rendered)
     }
 
     pub fn compile(&self) -> Result<Function, Error> {

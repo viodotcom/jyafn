@@ -1,8 +1,31 @@
 use byte_slice_cast::*;
+use get_size::GetSize;
+use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use std::convert::AsRef;
+use std::ops::Deref;
 
 pub const BUFFER_SIZE: usize = 4 * std::mem::size_of::<u64>();
-pub type Buffer = SmallVec<[u8; BUFFER_SIZE]>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Buffer(SmallVec<[u8; BUFFER_SIZE]>);
+
+impl GetSize for Buffer {
+    fn get_heap_size(&self) -> usize {
+        if self.0.spilled() {
+            self.0.capacity()
+        } else {
+            0
+        }
+    }
+}
+
+impl Deref for Buffer {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 type BoxBuffer = Box<[u8]>;
 
 #[derive(Debug, Clone)]
@@ -14,17 +37,19 @@ impl From<Buffer> for Visitor {
     }
 }
 
+impl AsRef<[u8]> for Visitor {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 impl Visitor {
     pub(crate) fn new(size: usize) -> Visitor {
         Visitor(vec![0; size * 8].into_boxed_slice(), 0)
     }
 
-    pub fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-
     pub fn into_inner(self) -> Buffer {
-        self.0.iter().copied().collect()
+        Buffer(self.0.into_vec().into())
     }
 
     pub(crate) fn reset(&mut self) {

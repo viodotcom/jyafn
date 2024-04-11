@@ -19,6 +19,10 @@ impl Dataset {
         self.n_items
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.n_items == 0
+    }
+
     pub fn try_build<I, E, Err, C>(layout: Layout, mut conv_err: C, it: I) -> Result<Dataset, Err>
     where
         I: IntoIterator<Item = Result<E, Err>>,

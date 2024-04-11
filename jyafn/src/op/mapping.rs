@@ -1,10 +1,11 @@
+use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, GetSize)]
 pub(crate) struct CallMapping {
     pub name: String,
 }
@@ -13,8 +14,8 @@ pub(crate) struct CallMapping {
 impl Op for CallMapping {
     fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
         if let Some(mapping) = graph.mappings.get(&self.name) {
-            if &mapping.key_layout().slots() == args {
-                return Some(Type::Int);
+            if mapping.key_layout().slots() == args {
+                return Some(Type::Ptr);
             }
         }
 
@@ -30,7 +31,7 @@ impl Op for CallMapping {
     ) {
         func.assign_instr(
             output.clone(),
-            Type::Int.render(),
+            Type::Ptr.render(),
             qbe::Instr::Call(
                 qbe::Value::Global(format!("mapping.{}", self.name)),
                 args.iter()
@@ -39,9 +40,13 @@ impl Op for CallMapping {
             ),
         );
     }
+
+    fn get_size(&self) -> usize {
+        GetSize::get_size(self)
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, GetSize)]
 pub(crate) struct LoadMappingValue {
     pub mapping: String,
     pub error_code: u64,
@@ -51,7 +56,7 @@ pub(crate) struct LoadMappingValue {
 #[typetag::serde]
 impl Op for LoadMappingValue {
     fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
-        if args.len() != 1 || args[0] != Type::Int {
+        if args.len() != 1 || args[0] != Type::Ptr {
             return None;
         }
 
@@ -99,9 +104,13 @@ impl Op for LoadMappingValue {
             qbe::Instr::Load(ty.render(), qbe::Value::Temporary(addr)),
         );
     }
+
+    fn get_size(&self) -> usize {
+        GetSize::get_size(self)
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, GetSize)]
 pub(crate) struct LoadOrDefaultMappingValue {
     pub mapping: String,
     pub error_code: u64,
@@ -111,7 +120,7 @@ pub(crate) struct LoadOrDefaultMappingValue {
 #[typetag::serde]
 impl Op for LoadOrDefaultMappingValue {
     fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
-        if args.len() != 2 || args[0] != Type::Int {
+        if args.len() != 2 || args[0] != Type::Ptr {
             return None;
         }
 
@@ -167,5 +176,9 @@ impl Op for LoadOrDefaultMappingValue {
         );
 
         func.add_block(end_if);
+    }
+
+    fn get_size(&self) -> usize {
+        GetSize::get_size(self)
     }
 }

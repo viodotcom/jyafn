@@ -1,10 +1,11 @@
+use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{Graph, Ref, Type};
 
 use super::Op;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, GetSize)]
 pub struct Eq(pub Option<Type>);
 
 #[typetag::serde]
@@ -19,8 +20,8 @@ impl Op for Eq {
                 self.0 = Some(Type::Symbol);
                 Type::Bool
             }
-            [Type::Int, Type::Int] => {
-                self.0 = Some(Type::Int);
+            [Type::Ptr, Type::Ptr] => {
+                self.0 = Some(Type::Ptr);
                 Type::Bool
             }
             _ => return None,
@@ -52,6 +53,10 @@ impl Op for Eq {
         } else {
             None
         }
+    }
+
+    fn get_size(&self) -> usize {
+        GetSize::get_size(self)
     }
 }
 

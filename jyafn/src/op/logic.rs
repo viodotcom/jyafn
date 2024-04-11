@@ -1,10 +1,11 @@
+use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, GetSize)]
 pub(crate) struct Assert(pub u64);
 
 #[typetag::serde]
@@ -51,6 +52,10 @@ impl Op for Assert {
 
     fn is_illegal(&self, args: &[Ref]) -> bool {
         matches!(args[0].as_bool(), Some(false))
+    }
+
+    fn get_size(&self) -> usize {
+        GetSize::get_size(self)
     }
 }
 

@@ -1,3 +1,5 @@
+use crate::utils;
+
 use super::symbols::Sym;
 use super::{Layout, Visitor};
 
@@ -13,9 +15,15 @@ pub trait Decode {
 #[derive(Debug, Clone, Copy)]
 pub struct ZeroDecoder<D>(std::marker::PhantomData<D>);
 
+impl<D> Default for ZeroDecoder<D> {
+    fn default() -> Self {
+        ZeroDecoder(std::marker::PhantomData)
+    }
+}
+
 impl<D> ZeroDecoder<D> {
     pub fn new() -> Self {
-        ZeroDecoder(std::marker::PhantomData)
+        ZeroDecoder::default()
     }
 }
 
@@ -41,15 +49,21 @@ impl Decode for serde_json::Value {
             Layout::Unit => Self::Null,
             Layout::Scalar => visitor.pop().into(),
             Layout::Bool => (visitor.pop_int() != 0).into(),
+            Layout::DateTime(format) => {
+                chrono::DateTime::<chrono::Utc>::from(utils::Timestamp::from(visitor.pop_int()))
+                    .format(format)
+                    .to_string()
+                    .into()
+            }
+            Layout::Symbol => {
+                Self::String(symbols.get(visitor.pop_int() as usize).unwrap().to_string())
+            }
             Layout::Struct(fields) => fields
                 .0
                 .iter()
                 .map(|(name, field)| (name.clone(), Self::build(field, symbols, visitor)))
                 .collect::<serde_json::Map<_, _>>()
                 .into(),
-            Layout::Symbol => {
-                Self::String(symbols.get(visitor.pop_int() as usize).unwrap().to_string())
-            }
             Layout::List(element, size) => (0..*size)
                 .map(|_| Self::build(element, symbols, visitor))
                 .collect::<Vec<_>>()

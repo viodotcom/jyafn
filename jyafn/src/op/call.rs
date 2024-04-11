@@ -1,3 +1,4 @@
+use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{pfunc, Graph, Ref, Type};
@@ -33,7 +34,7 @@ impl Op for Call {
                 qbe::Value::Const(pfunc.location() as u64),
                 pfunc
                     .signature()
-                    .into_iter()
+                    .iter()
                     .zip(args)
                     .map(|(ty, arg)| (ty.render(), arg.render()))
                     .collect(),
@@ -49,5 +50,9 @@ impl Op for Call {
             .map(Ref::as_f64)
             .collect::<Option<Vec<_>>>()?;
         (pfunc.const_eval.0)(&const_args).map(|v| v.into())
+    }
+
+    fn get_size(&self) -> usize {
+        self.0.get_size()
     }
 }
