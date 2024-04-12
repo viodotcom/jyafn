@@ -22,7 +22,7 @@ jobs:
       with:
         command: build
         args: --release
-        container: manylinux2014
+        manylinux: auto
         working-directory: jyafn-python
     - name: ls
       run: ls target/wheels
