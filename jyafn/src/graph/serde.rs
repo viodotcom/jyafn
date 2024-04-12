@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::{Read, Seek, Write};
 
 use crate::Error;
@@ -8,7 +7,7 @@ use super::Graph;
 impl Graph {
     // NOTE: need to use a concrete type because the `Storage` object that backs mappings
     // needs to be object-safe. A better workaround may be thought in the future.
-    pub fn dump(&self, writer: File) -> Result<(), Error> {
+    pub fn dump<W: Write + Seek>(&self, writer: W) -> Result<(), Error> {
         let mut writer = zip::ZipWriter::new(writer);
 
         writer.start_file("graph", Default::default())?;

@@ -34,6 +34,12 @@ pub fn parse_datetime(s: &str, fmt: &str) -> chrono::ParseResult<DateTime<Utc>> 
         .map(|t| NaiveDateTime::UNIX_EPOCH.date().and_time(t).and_utc())
 }
 
+pub fn format_datetime(timestamp: i64, fmt: &str) -> String {
+    DateTime::<Utc>::from(Timestamp(timestamp))
+        .format(fmt)
+        .to_string()
+}
+
 pub struct Timestamp(i64);
 
 impl From<DateTime<Utc>> for Timestamp {

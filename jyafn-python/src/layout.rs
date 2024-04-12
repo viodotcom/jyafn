@@ -55,11 +55,7 @@ impl<'py> Encode for Obj<'py> {
             }
             RustLayout::Symbol => {
                 let e = self.0.extract::<String>()?;
-                let Some(index) = symbols.find(&e) else {
-                    return Err(exceptions::PyTypeError::new_err(format!(
-                        "symbol {e:?} not found",
-                    )));
-                };
+                let index = symbols.find(&e);
                 visitor.push_int(index as i64);
             }
             RustLayout::Struct(fields) => {

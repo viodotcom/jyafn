@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::convert::AsRef;
 
 pub trait Sym {
-    fn find(&mut self, name: &str) -> Option<usize>;
+    fn find(&mut self, name: &str) -> usize;
     fn get(&self, id: usize) -> Option<&str>;
 }
 
@@ -11,13 +11,13 @@ pub trait Sym {
 pub struct Symbols(Vec<String>);
 
 impl Sym for Symbols {
-    fn find(&mut self, name: &str) -> Option<usize> {
+    fn find(&mut self, name: &str) -> usize {
         if let Some(symbol_id) = self.0.iter().position(|e| e == name) {
-            Some(symbol_id)
+            symbol_id
         } else {
             let symbol_id = self.0.len();
             self.0.push(name.to_string());
-            Some(symbol_id)
+            symbol_id
         }
     }
 
@@ -56,16 +56,17 @@ impl SymbolsView<'_> {
 }
 
 impl Sym for SymbolsView<'_> {
-    fn find(&mut self, name: &str) -> Option<usize> {
+    fn find(&mut self, name: &str) -> usize {
         if let Some(id) = self.top.0.iter().position(|e| e == name) {
-            Some(id)
+            id
         } else if let Some(new) = self.new.as_mut() {
-            Some(new.push(name.to_string()) + self.top.0.len())
+            new.push(name.to_string()) + self.top.0.len()
         } else {
             let mut new = Symbols::default();
             let id = new.push(name.to_string());
             self.new = Some(new);
-            Some(id + self.top.0.len())
+
+            id + self.top.0.len()
         }
     }
 
@@ -73,7 +74,7 @@ impl Sym for SymbolsView<'_> {
         if let Some(name) = self.top.get(id) {
             Some(name)
         } else if let Some(new) = self.new.as_ref() {
-            new.get(id)
+            new.get(id - self.top.0.len())
         } else {
             None
         }

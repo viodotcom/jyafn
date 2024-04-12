@@ -4,6 +4,7 @@ use get_size::GetSize;
 use hashbrown::HashMap;
 use serde_derive::{Deserialize, Serialize};
 use std::hash::{BuildHasher, Hasher};
+use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::sync::Arc;
 use zip::read::ZipFile;
 
@@ -66,12 +67,12 @@ fn hash(line: &Buffer) -> u64 {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait StorageType: std::fmt::Debug + Send + Sync {
+pub trait StorageType: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     fn init(&self) -> Result<Box<dyn Storage>, Error>;
     fn read(&self, f: ZipFile<'_>) -> Result<Box<dyn Storage>, Error>;
 }
 
-pub trait Storage: std::fmt::Debug + Send + Sync {
+pub trait Storage: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     fn insert(&mut self, hash: u64, value: Buffer);
     fn get(&self, hash: u64) -> Option<&Buffer>;
     /// The ammount of heap used by this storage.

@@ -110,18 +110,25 @@ impl Function {
         let input_size_in_floats = input_layout.size();
         let output_size_in_floats = output_layout.size();
 
+        let mut data = FunctionData {
+            code,
+            input_size: input_size_in_floats * Type::Float.size(),
+            input_layout: input_layout.into(),
+            output_size: output_size_in_floats * Type::Float.size(),
+            output_layout,
+            fn_ptr,
+            graph,
+            input: ThreadLocal::new(),
+            output: ThreadLocal::new(),
+        };
+
+        let data_size = data.get_size();
+        data.graph
+            .metadata_mut()
+            .insert("jyafn.mem_size_estimate".to_string(), data_size.to_string());
+
         Ok(Function {
-            data: Arc::new(FunctionData {
-                code,
-                input_size: input_size_in_floats * Type::Float.size(),
-                input_layout: input_layout.into(),
-                output_size: output_size_in_floats * Type::Float.size(),
-                output_layout,
-                fn_ptr,
-                graph,
-                input: ThreadLocal::new(),
-                output: ThreadLocal::new(),
-            }),
+            data: Arc::new(data),
         })
     }
 

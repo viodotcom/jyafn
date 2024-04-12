@@ -1,13 +1,6 @@
-import jyafn as fn
 import timeit
 
-
-# @fn.func
-# def a_fun(a: fn.scalar, b: fn.scalar) -> fn.scalar:
-#     return 2.0 * a + b + 1.0
-
-# def a_py_fun(a, b):
-#     return 2.0 * a + b + 1.0
+import jyafn as fn
 
 
 @fn.func
@@ -24,13 +17,6 @@ def a_py_fun(a, b):
         b += a
     return b
 
-
-# @fn.func
-# def a_fun() -> fn.scalar:
-#     return 0.0
-
-# def a_py_fun():
-#     return 0.0
 
 print("py", a_py_fun(2, 3))
 print("jyafn", a_fun(2, 3))

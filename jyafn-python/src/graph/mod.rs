@@ -4,7 +4,7 @@ pub use r#ref::Ref;
 
 use pyo3::exceptions;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyString};
+use pyo3::types::{PyBytes, PyDict};
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
@@ -12,7 +12,8 @@ use super::layout::Layout;
 use super::{Function, ToPyErr};
 
 thread_local! {
-    pub static CONTEXT: RefCell<Vec<Graph>> = RefCell::new(vec![Graph::new(Some("main".to_string()))]);
+    pub static CONTEXT: RefCell<Vec<Graph>> =
+        RefCell::new(vec![Graph::new(Some("main".to_string()))]);
 }
 
 #[pyfunction]
@@ -32,13 +33,6 @@ where
     let current = current_graph()?;
     let mut lock = current.0.lock().expect("poisoned");
     f(&mut lock)
-}
-
-pub fn with_current<F, T>(f: F) -> PyResult<T>
-where
-    F: FnOnce(&mut rust::Graph) -> T,
-{
-    try_with_current(|g| Ok(f(g)))
 }
 
 pub fn insert_in_current<O: rust::Op>(op: O, args: Vec<rust::Ref>) -> PyResult<Ref> {
@@ -82,18 +76,15 @@ impl Graph {
         get_size::GetSize::get_size(&*self.0.lock().expect("poisoned"))
     }
 
-    // pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-    //     let mut bytes = Vec::<u8>::new();
-    //     self.0
-    //         .lock()
-    //         .expect("poisoned")
-    //         .dump(std::io::Cursor::new(&mut bytes))
-    //         .map_err(ToPyErr)?;
-    //     let leaked = Box::leak(bytes.into_boxed_slice());
-    //     // Safety: leaking the box from rust and giving it to Python. Therefore, no
-    //     // double free.
-    //     unsafe { Ok(PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())) }
-    // }
+    pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let mut bytes = Vec::<u8>::new();
+        self.0
+            .lock()
+            .expect("poisoned")
+            .dump(std::io::Cursor::new(&mut bytes))
+            .map_err(ToPyErr)?;
+        Ok(PyBytes::new_bound(py, &bytes))
+    }
 
     pub fn write(&self, path: &str) -> PyResult<()> {
         let file = std::fs::File::create(path)?;
@@ -115,13 +106,6 @@ impl Graph {
     pub fn to_json(&self) -> String {
         self.0.lock().expect("poisoned").to_json()
     }
-
-    // #[staticmethod]
-    // pub fn from_json(json: &Bound<'_, PyString>) -> PyResult<Self> {
-    //     Ok(Graph(Arc::new(Mutex::new(
-    //         rust::Graph::from_json(json.to_str()?).map_err(ToPyErr)?,
-    //     ))))
-    // }
 
     #[getter]
     pub fn name(&self) -> String {

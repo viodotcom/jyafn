@@ -87,17 +87,17 @@ impl Function {
         })
     }
 
-    // pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-    //     let mut bytes = Vec::<u8>::new();
-    //     self.inner
-    //         .graph()
-    //         .dump(std::io::Cursor::new(&mut bytes))
-    //         .map_err(ToPyErr)?;
-    //     let leaked = Box::leak(bytes.into_boxed_slice());
-    //     // Safety: leaking the box from rust and giving it to Python. Therefore, no
-    //     // double free.
-    //     unsafe { Ok(PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())) }
-    // }
+    pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let mut bytes = Vec::<u8>::new();
+        self.inner
+            .graph()
+            .dump(std::io::Cursor::new(&mut bytes))
+            .map_err(ToPyErr)?;
+        let leaked = Box::leak(bytes.into_boxed_slice());
+        // Safety: leaking the box from rust and giving it to Python. Therefore, no
+        // double free.
+        unsafe { Ok(PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())) }
+    }
 
     pub fn write(&self, path: &str) -> PyResult<()> {
         let file = std::fs::File::create(path)?;
@@ -169,5 +169,18 @@ impl Function {
         }
 
         self.eval(&kwargs)
+    }
+
+    fn eval_json(&self, json: &str, pretty: Option<bool>) -> PyResult<String> {
+        let value: serde_json::Value =
+            serde_json::from_str(json).map_err(|e| ToPyErr(e.to_string().into()))?;
+        let output: serde_json::Value = self.inner.eval(&value).map_err(ToPyErr)?;
+
+        Ok(if pretty.unwrap_or(false) {
+            serde_json::to_string_pretty(&output)
+        } else {
+            serde_json::to_string(&output)
+        }
+        .expect("can always serialize"))
     }
 }

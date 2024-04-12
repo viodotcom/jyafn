@@ -1,10 +1,10 @@
-import boto3
 import json
-import ppca_rs
-import numpy as np
-import jyafn as fn
-
 from time import time
+
+import boto3
+import jyafn as fn
+import numpy as np
+import ppca_rs
 
 s3 = boto3.client("s3")
 

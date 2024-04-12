@@ -1,6 +1,5 @@
 extern crate jyafn as rust;
 
-mod dataset;
 mod function;
 mod graph;
 mod layout;
@@ -28,15 +27,11 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(graph::current_graph, m)?)?;
     m.add_function(wrap_pyfunction!(r#const, m)?)?;
     m.add_function(wrap_pyfunction!(input, m)?)?;
-    m.add_function(wrap_pyfunction!(list_input, m)?)?;
-    m.add_function(wrap_pyfunction!(symbol_input, m)?)?;
     m.add_function(wrap_pyfunction!(ret, m)?)?;
     m.add_function(wrap_pyfunction!(assert_, m)?)?;
 
     m.add_class::<layout::Layout>()?;
     m.add_function(wrap_pyfunction!(putative_layout, m)?)?;
-
-    m.add_class::<dataset::Dataset>()?;
 
     m.add_class::<mapping::LazyMapping>()?;
 
@@ -213,18 +208,10 @@ fn input(py: Python, name: String, layout: Option<Layout>) -> PyResult<PyObject>
     if let Some(layout) = layout {
         graph::try_with_current(|g| pythonize_ref_value(py, g.input(name, layout.0)))
     } else {
-        graph::with_current(|g| Ref(g.scalar_input(name)).into_py(py))
+        graph::try_with_current(|g| {
+            pythonize_ref_value(py, g.input(name, rust::layout::Layout::Scalar))
+        })
     }
-}
-
-#[pyfunction]
-fn list_input(name: String, size: usize) -> PyResult<Vec<Ref>> {
-    graph::with_current(|g| g.vec_input(name, size).into_iter().map(Ref).collect())
-}
-
-#[pyfunction]
-fn symbol_input(name: String) -> PyResult<Ref> {
-    graph::with_current(|g| Ref(g.symbol_input(name)))
 }
 
 #[pyfunction]

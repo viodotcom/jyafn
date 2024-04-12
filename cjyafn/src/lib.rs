@@ -3,10 +3,15 @@
 
 extern crate jyafn as rust;
 
+#[cfg(test)]
+mod test;
+
+use get_size::GetSize;
 use rust::{
     layout::{Layout, Struct},
     Error, Function, Graph,
 };
+use std::borrow::Cow;
 use std::ffi::{c_char, CStr, CString};
 use std::panic::UnwindSafe;
 
@@ -51,6 +56,48 @@ fn from_ptr_result<T>(result: Result<*const T, Error>) -> Outcome {
     }
 }
 
+fn from_ptr<T>(ok: *const T) -> Outcome {
+    Outcome {
+        ok: ok as *const () as *mut (),
+        err: std::ptr::null(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn parse_datetime(s: *const c_char, fmt: *const c_char) -> Outcome {
+    unsafe {
+        try_panic_to_outcome(|| {
+            from_ptr_result(
+                rust::utils::parse_datetime(&from_c_str(s), &from_c_str(fmt))
+                    .map(|dt| {
+                        Box::leak(Box::new(i64::from(rust::utils::Timestamp::from(dt)))) as *mut i64
+                            as *const i64
+                    })
+                    .map_err(|e| e.to_string().into()),
+            )
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn format_datetime(timestamp: i64, fmt: *const c_char) -> Outcome {
+    unsafe {
+        try_panic_to_outcome(|| {
+            from_ptr(new_c_str(rust::utils::format_datetime(
+                timestamp,
+                &from_c_str(fmt),
+            )))
+        })
+    }
+}
+
+unsafe fn from_c_str<'a>(s: *const c_char) -> Cow<'a, str> {
+    let cstr = CStr::from_ptr(s);
+    cstr.to_string_lossy()
+}
+
+/// Every time this function is called, there needs to be an accompaning `free` on the
+/// other side.
 fn new_c_str(s: String) -> *const c_char {
     let c_str = CString::new(s)
         .expect("string representation should never contain \\0")
@@ -151,10 +198,30 @@ pub extern "C" fn error_to_string(error: *const ()) -> *const c_char {
 }
 
 #[no_mangle]
+pub extern "C" fn error_drop(error: *mut ()) {
+    unsafe {
+        let _ = Box::from_raw(error as *mut Error);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn graph_get_metadata(graph: *const (), key: *const c_char) -> *const c_char {
+    unsafe {
+        with_unchecked(graph, |graph: &Graph| {
+            if let Some(value) = graph.metadata().get(&*from_c_str(key)) {
+                new_c_str(value.to_string())
+            } else {
+                std::ptr::null()
+            }
+        })
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn graph_load(bytes: *const u8, len: usize) -> Outcome {
     try_panic_to_outcome(|| {
         fn graph_load(bytes: *const u8, len: usize) -> Result<Graph, Error> {
-            unsafe { Graph::load(std::slice::from_raw_parts(bytes, len)) }
+            unsafe { Graph::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len))) }
         }
 
         from_result(graph_load(bytes, len))
@@ -168,7 +235,11 @@ pub extern "C" fn graph_to_json(graph: *const ()) -> *const c_char {
 
 #[no_mangle]
 pub extern "C" fn graph_render(graph: *const ()) -> Outcome {
-    unsafe { with(graph, |graph: &Graph| new_c_str(graph.render().to_string())) }
+    unsafe {
+        try_with(graph, |graph: &Graph| {
+            from_ptr(new_c_str(graph.render().to_string()))
+        })
+    }
 }
 
 #[no_mangle]
@@ -183,6 +254,13 @@ pub extern "C" fn graph_clone(graph: *const ()) -> *const () {
             let boxed = Box::new(graph.clone());
             Box::leak(boxed) as *const Graph as *const ()
         })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn graph_drop(graph: *mut ()) {
+    unsafe {
+        let _ = Box::from_raw(graph as *mut Graph);
     }
 }
 
@@ -216,10 +294,10 @@ pub extern "C" fn layout_is_bool(layout: *const ()) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn layout_is_struct(layout: *const ()) -> bool {
+pub extern "C" fn layout_is_datetime(layout: *const ()) -> bool {
     unsafe {
         with_unchecked(layout, |layout: &Layout| {
-            matches!(layout, Layout::Struct(_))
+            matches!(layout, Layout::DateTime(_))
         })
     }
 }
@@ -230,10 +308,32 @@ pub extern "C" fn layout_is_symbol(layout: *const ()) -> bool {
 }
 
 #[no_mangle]
+pub extern "C" fn layout_is_struct(layout: *const ()) -> bool {
+    unsafe {
+        with_unchecked(layout, |layout: &Layout| {
+            matches!(layout, Layout::Struct(_))
+        })
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn layout_is_list(layout: *const ()) -> bool {
     unsafe {
         with_unchecked(layout, |layout: &Layout| {
             matches!(layout, Layout::List(_, _))
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn layout_datetime_format(layout: *const ()) -> *const c_char {
+    unsafe {
+        with_unchecked(layout, |layout: &Layout| {
+            if let Layout::DateTime(fmt) = layout {
+                new_c_str(fmt.clone())
+            } else {
+                std::ptr::null()
+            }
         })
     }
 }
@@ -274,6 +374,13 @@ pub extern "C" fn layout_list_size(layout: *const ()) -> usize {
                 0
             }
         })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn layout_drop(layout: *mut ()) {
+    unsafe {
+        let _ = Box::from_raw(layout as *mut Layout);
     }
 }
 
@@ -348,6 +455,30 @@ pub extern "C" fn function_graph(func: *const ()) -> *const () {
 }
 
 #[no_mangle]
+pub extern "C" fn function_get_metadata(func: *const (), key: *const c_char) -> *const c_char {
+    unsafe {
+        with_unchecked(func, |func: &Function| {
+            if let Some(value) = func.graph().metadata().get(&*from_c_str(key)) {
+                new_c_str(value.to_string())
+            } else {
+                std::ptr::null()
+            }
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn function_symbols_json(func: *const ()) -> Outcome {
+    unsafe {
+        try_with(func, |func: &Function| {
+            from_ptr(new_c_str(
+                serde_json::to_string(func.graph().symbols()).expect("can always serialize"),
+            ))
+        })
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn function_fn_ptr(
     func: *const (),
 ) -> unsafe extern "C" fn(*const u8, *mut u8) -> u64 {
@@ -355,9 +486,14 @@ pub extern "C" fn function_fn_ptr(
 }
 
 #[no_mangle]
+pub extern "C" fn function_get_size(func: *const ()) -> usize {
+    unsafe { with_unchecked(func, |func: &Function| func.get_size()) }
+}
+
+#[no_mangle]
 pub extern "C" fn function_load(bytes: *const u8, len: usize) -> Outcome {
     fn function_load(bytes: *const u8, len: usize) -> Result<Function, Error> {
-        unsafe { Function::load(std::slice::from_raw_parts(bytes, len)) }
+        unsafe { Function::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len))) }
     }
 
     try_panic_to_outcome(|| from_result(function_load(bytes, len)))
@@ -410,6 +546,13 @@ pub extern "C" fn function_eval_json(func: *const (), input: *mut c_char) -> Out
                 Ok(new_c_str(output_str))
             })())
         })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn function_drop(func: *mut ()) {
+    unsafe {
+        let _ = Box::from_raw(func as *mut Function);
     }
 }
 

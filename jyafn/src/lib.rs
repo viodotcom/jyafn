@@ -2,7 +2,6 @@
 compile_error!("Currently `jyafn` only works in 64-bit atchitectures");
 
 pub mod r#const;
-pub mod dataset;
 pub mod layout;
 pub mod mapping;
 pub mod op;
@@ -61,8 +60,6 @@ pub enum Error {
     },
     #[error("deserialization error: {0}")]
     Deserialization(bincode::Error),
-    #[error("JSON deserialization error: {0}")]
-    JsonDeserialization(serde_json::Error),
     #[error("zip error: {0}")]
     Zip(zip::result::ZipError),
     #[error("{0}")]
@@ -146,8 +143,8 @@ mod test {
 
     fn create_simple_graph() -> Graph {
         let mut graph = Graph::new();
-        let a = graph.scalar_input("a".to_string());
-        let b = graph.scalar_input("b".to_string());
+        let a = graph.input("a".to_string(), Layout::Scalar);
+        let b = graph.input("b".to_string(), Layout::Scalar);
         let c = graph.insert(op::Add, vec![a, b]).unwrap();
         let one = graph.r#const(1.0);
         let d = graph.insert(op::Add, vec![c, one]).unwrap();
@@ -198,7 +195,7 @@ mod test {
 
     fn create_pfunc_graph() -> Graph {
         let mut g = Graph::new();
-        let a = g.scalar_input("a".to_string());
+        let a = g.input("a".to_string(), Layout::Scalar);
         let s = g.insert(op::Call("sqrt".to_string()), vec![a]).unwrap();
         g.output(RefValue::Scalar(s), Layout::Scalar).unwrap();
 
@@ -227,7 +224,7 @@ mod test {
 
     fn create_abs_graph() -> Graph {
         let mut g = Graph::new();
-        let a = g.scalar_input("a".to_string());
+        let a = g.input("a".to_string(), Layout::Scalar);
         let aa = g.insert(op::Abs, vec![a]).unwrap();
         g.output(RefValue::Scalar(aa), Layout::Scalar).unwrap();
 

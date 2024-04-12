@@ -1,3 +1,6 @@
+//! This module is deprecated at the moment (YAGNI) and might be deleted in a future
+//! commit.
+
 #![cfg(feature = "map-reduce")]
 #![allow(unused_variables)]
 

@@ -1,9 +1,11 @@
-from .jyafn import *
 import abc
-import jyafn as fn
 import types
 from abc import ABC, abstractmethod
 from typing import Any, Iterable
+
+import jyafn as fn
+
+from .jyafn import *
 
 class BaseAnnotation(ABC, metaclass=abc.ABCMeta):
     @classmethod

@@ -74,6 +74,12 @@ impl Struct {
         *buf += indent;
         *buf += "}";
     }
+
+    pub fn pretty(&self) -> String {
+        let mut buf = String::new();
+        self.pretty_recursive(&mut buf, &mut String::new());
+        buf
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, GetSize)]

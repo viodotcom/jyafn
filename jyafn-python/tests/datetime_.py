@@ -1,5 +1,6 @@
-import jyafn as fn
 from datetime import datetime
+
+import jyafn as fn
 
 
 @fn.func

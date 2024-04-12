@@ -120,22 +120,6 @@ impl Graph {
         }
     }
 
-    pub fn scalar_input(&mut self, name: String) -> Ref {
-        self.input_layout.insert(name, Layout::Scalar);
-        self.push_input(Type::Float)
-    }
-
-    pub fn vec_input(&mut self, name: String, size: usize) -> Vec<Ref> {
-        self.input_layout
-            .insert(name, Layout::List(Box::new(Layout::Scalar), size));
-        (0..size).map(|_| self.push_input(Type::Float)).collect()
-    }
-
-    pub fn symbol_input(&mut self, name: String) -> Ref {
-        self.input_layout.insert(name, Layout::Symbol);
-        self.push_input(Type::Symbol)
-    }
-
     pub fn input(&mut self, name: String, layout: Layout) -> RefValue {
         let val = self.alloc_input(&layout);
         self.input_layout.insert(name, layout);

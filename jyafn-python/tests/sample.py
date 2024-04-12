@@ -1,5 +1,6 @@
-import jyafn as fn
 import timeit
+
+import jyafn as fn
 
 
 @fn.func

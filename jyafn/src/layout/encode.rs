@@ -66,9 +66,7 @@ impl Encode for serde_json::Value {
                 visitor.push_int(timestamp.into());
             }
             (Self::String(e), Layout::Symbol) => {
-                let Some(index) = symbols.find(e) else {
-                    return Err(format!("symbol {e:?} not found").into());
-                };
+                let index = symbols.find(e);
                 visitor.push_int(index as i64);
             }
             (Self::Array(array), Layout::List(element, size)) => {
