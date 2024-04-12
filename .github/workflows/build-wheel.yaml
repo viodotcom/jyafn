@@ -8,22 +8,20 @@ on:
 
 
 jobs:
-  Build-wheel:
+  build-wheel:
     runs-on: ubuntu-latest
     steps:
     - name: Check out repository code
       uses: actions/checkout@v4
       with:
         ref: main
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
+    - name: Prepare maturin build
+      run: make qbe
+    - name: Maturin build
+      uses: PyO3/maturin-action@v1
       with:
-        toolchain: stable
-        profile: minimal
-    - name: Install Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: pip
-    - run: pip install maturin
-    - run: make jyafn-python
+        command: build
+        args: --release
+        working-directory: jyafn-python
+    - name: ls
+      run: ls target/wheels
