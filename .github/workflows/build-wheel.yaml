@@ -49,4 +49,5 @@ jobs:
       with:
         files: "*.whl"
         tag_name: commit-id=${{ github.sha }}
-        prerelease: true
+        prerelease: false
+        make_latest: true
