@@ -48,4 +48,5 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: "*.whl"
+        tag_name: commit-id=${{ github.sha }}
         prerelease: true
