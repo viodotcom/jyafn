@@ -5,11 +5,16 @@ Hello and welcome to the JYAFN starter tutorial! Today, we are going to build an
 ## Before we start...
 
 Of course, there are always the boring parts before the fun begins. To get started, you need to install JYAFN in Python. For that, there are some routes. Chose the one that works for you. Firstly, you can "clone & make install", like so:
-```
+```sh
 clone git@github.com:FindHotel/jyafn.git
 cd jyafn && make install
 ```
-This will give you the latest and greatest JYAFN, but requires you to have _all_ dev dependencies (more boring stuff, for some). 
+This will give you the latest and greatest JYAFN, but requires you to have _all_ dev dependencies (more boring stuff, for some). If you want convenience, you can use the `gh` (GitHub CLI) with the following (rather convoluted) command:
+```sh
+gh release download -R FindHotel/jyafn --clobber $(
+    gh release list -R FindHotel/jyafn -q='.[0].name' --json 'name'
+) && pip install --force-reinstall jyafn_python*.whl
+```
 
 To check that everything is working as expected, open your favorite python interpreter and type
 ```python

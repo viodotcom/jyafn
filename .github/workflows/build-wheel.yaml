@@ -9,10 +9,11 @@ on:
 
 jobs:
   build-wheel:
-    runs-on: ubuntu-latest
     strategy:
-      matrix:
-        pyversion: ["3.10"] #, "3.11", "3.12"]
+        matrix:
+          pyversion: ["3.10"] #, "3.11", "3.12"]
+          os: ["ubuntu-latest"]
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Check out repository code
       uses: actions/checkout@v4
@@ -51,3 +52,5 @@ jobs:
         tag_name: commit-id=${{ github.sha }}
         prerelease: false
         make_latest: true
+
+# https://github.com/FindHotel/jyafn/releases/download/latest/jyafn_python-0.1.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
