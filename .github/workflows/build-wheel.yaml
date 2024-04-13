@@ -24,13 +24,13 @@ jobs:
       uses: PyO3/maturin-action@v1
       with:
         command: build
-        args: --release -i {{ matrix.pyversion }}
+        args: --release -i ${{ matrix.pyversion }}
         manylinux: auto
         working-directory: jyafn-python
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
-        name: wheel-{{ matrix.pyversion }}
+        name: wheel-${{ matrix.pyversion }}
         if-no-files-found: error
         path: target/wheels/*.whl
         retention-days: 1
