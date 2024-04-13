@@ -44,4 +44,8 @@ jobs:
       with:
         pattern: wheel-*
         merge-multiple: true
-    - run: ls target/wheels
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: "*.whl"
+        prerelease: true
