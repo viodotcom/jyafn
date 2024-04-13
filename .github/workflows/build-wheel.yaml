@@ -10,7 +10,7 @@ on:
 jobs:
   build-wheel:
     runs-on: ubuntu-latest
-    stratey:
+    strategy:
       matrix:
         pyversion: ["3.10"] #, "3.11", "3.12"]
     steps:
@@ -34,3 +34,14 @@ jobs:
         if-no-files-found: error
         path: target/wheels/*.whl
         retention-days: 1
+
+  release:
+    needs: [build-wheel]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download wheels
+      uses: actions/download-artifact@v4
+      with:
+        pattern: wheel-*
+        merge-multiple: true
+    - run: ls target/wheels
