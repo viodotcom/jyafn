@@ -143,8 +143,12 @@ mod test {
 
     fn create_simple_graph() -> Graph {
         let mut graph = Graph::new();
-        let a = graph.input("a".to_string(), Layout::Scalar);
-        let b = graph.input("b".to_string(), Layout::Scalar);
+        let RefValue::Scalar(a) = graph.input("a".to_string(), Layout::Scalar) else {
+            unreachable!()
+        };
+        let RefValue::Scalar(b) = graph.input("b".to_string(), Layout::Scalar) else {
+            unreachable!()
+        };
         let c = graph.insert(op::Add, vec![a, b]).unwrap();
         let one = graph.r#const(1.0);
         let d = graph.insert(op::Add, vec![c, one]).unwrap();
@@ -187,6 +191,7 @@ mod test {
         let graph = create_simple_graph();
         let func = graph.compile().unwrap();
         println!("{}", graph.render());
+        println!("{}", graph.render_assembly().unwrap());
 
         let i = [5.0, 6.0];
         let out = func.eval_raw(i.as_byte_slice()).unwrap();
@@ -195,7 +200,9 @@ mod test {
 
     fn create_pfunc_graph() -> Graph {
         let mut g = Graph::new();
-        let a = g.input("a".to_string(), Layout::Scalar);
+        let RefValue::Scalar(a) = g.input("a".to_string(), Layout::Scalar) else {
+            unreachable!()
+        };
         let s = g.insert(op::Call("sqrt".to_string()), vec![a]).unwrap();
         g.output(RefValue::Scalar(s), Layout::Scalar).unwrap();
 
@@ -224,7 +231,9 @@ mod test {
 
     fn create_abs_graph() -> Graph {
         let mut g = Graph::new();
-        let a = g.input("a".to_string(), Layout::Scalar);
+        let RefValue::Scalar(a) = g.input("a".to_string(), Layout::Scalar) else {
+            unreachable!()
+        };
         let aa = g.insert(op::Abs, vec![a]).unwrap();
         g.output(RefValue::Scalar(aa), Layout::Scalar).unwrap();
 

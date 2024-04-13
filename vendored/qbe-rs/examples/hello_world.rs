@@ -32,13 +32,13 @@ fn generate_main_func(module: &mut Module) {
         Value::Temporary("r".into()),
         Type::Word,
         Instr::Call(
-            "add".into(),
+            Value::Global("add".into()),
             vec![(Type::Word, Value::Const(1)), (Type::Word, Value::Const(1))],
         ),
     );
     // TODO: The example shows a variadic call. We don't have those yet
     func.add_instr(Instr::Call(
-        "printf".into(),
+        Value::Global("printf".into()),
         vec![
             (Type::Long, Value::Global("fmt".into())),
             (Type::Word, Value::Temporary("r".into())),

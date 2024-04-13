@@ -1,5 +1,5 @@
-import jyafn as fn
-
+# type:ignore
+import jyafn as fn 
 
 def fmt_layout(layout: fn.Layout, indent=0) -> str:
     layout_str = str(layout)
@@ -59,7 +59,7 @@ def describe_fn(func: fn.Function) -> str:
     return buffer
 
 
-def describe_graph(graph: fn.Graph):
+def describe_graph(graph: fn.Graph) -> str:
     buffer = ""
 
     def print(*args):

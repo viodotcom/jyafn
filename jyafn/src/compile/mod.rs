@@ -159,6 +159,7 @@ where
     Ok(String::from_utf8_lossy(&qbe_output.stdout).to_string())
 }
 
+#[cfg(target_os = "macos")]
 fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     let mut r#as = Command::new("as")
         .args(["-o", "-"])
@@ -180,6 +181,34 @@ fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     }
 
     Ok(as_output.stdout)
+}
+
+#[cfg(target_os = "linux")]
+fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
+    let tempdir = tempfile::tempdir()?;
+    let output = tempdir.path().join("main.o");
+
+    let mut r#as = Command::new("as")
+        .arg("-o")
+        .arg(&output)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let mut stdin = r#as.stdin.take().expect("qbe stdin stream not captured");
+    stdin.write_all(assembly.as_bytes())?;
+    drop(stdin);
+
+    let as_output = r#as.wait_with_output()?;
+    if !as_output.status.success() {
+        return Err(Error::Assembler {
+            status: as_output.status,
+            err: String::from_utf8_lossy(&as_output.stderr).to_string(),
+        });
+    }
+
+    Ok(std::fs::read(output)?)
 }
 
 fn link(unlinked: &[u8]) -> Result<Vec<u8>, Error> {

@@ -1,3 +1,5 @@
+# type: ignore
+
 from .jyafn import *
 
 import jyafn as fn
@@ -12,25 +14,36 @@ import datetime as pydatetime
 
 
 class BaseAnnotation(ABC):
+    """
+    The base class of all annotations used to annotate parameters and return types of
+    `@fn.func`. All classes derived from this, as well as `types.GenericAlias` objects
+    can be converted into JYAFN Layouts.
+    """
+
     @classmethod
     def __class_getitem__(cls, args) -> types.GenericAlias:
+        """Creates a `types.GenericAlias` from this class."""
         return types.GenericAlias(cls, args)
 
     @classmethod
     @abstractmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        """Transform this class into a JYAFN layout."""
         pass
 
     @classmethod
     def transform_input(cls, input: Any) -> Any:
+        """Extra transformations to the input after its declaration."""
         return input
 
     @classmethod
     def transform_output(cls, output: Any) -> Any:
+        """Extra transformations to the output before its insertion in the graph."""
         return output
 
 
 def make_layout(a: fn.Layout | type[BaseAnnotation] | types.GenericAlias) -> fn.Layout:
+    """Gets an object and interprets that object as an `fn.Layout`."""
     match a:
         case fn.Layout():
             return a
@@ -42,25 +55,33 @@ def make_layout(a: fn.Layout | type[BaseAnnotation] | types.GenericAlias) -> fn.
             raise TypeError(f"Cannot make layout out of {a}")
 
 
-class unit:
+class unit(BaseAnnotation):
+    """Annotates the `unit` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.unit()
 
 
 class scalar(BaseAnnotation):
+    """Annotates the `scalar` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.scalar()
 
 
 class bool(BaseAnnotation):
+    """Annotates the `bool` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.bool()
 
 
 class datetime(BaseAnnotation):
+    """Annotates the `datetime` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         match args:
@@ -73,12 +94,16 @@ class datetime(BaseAnnotation):
 
 
 class symbol(BaseAnnotation):
+    """Annotates the `symbol` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.symbol()
 
 
 class struct(BaseAnnotation):
+    """Annotates the `struct` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         match args:
@@ -102,6 +127,8 @@ class struct(BaseAnnotation):
 
 
 class list(BaseAnnotation):
+    """Annotates the `list` layout."""
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         match args:
@@ -118,13 +145,19 @@ class list(BaseAnnotation):
             case (
                 ty,
                 size,
-            ) if isinstance(ann, type):
+            ) if isinstance(ty, type):
                 return fn.Layout.list_of(ty.make_layout(()), size)
             case _:
                 raise TypeError(f"Invalid args for list annotation: {args}")
 
 
 class tensor(BaseAnnotation):
+    """
+    Does not annotate any specific layout, but creates an input that is an `np.ndarray`
+    populated with `fn.Ref`s. This can be used to make tensor operations backed by 
+    `numpy`.
+    """
+
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         layout = fn.Layout.scalar()
@@ -145,7 +178,10 @@ class tensor(BaseAnnotation):
             return output
 
 
-def _input_from_annotation(name: str, a: Any) -> fn.Ref:
+def _input_from_annotation(name: str, a: Any) -> fn.Layout:
+    """
+    Gets an annotation and a field name and creates the associated input layout structure.
+    """
     match a:
         case type():
             layout = a.make_layout(())
@@ -166,6 +202,10 @@ def _input_from_annotation(name: str, a: Any) -> fn.Ref:
 
 
 def _ret_from_annotation(ret: Any, a: Any) -> None:
+    """
+    Gets a "depythonizable" Python object filled with `fn.Ref`s and sets it as the return
+    of the current graph, given an optionally annotated output layout.
+    """
     match a:
         case inspect._empty:
             layout = fn.putative_layout(ret)
@@ -186,7 +226,32 @@ def _ret_from_annotation(ret: Any, a: Any) -> None:
 
 
 def func(*args, metadata: dict = {}, debug: bool = False) -> fn.Function:
-    def inner(f: Any):
+    """
+    Decorates a Python function and creates an `fn.Function` out of it, managing graph
+    creation and compilation. You can still access the original function using the 
+    `original` property in the returned object.
+
+    Annotating _all_ input arguments is mandatory, while annotating the output value is
+    optional, but will be checked.
+
+    Examples:
+    ```
+    @fn.func
+    def two_x_plus_y(x: fn.scalar, y: fn.scalar) -> fn.scalar:
+        return 2.0 * x + y
+
+    @fn.func(metadata={"foo": "bar"})
+    def with_custom_metadata(x: fn.scalar, y: fn.scalar) -> fn.scalar:
+        return 2.0 * x + y
+
+    # call the compiled JYAFN:
+    assert two_x_plus_y(2.0, 1.0) == 5.0
+
+    # call the original Python function:
+    assert two_x_plus_y.original(2.0, 1.0) == 5.0
+    ```
+    """
+    def inner(f: Any) -> fn.Function:
         signature = inspect.signature(f)
         with fn.Graph(name=f"{f.__qualname__}") as g:
             inputs = {
@@ -219,10 +284,21 @@ def mapping(
     value_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias,
     obj: Any,
 ) -> fn.LazyMapping:
+    """
+    Creates a new key-value mapping to be used in a graph. Mappings in JYAFN work very
+    much like ordinary Python dictionaries, except that they are immutable and strongly
+    typed (you must always conform to the declared layouts).
+
+    If you pass a Python dictionary as an `obj`, you _can_ use this mapping in multiple
+    times in multiple graphs. However, if you pass a Generator (or other iterable), the
+    mapping will be marked as consumed and an exception will be raised on reuse. This is
+    done to avoid errors stemming from already spent iterators.
+    """
     return fn.LazyMapping(name, make_layout(key_layout), make_layout(value_layout), obj)
 
 
 def min(x: Iterable[Any]) -> fn.Ref:
+    """A drop-in for `np.min`"""
     def _min(it, el):
         for item in it:
             if hasattr(item, "__iter__"):
@@ -243,6 +319,7 @@ def min(x: Iterable[Any]) -> fn.Ref:
 
 
 def max(x: Iterable[fn.Ref]) -> fn.Ref:
+    """A drop-in for `np.max`"""
     def _max(it, el):
         for item in it:
             if hasattr(item, "__iter__"):
@@ -263,6 +340,7 @@ def max(x: Iterable[fn.Ref]) -> fn.Ref:
 
 
 def all(x: Iterable[fn.Ref]) -> fn.Ref:
+    """A drop-in for `np.all`"""
     def _all(it, el):
         for item in it:
             if hasattr(item, "__iter__"):
@@ -283,6 +361,7 @@ def all(x: Iterable[fn.Ref]) -> fn.Ref:
 
 
 def any(x: Iterable[fn.Ref]) -> fn.Ref:
+    """A drop-in for `np.any`"""
     def _any(it, el):
         for item in it:
             if hasattr(item, "__iter__"):
@@ -305,6 +384,11 @@ def any(x: Iterable[fn.Ref]) -> fn.Ref:
 def make_timestamp(
     time: pydatetime.date | pydatetime.datetime | pydatetime.timedelta,
 ) -> float:
+    """
+    Creates a JYAFN timestamp _constant_ out of a python datetime, date or timedelta
+    object from the `datetime` package. This basically converts the input into its 
+    correspondent value in microseconds.
+    """
     match time:
         case pydatetime.datetime():
             return time.timestamp()
@@ -323,10 +407,19 @@ def make_timestamp(
 def make_datetime(
     time: pydatetime.date | pydatetime.datetime | pydatetime.timedelta,
 ) -> fn.Ref:
+    """
+    Creates a JYAFN datetime _constant_ out of a python datetime, date or timedelta
+    object from the `datetime` package. This basically converts the input into its 
+    correspondent value in microseconds.
+    """
     return fn.fromtimestamp(fn.const(make_timestamp(time)))
 
 
 SECOND: float = 1.0
+"""A second"""
 MINUTE: float = 60.0 * SECOND
+"""A minute, in seconds"""
 HOUR: float = 60.0 * MINUTE
+"""An hout, in seconds"""
 DAY: float = 24.0 * HOUR
+"""A day, in seconds"""

@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 use thread_local::ThreadLocal;
+use object::Object;
 
 use super::{layout, Error, Graph, Type};
 
@@ -95,18 +96,27 @@ impl Function {
     }
 
     pub(crate) fn init(graph: Graph, shared_object: Vec<u8>) -> Result<Function, Error> {
-        use object::{Object, ObjectSection, ObjectSymbol};
         let mut mmap = memmap::MmapMut::map_anon(shared_object.len())?;
         mmap.clone_from_slice(&shared_object);
         let code = mmap.make_exec()?;
 
+        let obj = object::read::File::parse(code.as_ref())?;
+
+        #[cfg(target_os = "macos")]
+        const ENTRYPOINT: &[u8] = b"_run";
+        #[cfg(target_os = "linux")]
+        const ENTRYPOINT: &[u8] = b"run";
+
+        let exports = obj.exports()?;
+        let entry = exports
+            .into_iter()
+            .find(|export| export.name() == ENTRYPOINT)
+            .expect("entrypoint not found");
+        let start_ptr = code.as_ptr().wrapping_add(entry.address() as usize);
+        let fn_ptr: RawFn = unsafe { std::mem::transmute(start_ptr) };
+
         let input_layout = graph.input_layout.clone();
         let output_layout = graph.output_layout.clone();
-        let obj = object::read::File::parse(code.as_ref())?;
-        let symbol = obj.symbol_by_name("_run").unwrap();
-        let section = obj.section_by_index(symbol.section_index().unwrap())?;
-        let data = section.data()?;
-        let fn_ptr: RawFn = unsafe { std::mem::transmute(data.as_ptr()) };
         let input_size_in_floats = input_layout.size();
         let output_size_in_floats = output_layout.size();
 

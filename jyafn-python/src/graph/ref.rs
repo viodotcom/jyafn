@@ -109,12 +109,12 @@ impl Ref {
 
     fn __pow__(&self, exponent: &Bound<PyAny>, _modulo: &Bound<PyAny>) -> PyResult<Ref> {
         let exponent = Ref::make(exponent)?;
-        insert_in_current(rust::op::Call("pow".to_string()), vec![self.0, exponent.0])
+        insert_in_current(rust::op::Call("powf".to_string()), vec![self.0, exponent.0])
     }
 
     fn __rpow__(&self, base: &Bound<PyAny>, _modulo: &Bound<PyAny>) -> PyResult<Ref> {
         let base = Ref::make(base)?;
-        insert_in_current(rust::op::Call("pow".to_string()), vec![base.0, self.0])
+        insert_in_current(rust::op::Call("powf".to_string()), vec![base.0, self.0])
     }
 
     fn __abs__(&self) -> PyResult<Ref> {

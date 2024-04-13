@@ -11,10 +11,15 @@ cd jyafn && make install
 ```
 This will give you the latest and greatest JYAFN, but requires you to have _all_ dev dependencies (more boring stuff, for some). If you want convenience, you can use the `gh` (GitHub CLI) with the following (rather convoluted) command:
 ```sh
-gh release download -R FindHotel/jyafn --clobber $(
-    gh release list -R FindHotel/jyafn -q='.[0].name' --json 'name'
-) && pip install --force-reinstall jyafn_python*.whl
+PY=cp311 && \
+V="0.1.0" && \
+LATEST=$(gh release list -R FindHotel/jyafn | head -n1 | awk '{print $1}') && \
+FILE=jyafn_python-$V-$PY-$PY-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
+rm -f $FILE && \
+gh release download -R FindHotel/jyafn -p $FILE && \
+pip -m pip install --force-reinstall $FILE
 ```
+Remeber to substitute foryour python version. In the above example, we are using `cp311` (Python 3.11).
 
 To check that everything is working as expected, open your favorite python interpreter and type
 ```python
