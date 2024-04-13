@@ -9,9 +9,10 @@ import typing
 import numpy as np
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterable
+from typing import Any
 import datetime as pydatetime
 
+from .np_dropin import *
 
 class BaseAnnotation(ABC):
     """
@@ -295,90 +296,6 @@ def mapping(
     done to avoid errors stemming from already spent iterators.
     """
     return fn.LazyMapping(name, make_layout(key_layout), make_layout(value_layout), obj)
-
-
-def min(x: Iterable[Any]) -> fn.Ref:
-    """A drop-in for `np.min`"""
-    def _min(it, el):
-        for item in it:
-            if hasattr(item, "__iter__"):
-                el = _min(iter(item), el)
-            elif el is None:
-                el = item
-            else:
-                el = (el > item).choose(item, el)
-
-        return el
-
-    el = _min(iter(x), None)
-
-    if el is None:
-        raise TypeError("min expected at least 1 argument, got 0")
-
-    return el
-
-
-def max(x: Iterable[fn.Ref]) -> fn.Ref:
-    """A drop-in for `np.max`"""
-    def _max(it, el):
-        for item in it:
-            if hasattr(item, "__iter__"):
-                el = _max(iter(item), el)
-            elif el is None:
-                el = item
-            else:
-                el = (el > item).choose(el, item)
-
-        return el
-
-    el = _max(iter(x), None)
-
-    if el is None:
-        raise TypeError("max expected at least 1 argument, got 0")
-
-    return el
-
-
-def all(x: Iterable[fn.Ref]) -> fn.Ref:
-    """A drop-in for `np.all`"""
-    def _all(it, el):
-        for item in it:
-            if hasattr(item, "__iter__"):
-                el = _all(iter(item), el)
-            elif el is None:
-                el = item
-            else:
-                el &= item
-
-        return el
-
-    el = _all(iter(x), None)
-
-    if el is None:
-        raise TypeError("all expected at least 1 argument, got 0")
-
-    return el
-
-
-def any(x: Iterable[fn.Ref]) -> fn.Ref:
-    """A drop-in for `np.any`"""
-    def _any(it, el):
-        for item in it:
-            if hasattr(item, "__iter__"):
-                el = _any(iter(item), el)
-            elif el is None:
-                el = item
-            else:
-                el |= item
-
-        return el
-
-    el = _any(iter(x), None)
-
-    if el is None:
-        raise TypeError("all expected at least 1 argument, got 0")
-
-    return el
 
 
 def make_timestamp(

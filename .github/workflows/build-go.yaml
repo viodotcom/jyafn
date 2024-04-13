@@ -1,0 +1,10 @@
+name: Build Python wheels
+
+on:
+  push:
+    branches:
+      - stable
+  workflow_dispatch:
+
+
+jobs: []

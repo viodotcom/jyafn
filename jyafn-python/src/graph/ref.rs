@@ -33,7 +33,8 @@ impl Ref {
 
     fn __bool__(&self) -> PyResult<bool> {
         Err(exceptions::PyTypeError::new_err(
-            "Cannot assert the truthiness of a Ref",
+            "Cannot assert the truthiness of a Ref\n\
+            hint: look for a replacement in `jyafn` instead (e.g. `np.max` -> `fn.max`)",
         ))
     }
 
@@ -228,6 +229,18 @@ impl Ref {
         insert_in_current(rust::op::Call("atan".to_string()), vec![self.0])
     }
 
+    fn arcsin(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("asin".to_string()), vec![self.0])
+    }
+
+    fn arccos(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("acos".to_string()), vec![self.0])
+    }
+
+    fn arctan(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("atan".to_string()), vec![self.0])
+    }
+
     fn sinh(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("sinh".to_string()), vec![self.0])
     }
@@ -249,6 +262,18 @@ impl Ref {
     }
 
     fn atanh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("atanh".to_string()), vec![self.0])
+    }
+
+    fn arcsinh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("asinh".to_string()), vec![self.0])
+    }
+
+    fn arccosh(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("acosh".to_string()), vec![self.0])
+    }
+
+    fn arctanh(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("atanh".to_string()), vec![self.0])
     }
 

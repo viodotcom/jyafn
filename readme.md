@@ -1,5 +1,7 @@
 # Just Your Average Function
 
+> 💡 Don't forget to check out the [docs](./docs/index.md) for more in-depth info.
+
 ![There is something going on!](./nothing-going-on.jpg)
 
 Look at this innocent-looking piece of code:
@@ -67,6 +69,22 @@ For all cases, unfortuately you will need `gcc` or `clang` installed (they are _
 
 ### Python
 
+#### Download from GitHub
+
+You can use the following snippet of code to install `jyafn` from GitHub releases, using the `gh` GitHub CLI:
+```sh
+PY=cp311 && \
+V="0.1.0" && \
+LATEST=$(gh release list -R FindHotel/jyafn | head -n1 | awk '{print $1}') && \
+FILE=jyafn_python-$V-$PY-$PY-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
+rm -f $FILE && \
+gh release download -R FindHotel/jyafn -p $FILE && \
+pip -m pip install --force-reinstall $FILE
+```
+Remeber to substitute foryour python version. In the above example, we are using `cp311` (Python 3.11).
+
+
+#### Build from source
 Clone the repo, then
 ```sh
 make install

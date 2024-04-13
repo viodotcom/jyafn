@@ -3,7 +3,7 @@ name: Build Python wheels
 on:
   push:
     branches:
-      - main
+      - stable
   workflow_dispatch:
 
 
@@ -18,7 +18,7 @@ jobs:
     - name: Check out repository code
       uses: actions/checkout@v4
       with:
-        ref: main
+        ref: stable
     - name: Prepare maturin build
       run: make qbe
     - name: Maturin build
