@@ -242,13 +242,24 @@ impl Statements {
         }
     }
 
-    pub fn render_into(&self, graph: &Graph, reachable: &[bool], func: &mut qbe::Function) {
+    pub fn render_into(
+        &self,
+        graph: &Graph,
+        reachable: &[bool],
+        func: &mut qbe::Function,
+        namespace: &str,
+    ) {
         for statement in &self.0 {
             match statement {
                 &StatementOrConditional::Statement(node_id) if reachable[node_id] => {
                     let node = &graph.nodes[node_id];
-                    node.op
-                        .render_into(graph, Ref::Node(node_id).render(), &node.args, func)
+                    node.op.render_into(
+                        graph,
+                        Ref::Node(node_id).render(),
+                        &node.args,
+                        func,
+                        namespace,
+                    )
                 }
                 StatementOrConditional::Conditional {
                     node_id,
@@ -269,7 +280,7 @@ impl Statements {
                     ));
 
                     func.add_block(true_label);
-                    true_side.render_into(graph, reachable, func);
+                    true_side.render_into(graph, reachable, func, namespace);
                     func.assign_instr(
                         output.clone(),
                         node.ty.render(),
@@ -278,7 +289,7 @@ impl Statements {
                     func.add_instr(qbe::Instr::Jmp(end_label.clone()));
 
                     func.add_block(false_label);
-                    false_side.render_into(graph, reachable, func);
+                    false_side.render_into(graph, reachable, func, namespace);
                     func.assign_instr(
                         output,
                         node.ty.render(),

@@ -1,15 +1,17 @@
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{Graph, Ref, Type};
+use crate::{impl_op, Graph, Ref, Type};
 
 use super::Op;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToBool;
 
 #[typetag::serde]
 impl Op for ToBool {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float] => Type::Bool,
             _ => return None,
@@ -22,6 +24,7 @@ impl Op for ToBool {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -36,12 +39,14 @@ impl Op for ToBool {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToFloat;
 
 #[typetag::serde]
 impl Op for ToFloat {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Bool] => Type::Float,
             _ => return None,
@@ -54,6 +59,7 @@ impl Op for ToFloat {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,

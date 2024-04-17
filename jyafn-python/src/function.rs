@@ -36,6 +36,15 @@ impl Function {
     }
 
     #[getter]
+    fn __doc__(&self) -> Option<&str> {
+        self.inner
+            .graph()
+            .metadata()
+            .get("jyafn.doc")
+            .map(String::as_str)
+    }
+
+    #[getter]
     fn name(&self) -> String {
         self.inner.graph().name().to_string()
     }

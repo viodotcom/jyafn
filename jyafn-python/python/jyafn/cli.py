@@ -1,10 +1,10 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import click
-from click_default_group import DefaultGroup # type:ignore
+from click_default_group import DefaultGroup  # type:ignore
 import jyafn as fn
 
-from .describe import describe, describe_graph # type:ignore
+from .describe import describe, describe_graph  # type:ignore
 
 
 @click.group(cls=DefaultGroup, default="run", default_if_no_args=True)

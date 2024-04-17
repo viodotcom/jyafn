@@ -177,6 +177,10 @@ impl Ref {
         insert_in_current(rust::op::Choose, vec![self.0, if_true.0, if_false.0])
     }
 
+    fn index(&self, indexable: &Bound<PyAny>) -> PyResult<()> {
+        Ok(())
+    }
+
     fn to_bool(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::ToBool, vec![self.0])
     }
@@ -187,6 +191,22 @@ impl Ref {
 
     // Reimplementing pfuncs as methods allows us to take advantage of numpy
     // functionalities.
+
+    fn floor(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("floot".to_string()), vec![self.0])
+    }
+
+    fn round(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("round".to_string()), vec![self.0])
+    }
+
+    fn trunc(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("trunc".to_string()), vec![self.0])
+    }
+
+    fn ceil(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("ceil".to_string()), vec![self.0])
+    }
 
     fn sqrt(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("sqrt".to_string()), vec![self.0])
@@ -200,9 +220,27 @@ impl Ref {
         insert_in_current(rust::op::Call("ln".to_string()), vec![self.0])
     }
 
+    fn exp_m1(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("exp_m1".to_string()), vec![self.0])
+    }
+
+    fn ln_1p(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("ln_1p".to_string()), vec![self.0])
+    }
+
     /// To make numpy happy.
     fn log(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("ln".to_string()), vec![self.0])
+    }
+
+    /// To make numpy happy.
+    fn expm1(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("exp_m1".to_string()), vec![self.0])
+    }
+
+    /// To make numpy happy.
+    fn log1p(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("ln_1p".to_string()), vec![self.0])
     }
 
     fn sin(&self) -> PyResult<Ref> {
@@ -229,6 +267,11 @@ impl Ref {
         insert_in_current(rust::op::Call("atan".to_string()), vec![self.0])
     }
 
+    fn atan2(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+        let other = Ref::make(other)?;
+        insert_in_current(rust::op::Call("atan2".to_string()), vec![self.0, other.0])
+    }
+
     fn arcsin(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("asin".to_string()), vec![self.0])
     }
@@ -239,6 +282,11 @@ impl Ref {
 
     fn arctan(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("atan".to_string()), vec![self.0])
+    }
+
+    fn arctan2(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+        let other = Ref::make(other)?;
+        insert_in_current(rust::op::Call("atan2".to_string()), vec![self.0, other.0])
     }
 
     fn sinh(&self) -> PyResult<Ref> {

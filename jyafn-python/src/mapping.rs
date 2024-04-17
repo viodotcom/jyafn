@@ -71,8 +71,8 @@ impl LazyMapping {
     }
 
     fn __getitem__(&mut self, key: &Bound<PyAny>) -> PyResult<PyObject> {
-        let ref_value = depythonize_ref_value(key)?;
         graph::try_with_current(|g| {
+            let ref_value = depythonize_ref_value(g, key)?;
             self.init(key.py(), g)?;
             let value = g.call_mapping(&self.name, ref_value).map_err(ToPyErr)?;
             pythonize_ref_value(key.py(), value)
@@ -86,9 +86,9 @@ impl LazyMapping {
 
     fn get(&mut self, key: &Bound<PyAny>, default: Option<&Bound<PyAny>>) -> PyResult<PyObject> {
         if let Some(default) = default {
-            let ref_value = depythonize_ref_value(key)?;
-            let default_value = depythonize_ref_value(default)?;
             graph::try_with_current(|g| {
+                let ref_value = depythonize_ref_value(g, key)?;
+                let default_value = depythonize_ref_value(g, default)?;
                 self.init(key.py(), g)?;
                 let value = g
                     .call_mapping_default(&self.name, ref_value, default_value)

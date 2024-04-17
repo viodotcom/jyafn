@@ -10,7 +10,7 @@ import jyafn as fn
 
 @fn.func
 def reduce_sum(mat: fn.tensor[2, 2]) -> fn.scalar:
-	return np.sum(mat)
+    return np.sum(mat)
 ```
 I know: it looks a bit funny but what if I told you that
 

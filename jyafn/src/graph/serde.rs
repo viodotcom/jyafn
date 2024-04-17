@@ -2,7 +2,7 @@ use std::io::{Read, Seek, Write};
 
 use crate::Error;
 
-use super::Graph;
+use super::{check, Graph};
 
 impl Graph {
     // NOTE: need to use a concrete type because the `Storage` object that backs mappings
@@ -28,8 +28,11 @@ impl Graph {
     pub fn load_uninitialized<R: Read + Seek>(reader: R) -> Result<Self, Error> {
         let mut archive = zip::ZipArchive::new(reader)?;
         let file = archive.by_name("graph")?;
+        let mut graph = bincode::deserialize_from(file).map_err(Error::Deserialization)?;
 
-        bincode::deserialize_from(file).map_err(Error::Deserialization)
+        check::run_checks(&mut graph)?;
+
+        Ok(graph)
     }
 
     pub fn load<R: Read + Seek>(reader: R) -> Result<Self, Error> {
@@ -58,6 +61,8 @@ impl Graph {
                 .into());
             }
         }
+
+        check::run_checks(&mut graph)?;
 
         Ok(graph)
     }

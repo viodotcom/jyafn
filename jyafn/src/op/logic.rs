@@ -1,16 +1,16 @@
-use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{Graph, Ref, Type};
+use crate::{impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
-#[derive(Debug, Serialize, Deserialize, GetSize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Assert(pub u64);
 
 #[typetag::serde]
 impl Op for Assert {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Bool] => Type::Bool,
             _ => return None,
@@ -23,6 +23,7 @@ impl Op for Assert {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         let false_side = unique_for(output.clone(), "assert.if.false");
         let true_side = unique_for(output.clone(), "assert.if.true");
@@ -34,7 +35,10 @@ impl Op for Assert {
         ));
         func.add_block(false_side);
         // +1 because returning 0 is success.
-        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Const(self.0 + 1))));
+        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Global(format!(
+            "{namespace}.error.{}",
+            self.0
+        )))));
         func.add_block(true_side);
     }
 
@@ -53,21 +57,19 @@ impl Op for Assert {
     fn is_illegal(&self, args: &[Ref]) -> bool {
         matches!(args[0].as_bool(), Some(false))
     }
-
-    fn get_size(&self) -> usize {
-        GetSize::get_size(self)
-    }
 }
 
 /// The ternary operator. Unfortunately, this a naive version where both sides of the
 /// ternary are calculated. Further design optimization is needed to elliminate this grave
 /// shortcomming.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Choose;
 
 #[typetag::serde]
 impl Op for Choose {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Bool, a, b] if a == b => *a,
             _ => return None,
@@ -80,6 +82,7 @@ impl Op for Choose {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         let true_side = unique_for(output.clone(), "choose.if.true");
         let false_side = unique_for(output.clone(), "choose.if.false");
@@ -126,12 +129,14 @@ impl Op for Choose {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Not;
 
 #[typetag::serde]
 impl Op for Not {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Bool] => Type::Bool,
             _ => return None,
@@ -144,6 +149,7 @@ impl Op for Not {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -165,12 +171,14 @@ impl Op for Not {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct And;
 
 #[typetag::serde]
 impl Op for And {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Bool, Type::Bool] => Type::Bool,
             _ => return None,
@@ -183,6 +191,7 @@ impl Op for And {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -200,12 +209,14 @@ impl Op for And {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Or;
 
 #[typetag::serde]
 impl Op for Or {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Bool, Type::Bool] => Type::Bool,
             _ => return None,
@@ -218,6 +229,7 @@ impl Op for Or {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,

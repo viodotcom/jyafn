@@ -1,16 +1,17 @@
-use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{Graph, Ref, Type};
+use crate::{impl_op, Graph, Ref, Type};
 
 use super::Op;
 
-#[derive(Debug, Serialize, Deserialize, GetSize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Eq(pub Option<Type>);
 
 #[typetag::serde]
 impl Op for Eq {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => {
                 self.0 = Some(Type::Float);
@@ -20,8 +21,8 @@ impl Op for Eq {
                 self.0 = Some(Type::Symbol);
                 Type::Bool
             }
-            [Type::Ptr, Type::Ptr] => {
-                self.0 = Some(Type::Ptr);
+            [Type::Ptr { origin }, Type::Ptr { .. }] => {
+                self.0 = Some(Type::Ptr { origin: *origin });
                 Type::Bool
             }
             _ => return None,
@@ -34,6 +35,7 @@ impl Op for Eq {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -54,18 +56,16 @@ impl Op for Eq {
             None
         }
     }
-
-    fn get_size(&self) -> usize {
-        GetSize::get_size(self)
-    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Gt;
 
 #[typetag::serde]
 impl Op for Gt {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Bool,
             _ => return None,
@@ -78,6 +78,7 @@ impl Op for Gt {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -100,12 +101,14 @@ impl Op for Gt {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Lt;
 
 #[typetag::serde]
 impl Op for Lt {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Bool,
             _ => return None,
@@ -118,6 +121,7 @@ impl Op for Lt {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -140,12 +144,14 @@ impl Op for Lt {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ge;
 
 #[typetag::serde]
 impl Op for Ge {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Bool,
             _ => return None,
@@ -158,6 +164,7 @@ impl Op for Ge {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -180,12 +187,14 @@ impl Op for Ge {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Le;
 
 #[typetag::serde]
 impl Op for Le {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Bool,
             _ => return None,
@@ -198,6 +207,7 @@ impl Op for Le {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,

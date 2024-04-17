@@ -1,7 +1,7 @@
 import jyafn as fn
 
 
-@fn.func
+@fn.func(debug=True)
 def asserts(x: fn.scalar) -> None:
     fn.assert_(x > 0.0, "x must be positive")
 

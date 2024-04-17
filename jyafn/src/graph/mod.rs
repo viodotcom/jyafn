@@ -1,3 +1,5 @@
+mod check;
+mod compile;
 mod node;
 mod serde;
 
@@ -6,6 +8,7 @@ pub use node::{Node, Ref, Type};
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 use std::{
+    cmp::PartialEq,
     collections::HashMap,
     error::Error as StdError,
     fmt::Debug,
@@ -35,6 +38,30 @@ pub struct Graph {
     pub(crate) symbols: Symbols,
     pub(crate) errors: Vec<String>,
     pub(crate) mappings: HashMap<String, Arc<mapping::Mapping>>,
+    pub(crate) subgraphs: Vec<Graph>,
+}
+
+impl PartialEq for Graph {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.metadata == other.metadata
+            && self.input_layout == other.input_layout
+            && self.output_layout == other.output_layout
+            && self.inputs == other.inputs
+            && self.nodes == other.nodes
+            && self.outputs == other.outputs
+            && self.symbols == other.symbols
+            && self.errors == other.errors
+            && (self.mappings.len() == other.mappings.len()
+                && self.mappings.iter().all(|(k, v)| {
+                    other
+                        .mappings
+                        .get(k)
+                        .map(|other_v| Arc::ptr_eq(v, other_v))
+                        .unwrap_or(false)
+                }))
+            && self.subgraphs == other.subgraphs
+    }
 }
 
 impl Graph {
@@ -88,7 +115,7 @@ impl Graph {
         let error_msg = format!("initializing node for {op:?} on {args:?}");
 
         self.nodes
-            .push(Node::init(self, op, args).with_context(|| error_msg)?);
+            .push(Node::init(current_id, self, op, args).with_context(|| error_msg)?);
 
         Ok(Ref::Node(current_id))
     }
@@ -232,8 +259,13 @@ impl Graph {
             },
             key_args,
         )?;
-        let not_contains =
-            self.insert(op::Eq(None), vec![value_pointer, Ref::Const(Type::Ptr, 0)])?;
+        let not_contains = self.insert(
+            op::Eq(None),
+            vec![
+                value_pointer,
+                Ref::Const(Type::Ptr { origin: usize::MAX }, 0),
+            ],
+        )?;
 
         Ok(RefValue::Scalar(self.insert(op::Not, vec![not_contains])?))
     }
@@ -341,5 +373,57 @@ impl Graph {
             .value_layout()
             .build_ref_value(values)
             .ok_or_else(|| format!("building ref-value for call with default on mapping {name}"))?)
+    }
+
+    pub fn insert_subgraph(&mut self, subgraph: Graph) -> usize {
+        if let Some(exitsting) = self.subgraphs.iter().position(|g| g == &subgraph) {
+            return exitsting;
+        }
+
+        let graph_id = self.subgraphs.len();
+        self.subgraphs.push(subgraph);
+        graph_id
+    }
+
+    pub fn call_graph(&mut self, graph_id: usize, args: RefValue) -> Result<RefValue, Error> {
+        let subgraph = self
+            .subgraphs
+            .get(graph_id)
+            .ok_or_else(|| format!("no subgraph of id {graph_id}"))?
+            .clone();
+        let Some(args) = args.output_vec(&Layout::Struct(subgraph.input_layout.clone())) else {
+            return Err(Error::BadValue {
+                expected: Layout::Struct(subgraph.input_layout.clone()),
+                got: args,
+            })
+            .with_context(|| format!("calling subgraph {}", subgraph.name()));
+        };
+        let output_pointer = self.insert(op::CallGraph(graph_id), args)?;
+
+        let values = subgraph
+            .output_layout
+            .slots()
+            .iter()
+            .enumerate()
+            .map(|(id, _)| {
+                self.insert(
+                    op::LoadSubgraphOutput {
+                        subgraph: graph_id,
+                        slot: id,
+                    },
+                    vec![output_pointer],
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(subgraph
+            .output_layout
+            .build_ref_value(values)
+            .ok_or_else(|| {
+                format!(
+                    "building ref-value for call on subgraph {}",
+                    subgraph.name()
+                )
+            })?)
     }
 }

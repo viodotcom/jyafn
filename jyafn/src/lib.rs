@@ -8,7 +8,6 @@ pub mod op;
 pub mod pfunc;
 pub mod utils;
 
-mod compile;
 mod function;
 mod graph;
 

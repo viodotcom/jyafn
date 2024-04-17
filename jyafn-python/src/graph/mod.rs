@@ -4,12 +4,12 @@ pub use r#ref::Ref;
 
 use pyo3::exceptions;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict};
+use pyo3::types::{PyBytes, PyDict, PyTuple};
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use super::layout::Layout;
-use super::{Function, ToPyErr};
+use super::{depythonize_ref_value, pythonize_ref_value, Function, ToPyErr};
 
 thread_local! {
     pub static CONTEXT: RefCell<Vec<Graph>> =
@@ -70,6 +70,49 @@ impl Graph {
         CONTEXT.with_borrow_mut(|context| {
             context.pop();
         });
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn __call__(
+        &self,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyObject> {
+        if Arc::ptr_eq(&self.0, &current_graph()?.0) {
+            return Err(exceptions::PyException::new_err(format!(
+                "tried to call graph {} from itself. Recursion in JYAFN is disallowed.",
+                self.name()
+            )));
+        }
+
+        try_with_current(|g| {
+            // Check if self is not the current graph.
+            let graph = self.0.lock().expect("poisoned");
+            let kwargs = kwargs
+                .cloned()
+                .unwrap_or_else(|| PyDict::new_bound(args.py()));
+            let s = graph.input_layout();
+
+            if kwargs.len() + args.len() != s.0.len() {
+                return Err(exceptions::PyTypeError::new_err(format!(
+                    "graph takes {} arguments but {} were given",
+                    s.0.len(),
+                    kwargs.len()
+                )));
+            }
+
+            if !args.is_empty() {
+                for (item, (name, _)) in args.iter().zip(&s.0) {
+                    kwargs.set_item(name, item)?;
+                }
+            }
+
+            let kwargs_ref = depythonize_ref_value(g, &kwargs)?;
+            let graph_id = g.insert_subgraph(graph.clone());
+            let output = g.call_graph(graph_id, kwargs_ref).map_err(ToPyErr)?;
+
+            pythonize_ref_value(args.py(), output)
+        })
     }
 
     fn get_size(&self) -> usize {

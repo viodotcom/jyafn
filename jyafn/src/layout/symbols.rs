@@ -7,7 +7,7 @@ pub trait Sym {
     fn get(&self, id: usize) -> Option<&str>;
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, GetSize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, GetSize)]
 pub struct Symbols(Vec<String>);
 
 impl Sym for Symbols {

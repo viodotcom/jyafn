@@ -481,7 +481,7 @@ pub extern "C" fn function_symbols_json(func: *const ()) -> Outcome {
 #[no_mangle]
 pub extern "C" fn function_fn_ptr(
     func: *const (),
-) -> unsafe extern "C" fn(*const u8, *mut u8) -> u64 {
+) -> unsafe extern "C" fn(*const u8, *mut u8) -> *const c_char {
     unsafe { with_unchecked(func, |func: &Function| func.fn_ptr()) }
 }
 
@@ -500,7 +500,11 @@ pub extern "C" fn function_load(bytes: *const u8, len: usize) -> Outcome {
 }
 
 #[no_mangle]
-pub extern "C" fn function_call_raw(func: *const (), input: *const u8, output: *mut u8) -> u64 {
+pub extern "C" fn function_call_raw(
+    func: *const (),
+    input: *const u8,
+    output: *mut u8,
+) -> *const c_char {
     unsafe {
         with_unchecked(func, |func: &Function| {
             match std::panic::catch_unwind(|| {
@@ -510,10 +514,7 @@ pub extern "C" fn function_call_raw(func: *const (), input: *const u8, output: *
                 func.call_raw(input, output)
             }) {
                 Ok(status) => status,
-                Err(_le_oops) => {
-                    eprintln!("operation panicked (see stderr)");
-                    u64::MAX
-                }
+                Err(_le_oops) => b"operation panicked (see stderr)\0".as_ptr() as *const c_char,
             }
         })
     }

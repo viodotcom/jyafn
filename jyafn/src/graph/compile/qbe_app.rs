@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::{env, fs, io};
 
-const BIN: &[u8] = include_bytes!("../../../vendored/qbe/qbe");
+const BIN: &[u8] = include_bytes!("../../../../vendored/qbe/qbe");
 
 lazy_static! {
     static ref CURRENT_QBE: Mutex<Option<PathBuf>> = Mutex::default();

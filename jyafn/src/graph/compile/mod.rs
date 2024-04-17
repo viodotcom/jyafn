@@ -6,7 +6,9 @@ use std::{
     process::{Command, Stdio},
 };
 
-use super::{Error, Function, Graph, Node};
+use crate::Function;
+
+use super::{Error, Graph, Node};
 
 impl Graph {
     fn find_illegal(&self) -> Option<&Node> {
@@ -16,20 +18,16 @@ impl Graph {
     }
 
     pub fn render(&self) -> qbe::Module<'static> {
-        self.clone().do_render()
+        let mut module = qbe::Module::new();
+        self.clone().do_render(&mut module, "run");
+        module
     }
 
-    fn do_render(&mut self) -> qbe::Module<'static> {
-        // Optimizations:
-        optimize::const_eval(self);
-        let reachable = optimize::find_reachable(&self.outputs, &self.nodes);
-
-        let mut module = qbe::Module::new();
-
+    fn do_render(&mut self, module: &mut qbe::Module<'static>, namespace: &str) {
         // Rendering main:
         let main = module.add_function(qbe::Function::new(
             qbe::Linkage::public(),
-            "run".to_string(),
+            namespace.to_string(),
             vec![
                 (qbe::Type::Long, qbe::Value::Temporary("in".to_string())),
                 (qbe::Type::Long, qbe::Value::Temporary("out".to_string())),
@@ -66,7 +64,9 @@ impl Graph {
 
         // This is the fancier implementation, that passes the right nodes to the inside
         // of conditionals.
-        optimize::Statements::build(&self.nodes).render_into(self, &reachable, main);
+        optimize::const_eval(self);
+        let reachable = optimize::find_reachable(&self.outputs, &self.nodes);
+        optimize::Statements::build(&self.nodes).render_into(self, &reachable, main, namespace);
 
         for output in &self.outputs {
             main.add_instr(qbe::Instr::Store(
@@ -86,12 +86,28 @@ impl Graph {
 
         main.add_instr(qbe::Instr::Ret(Some(qbe::Value::Const(0))));
 
-        // Rendering mapping access functions:
-        for (name, mapping) in &self.mappings {
-            module.add_function(mapping.render(format!("mapping.{name}")));
+        // Render error messages:
+        for (error_id, error) in self.errors.iter().enumerate() {
+            module.add_data(qbe::DataDef::new(
+                qbe::Linkage::private(),
+                format!("{namespace}.error.{error_id}"),
+                None,
+                vec![
+                    (qbe::Type::Byte, qbe::DataItem::Str(error.to_string())),
+                    (qbe::Type::Byte, qbe::DataItem::Const(0)),
+                ],
+            ));
         }
 
-        module
+        // Rendering mapping access functions:
+        for (name, mapping) in &self.mappings {
+            module.add_function(mapping.render(format!("{namespace}.mapping.{name}")));
+        }
+
+        // Render sub-graphs:
+        for (i, subgraph) in self.subgraphs.iter_mut().enumerate() {
+            subgraph.do_render(module, &format!("{namespace}.graph.{i}"))
+        }
     }
 
     // fn render(&self) -> &'static str {
@@ -120,13 +136,14 @@ impl Graph {
 
     pub fn compile(&self) -> Result<Function, Error> {
         let mut graph = self.clone();
-        let rendered = graph.do_render();
+        let mut module = qbe::Module::new();
+        graph.do_render(&mut module, "run");
 
         if let Some(node) = graph.find_illegal() {
             return Err(Error::IllegalInstruction(format!("{node:?}")));
         }
 
-        let assembly = create_assembly(rendered)?;
+        let assembly = create_assembly(module)?;
         let unlinked = assemble(&assembly)?;
         let shared_object = link(&unlinked)?;
 

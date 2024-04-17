@@ -1,5 +1,6 @@
 # type:ignore
-import jyafn as fn 
+import jyafn as fn
+
 
 def fmt_layout(layout: fn.Layout, indent=0) -> str:
     layout_str = str(layout)

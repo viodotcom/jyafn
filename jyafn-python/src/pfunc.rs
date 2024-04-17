@@ -31,7 +31,7 @@ pub fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pfunc1s! {
         // f64 -> f64
         floor, ceil, round, trunc,
-        sqrt, exp, ln,
+        sqrt, exp, ln, ln_1p, exp_m1,
         sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh,
         gamma, loggamma, factorial, rgamma, digamma,
         erf, erfc, norm, norm_inv,
@@ -51,7 +51,7 @@ pub fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     pfunc2s! {
         // f64, f64 -> f64
-        powf, rem,
+        powf, rem, atan2,
         beta, logbeta, gammainc, gammac, gammac_inv,
         besselj, bessely, besseli
     }

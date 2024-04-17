@@ -7,12 +7,14 @@ import inspect
 import types
 import typing
 import numpy as np
-
-from abc import ABC, abstractmethod
-from typing import Any
 import datetime as pydatetime
 
+from abc import ABC, abstractmethod
+from typing import Any, Callable
+from dataclasses import dataclass
+
 from .np_dropin import *
+
 
 class BaseAnnotation(ABC):
     """
@@ -51,7 +53,11 @@ def make_layout(a: fn.Layout | type[BaseAnnotation] | types.GenericAlias) -> fn.
         case type():
             return a.make_layout(())
         case types.GenericAlias():
-            return typing.get_origin(a).make_layout(typing.get_args(a))
+            origin = typing.get_origin(a)
+            if issubclass(origin, BaseAnnotation):
+                return origin.make_layout(typing.get_args(a))
+            else:
+                raise TypeError(f"cannot make layout of a generic of {origin}")
         case _:
             raise TypeError(f"Cannot make layout out of {a}")
 
@@ -155,7 +161,7 @@ class list(BaseAnnotation):
 class tensor(BaseAnnotation):
     """
     Does not annotate any specific layout, but creates an input that is an `np.ndarray`
-    populated with `fn.Ref`s. This can be used to make tensor operations backed by 
+    populated with `fn.Ref`s. This can be used to make tensor operations backed by
     `numpy`.
     """
 
@@ -219,17 +225,120 @@ def _ret_from_annotation(ret: Any, a: Any) -> None:
             layout = origin.make_layout(typing.get_args(a))
         case None:
             ret = unit.transform_output(a)
-            layout = unit.make_layout(ret, ())
+            layout = unit.make_layout(())
         case _:
             raise Exception(f"Invalid return annotation for jyafn: {a}")
 
     return fn.ret(ret, layout)
 
 
+@dataclass
+class GraphFactory:
+    """
+    A fectory of graphs. This will create a new instance of a graph, given a callable that
+    builds the graph, eacho time the `build` method is invoked.
+    """
+
+    original: Callable
+    """The callable used to build the graph in this factory"""
+    metadata: dict[str, str]
+    """
+    The metadata to associate with this graph. This metadata does not override the default
+    JYAFN tags.
+    """
+    debug: bool = False
+    """Whether to print the QBE IR representation of this graph."""
+    cache: bool = True
+    """Whether to cache the graph after the first invocation of `build`."""
+    _cached: fn.Graph | None = None
+    """The cached value of the graph, if caching is enabled."""
+
+    @property
+    def __doc__(self) -> str | None:
+        return self.original.__doc__
+
+    def build(self) -> fn.Graph:
+        """Creates a new `fn.Graph` instance using the original function."""
+        if self.cache and self._cached is not None:
+            return self._cached
+
+        signature = inspect.signature(self.original)
+        with fn.Graph(name=f"{self.original.__qualname__}") as g:
+            inputs = {
+                arg: _input_from_annotation(arg, param.annotation)
+                for arg, param in signature.parameters.items()
+            }
+            _ret_from_annotation(self.original(**inputs), signature.return_annotation)
+
+        for key, value in self.metadata.items():
+            g.set_metadata(str(key), str(value))
+        g.set_metadata("jyafn.created_at", pydatetime.datetime.now().isoformat())
+        g.set_metadata("jyafn.mem_size_estimate", str(g.get_size()))
+        if self.original.__doc__ is not None:
+            g.set_metadata("jyafn.doc", self.original.__doc__)
+
+        if self.debug:
+            print(g.render())
+
+        if self.cache:
+            self._cached = g
+
+        return g
+
+    def compile(self) -> fn.Function:
+        """
+        Builds the computational graph invoking `build` and compiles the resulting graph
+        into an `fn.Function`.
+        """
+        g = self.build()
+        compiled = g.compile()
+        compiled.original = self.original
+
+        return compiled
+
+    def __call__(self, *args, **kwargs) -> Any:
+        """Calls this graph as a sub-graph call of the current graph."""
+        return self.build()(*args, **kwargs)
+
+
+def graph(
+    *args, metadata: dict = {}, debug: bool = False, cache: bool = False
+) -> GraphFactory:
+    """
+    Decorates a Python function and creates an `fn.GraphFactory` out of it. This factory
+    can be used to create a graph by invoking the `build` method.
+
+    Annotating _all_ input arguments is mandatory, while annotating the output value is
+    optional, but will be checked.
+
+    Examples:
+    ```
+    @fn.graph
+    def two_x_plus_y(x: fn.scalar, y: fn.scalar) -> fn.scalar:
+        return 2.0 * x + y
+
+    @fn.graph(metadata={"foo": "bar"})
+    def with_custom_metadata(x: fn.scalar, y: fn.scalar):
+        return 2.0 * x + y
+
+    # call the compiled JYAFN:
+    assert two_x_plus_y.compile()(2.0, 1.0) == 5.0
+
+    # call the compiled JYAFN:
+    assert two_x_plus_y.compile()(2.0, 1.0) == 5.0
+    ```
+    """
+
+    def inner(f: Any) -> GraphFactory:
+        return GraphFactory(f, metadata=metadata, debug=debug, cache=cache)
+
+    return inner(args[0]) if len(args) == 1 else inner
+
+
 def func(*args, metadata: dict = {}, debug: bool = False) -> fn.Function:
     """
     Decorates a Python function and creates an `fn.Function` out of it, managing graph
-    creation and compilation. You can still access the original function using the 
+    creation and compilation. You can still access the original function using the
     `original` property in the returned object.
 
     Annotating _all_ input arguments is mandatory, while annotating the output value is
@@ -242,7 +351,7 @@ def func(*args, metadata: dict = {}, debug: bool = False) -> fn.Function:
         return 2.0 * x + y
 
     @fn.func(metadata={"foo": "bar"})
-    def with_custom_metadata(x: fn.scalar, y: fn.scalar) -> fn.scalar:
+    def with_custom_metadata(x: fn.scalar, y: fn.scalar):
         return 2.0 * x + y
 
     # call the compiled JYAFN:
@@ -252,29 +361,9 @@ def func(*args, metadata: dict = {}, debug: bool = False) -> fn.Function:
     assert two_x_plus_y.original(2.0, 1.0) == 5.0
     ```
     """
+
     def inner(f: Any) -> fn.Function:
-        signature = inspect.signature(f)
-        with fn.Graph(name=f"{f.__qualname__}") as g:
-            inputs = {
-                arg: _input_from_annotation(arg, param.annotation)
-                for arg, param in signature.parameters.items()
-            }
-            _ret_from_annotation(f(**inputs), signature.return_annotation)
-
-        for key, value in metadata.items():
-            g.set_metadata(str(key), str(value))
-        g.set_metadata("jyafn.created_at", pydatetime.datetime.now().isoformat())
-        g.set_metadata("jyafn.mem_size_estimate", str(g.get_size()))
-        if f.__doc__ is not None:
-            g.set_metadata("jyafn.doc", f.__doc__)
-
-        if debug:
-            print(g.render())
-
-        compiled = g.compile()
-        compiled.original = f
-
-        return compiled
+        return GraphFactory(f, metadata=metadata, debug=debug).compile()
 
     return inner(args[0]) if len(args) == 1 else inner
 
@@ -303,7 +392,7 @@ def make_timestamp(
 ) -> float:
     """
     Creates a JYAFN timestamp _constant_ out of a python datetime, date or timedelta
-    object from the `datetime` package. This basically converts the input into its 
+    object from the `datetime` package. This basically converts the input into its
     correspondent value in microseconds.
     """
     match time:
@@ -326,7 +415,7 @@ def make_datetime(
 ) -> fn.Ref:
     """
     Creates a JYAFN datetime _constant_ out of a python datetime, date or timedelta
-    object from the `datetime` package. This basically converts the input into its 
+    object from the `datetime` package. This basically converts the input into its
     correspondent value in microseconds.
     """
     return fn.fromtimestamp(fn.const(make_timestamp(time)))
@@ -340,3 +429,7 @@ HOUR: float = 60.0 * MINUTE
 """An hout, in seconds"""
 DAY: float = 24.0 * HOUR
 """A day, in seconds"""
+MILLISECOND: float = SECOND / 1_000
+"""A millisecond, in seconds"""
+MICROSECOND: float = SECOND / 1_000_000
+"""A microsecond, in seconds"""

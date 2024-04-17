@@ -1,4 +1,6 @@
 use get_size::GetSize;
+use object::Object;
+use std::ffi::{c_char, CStr};
 use std::{
     cell::RefCell,
     fmt::Debug,
@@ -6,11 +8,10 @@ use std::{
     sync::Arc,
 };
 use thread_local::ThreadLocal;
-use object::Object;
 
 use super::{layout, Error, Graph, Type};
 
-pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> u64;
+pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> *const c_char;
 
 #[derive(Debug)]
 pub struct FunctionData {
@@ -142,7 +143,7 @@ impl Function {
         })
     }
 
-    pub fn call_raw<I, O>(&self, input: I, mut output: O) -> u64
+    pub fn call_raw<I, O>(&self, input: I, mut output: O) -> *const c_char
     where
         I: AsRef<[u8]>,
         O: AsMut<[u8]>,
@@ -164,15 +165,13 @@ impl Function {
     {
         let mut output = vec![0; self.data.output_size].into_boxed_slice();
         let status = self.call_raw(input, &mut output);
-        if status == 0 {
+        if status == std::ptr::null() {
             Ok(output)
-        } else if let Some(error) = self.graph().errors.get((status - 1) as usize) {
-            Err(Error::StatusRaised(error.to_string()))
         } else {
-            Err(Error::StatusRaised(format!(
-                "unknown error of id {}",
-                status - 1
-            )))
+            // Safety: null was checked and the function pinky-promisses to return a valid
+            // C string in case of error.
+            let error = unsafe { CStr::from_ptr(status) };
+            Err(Error::StatusRaised(error.to_string_lossy().to_string()))
         }
     }
 
@@ -210,15 +209,11 @@ impl Function {
 
         // Call:
         let status = self.call_raw(&encode_visitor.0, &mut decode_visitor.0);
-        if status != 0 {
-            return if let Some(error) = self.graph().errors.get((status - 1) as usize) {
-                Err(Error::StatusRaised(error.to_string()))
-            } else {
-                Err(Error::StatusRaised(format!(
-                    "unknown error of id {}",
-                    status - 1
-                )))
-            };
+        if status != std::ptr::null() {
+            // Safety: null was checked and the function pinky-promisses to return a valid
+            // C string in case of error.
+            let error = unsafe { CStr::from_ptr(status) };
+            return Err(Error::StatusRaised(error.to_string_lossy().to_string()));
         }
 
         // Deserialization dance:

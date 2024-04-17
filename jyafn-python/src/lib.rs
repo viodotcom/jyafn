@@ -127,7 +127,10 @@ fn pythonize_ref_value(py: Python, val: rust::layout::RefValue) -> PyResult<PyOb
     })
 }
 
-fn depythonize_ref_value(obj: &Bound<PyAny>) -> PyResult<rust::layout::RefValue> {
+fn depythonize_ref_value(
+    g: &mut rust::Graph,
+    obj: &Bound<PyAny>,
+) -> PyResult<rust::layout::RefValue> {
     fn depythonize_inner(
         g: &mut rust::Graph,
         obj: &Bound<PyAny>,
@@ -169,11 +172,12 @@ fn depythonize_ref_value(obj: &Bound<PyAny>) -> PyResult<rust::layout::RefValue>
         }
 
         Err(exceptions::PyTypeError::new_err(format!(
-            "Cannot make {obj} into a RefValue"
+            "Cannot make {obj}, of type {}, into a RefValue",
+            obj.get_type().name()?,
         )))
     }
 
-    graph::try_with_current(|g| depythonize_inner(g, obj))
+    depythonize_inner(g, obj)
 }
 
 #[pyfunction]
@@ -200,7 +204,7 @@ fn read_fn(file: &str) -> PyResult<Function> {
 
 #[pyfunction]
 fn putative_layout(obj: &Bound<PyAny>) -> PyResult<Layout> {
-    Ok(Layout(depythonize_ref_value(obj)?.putative_layout()))
+    graph::try_with_current(|g| Ok(Layout(depythonize_ref_value(g, obj)?.putative_layout())))
 }
 
 #[pyfunction]
@@ -216,8 +220,10 @@ fn input(py: Python, name: String, layout: Option<Layout>) -> PyResult<PyObject>
 
 #[pyfunction]
 fn ret(val: &Bound<PyAny>, layout: Layout) -> PyResult<()> {
-    let val = depythonize_ref_value(val)?;
-    graph::try_with_current(|g| Ok(g.output(val, layout.0).map_err(ToPyErr)?))
+    graph::try_with_current(|g| {
+        let val = depythonize_ref_value(g, val)?;
+        Ok(g.output(val, layout.0).map_err(ToPyErr)?)
+    })
 }
 
 #[pyfunction]

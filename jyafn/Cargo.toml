@@ -14,6 +14,7 @@ bincode = "1.3.3"
 byte-slice-cast = "1.2.2"
 chrono = "0.4.37"
 downcast-rs = "1.2.1"
+dyn-clone = "1.0.17"
 get-size = { version = "0.1.4", features = ["derive"] }
 hashbrown = { version = "0.14.3", features = ["serde", "raw"] }
 lazy_static = "1.4.0"

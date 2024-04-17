@@ -1,15 +1,17 @@
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{Graph, Ref, Type};
+use crate::{impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Add;
 
 #[typetag::serde]
 impl Op for Add {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Float,
             _ => return None,
@@ -22,6 +24,7 @@ impl Op for Add {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -43,12 +46,14 @@ impl Op for Add {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sub;
 
 #[typetag::serde]
 impl Op for Sub {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Float,
             _ => return None,
@@ -61,6 +66,7 @@ impl Op for Sub {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -78,12 +84,14 @@ impl Op for Sub {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Mul;
 
 #[typetag::serde]
 impl Op for Mul {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Float,
             _ => return None,
@@ -96,6 +104,7 @@ impl Op for Mul {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -117,12 +126,14 @@ impl Op for Mul {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Div;
 
 #[typetag::serde]
 impl Op for Div {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Float,
             _ => return None,
@@ -135,6 +146,7 @@ impl Op for Div {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -152,12 +164,14 @@ impl Op for Div {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rem;
 
 #[typetag::serde]
 impl Op for Rem {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float, Type::Float] => Type::Float,
             _ => return None,
@@ -170,9 +184,10 @@ impl Op for Rem {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         // `rem` does not work for floats in QBE. So, we need to resort to pfuncs!
-        super::call::Call("rem".to_string()).render_into(graph, output, args, func)
+        super::call::Call("rem".to_string()).render_into(graph, output, args, func, namespace)
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
@@ -184,12 +199,14 @@ impl Op for Rem {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Neg;
 
 #[typetag::serde]
 impl Op for Neg {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float] => Type::Float,
             _ => return None,
@@ -202,6 +219,7 @@ impl Op for Neg {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         func.assign_instr(
             output,
@@ -219,12 +237,14 @@ impl Op for Neg {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Abs;
 
 #[typetag::serde]
 impl Op for Abs {
-    fn annotate(&mut self, graph: &Graph, args: &[Type]) -> Option<Type> {
+    impl_op! {}
+
+    fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         Some(match args {
             [Type::Float] => Type::Float,
             _ => return None,
@@ -237,6 +257,7 @@ impl Op for Abs {
         output: qbe::Value,
         args: &[Ref],
         func: &mut qbe::Function,
+        namespace: &str,
     ) {
         let test_temp = qbe::Value::Temporary(unique_for(output.clone(), "abs.test"));
         func.assign_instr(

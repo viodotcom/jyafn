@@ -181,13 +181,13 @@ fn init() -> HashMap<&'static str, PFunc> {
     pfuncs_f64! {
         call1:
             floor, ceil, round, trunc,
-            sqrt, exp, ln,
+            sqrt, exp, ln, ln_1p, exp_m1,
             sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh,
             gamma, loggamma, factorial, rgamma, digamma,
             erf, erfc, norm, norm_inv,
             riemann_zeta;
         call2:
-            powf, rem,
+            powf, rem, atan2,
             beta, logbeta, gammainc, gammac, gammac_inv,
             besselj, bessely, besseli;
         call_bool_to_f64:

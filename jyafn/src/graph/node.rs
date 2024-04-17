@@ -1,9 +1,7 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
-use std::{
-    fmt::{self, Display},
-    sync::Arc,
-};
+use std::cmp::PartialEq;
+use std::fmt::{self, Display};
 
 use crate::{Error, Op};
 
@@ -15,7 +13,7 @@ pub enum Type {
     Float,
     Bool,
     Symbol,
-    Ptr,
+    Ptr { origin: usize },
     DateTime,
 }
 
@@ -24,11 +22,11 @@ impl TryFrom<u8> for Type {
 
     fn try_from(v: u8) -> Result<Self, Self::Error> {
         match v {
-            x if x == Type::Float as u8 => Ok(Type::Float),
-            x if x == Type::Bool as u8 => Ok(Type::Bool),
-            x if x == Type::Symbol as u8 => Ok(Type::Symbol),
-            x if x == Type::Ptr as u8 => Ok(Type::Ptr),
-            x if x == Type::Ptr as u8 => Ok(Type::DateTime),
+            0 => Ok(Type::Float),
+            1 => Ok(Type::Bool),
+            2 => Ok(Type::Symbol),
+            3 => Ok(Type::Ptr { origin: usize::MAX }),
+            4 => Ok(Type::DateTime),
             _ => Err(format!("{v} is not a valid type id"))?,
         }
     }
@@ -40,7 +38,7 @@ impl Display for Type {
             Type::Float => write!(f, "scalar"),
             Type::Bool => write!(f, "bool"),
             Type::Symbol => write!(f, "symbol"),
-            Type::Ptr => write!(f, "ptr"),
+            Type::Ptr { origin } => write!(f, "ptr@{origin}"),
             Type::DateTime => write!(f, "datetime"),
         }
     }
@@ -52,7 +50,7 @@ impl Type {
             Type::Float => qbe::Type::Double,
             Type::Bool => qbe::Type::Long,
             Type::Symbol => qbe::Type::Long,
-            Type::Ptr => qbe::Type::Long,
+            Type::Ptr { .. } => qbe::Type::Long,
             Type::DateTime => qbe::Type::Long,
         }
     }
@@ -62,7 +60,7 @@ impl Type {
             Type::Float => 8,
             Type::Bool => 8,
             Type::Symbol => 8,
-            Type::Ptr => 8,
+            Type::Ptr { .. } => 8,
             Type::DateTime => 8,
         }
     }
@@ -72,7 +70,7 @@ impl Type {
             Type::Float => format!("{}", f64::from_ne_bytes(val.to_ne_bytes())),
             Type::Bool => format!("{}", val == 1),
             Type::Symbol => format!("{val}"),
-            Type::Ptr => format!("{val:#x}"),
+            Type::Ptr { .. } => format!("{val:#x}"),
             Type::DateTime => {
                 if let Some(date) =
                     chrono::DateTime::<chrono::Utc>::from_timestamp_micros(val as i64)
@@ -143,9 +141,15 @@ impl Ref {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
-    pub(crate) op: Arc<dyn Op>,
+    pub(crate) op: Box<dyn Op>,
     pub(crate) args: Vec<Ref>,
     pub(crate) ty: Type,
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Node) -> bool {
+        self.op.is_eq(other.op.as_ref()) && self.args == other.args && self.ty == other.ty
+    }
 }
 
 impl GetSize for Node {
@@ -155,14 +159,19 @@ impl GetSize for Node {
 }
 
 impl Node {
-    pub(crate) fn init<O: Op>(graph: &Graph, mut op: O, args: Vec<Ref>) -> Result<Node, Error> {
+    pub(crate) fn init<O: Op>(
+        node_id: usize,
+        graph: &Graph,
+        mut op: O,
+        args: Vec<Ref>,
+    ) -> Result<Node, Error> {
         let arg_types = args.iter().map(|r| graph.type_of(*r)).collect::<Vec<_>>();
-        let Some(ty) = op.annotate(graph, &arg_types) else {
+        let Some(ty) = op.annotate(node_id, graph, &arg_types) else {
             return Err(Error::Type(Box::new(op), arg_types));
         };
 
         Ok(Node {
-            op: Arc::new(op),
+            op: Box::new(op),
             args,
             ty,
         })
