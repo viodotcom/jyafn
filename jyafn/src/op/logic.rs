@@ -34,7 +34,6 @@ impl Op for Assert {
             false_side.clone(),
         ));
         func.add_block(false_side);
-        // +1 because returning 0 is success.
         func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Global(format!(
             "{namespace}.error.{}",
             self.0

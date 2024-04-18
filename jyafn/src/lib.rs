@@ -14,7 +14,7 @@ mod graph;
 #[cfg(feature = "map-reduce")]
 pub use dataset::Dataset;
 pub use function::{Function, FunctionData, RawFn};
-pub use graph::{Graph, Node, Ref, Type};
+pub use graph::{Graph, IndexedList, Node, Ref, Type};
 pub use op::Op;
 pub use r#const::Const;
 

@@ -23,6 +23,10 @@ pub enum Cmp {
     Sgt,
     /// Returns 1 if first value is greater than or equal to second, respecting signedness
     Sge,
+    Ult,
+    Ule,
+    Ugt,
+    Uge,
     Lt,
     Le,
     Gt,
@@ -88,6 +92,7 @@ pub enum Instr<'a> {
     /// `1.1`
     Blit(Value, Value, u64),
     Ultof(Value),
+    Dtoui(Value),
 }
 
 impl<'a> fmt::Display for Instr<'a> {
@@ -113,6 +118,10 @@ impl<'a> fmt::Display for Instr<'a> {
                         Cmp::Sle => "sle",
                         Cmp::Sgt => "sgt",
                         Cmp::Sge => "sge",
+                        Cmp::Ult => "ult",
+                        Cmp::Ule => "ule",
+                        Cmp::Ugt => "ugt",
+                        Cmp::Uge => "uge",
                         Cmp::Lt => "lt",
                         Cmp::Le => "le",
                         Cmp::Gt => "gt",
@@ -168,6 +177,7 @@ impl<'a> fmt::Display for Instr<'a> {
             }
             Self::Blit(src, dst, n) => write!(f, "blit {}, {}, {}", src, dst, n),
             Self::Ultof(val) => write!(f, "ultof {val}"),
+            Self::Dtoui(val) => write!(f, "dtoui {val}"),
         }
     }
 }

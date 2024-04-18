@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
-use crate::{Graph, Ref};
+use crate::Ref;
 
 use super::{Layout, Struct, ISOFORMAT};
 

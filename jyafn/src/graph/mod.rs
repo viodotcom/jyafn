@@ -426,4 +426,48 @@ impl Graph {
                 )
             })?)
     }
+
+    pub fn indexed_list(&mut self, list: Vec<Ref>) -> Result<IndexedList, Error> {
+        let element = list
+            .first()
+            .map(|&f| self.type_of(f))
+            .unwrap_or(Type::Float);
+        let n_elements = list.len();
+        let list = self.insert(
+            op::List {
+                element,
+                n_elements,
+            },
+            list,
+        )?;
+        let error = self.push_error(format!("Index out of bounds"));
+
+        Ok(IndexedList {
+            list,
+            element,
+            n_elements,
+            error,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct IndexedList {
+    list: Ref,
+    element: Type,
+    n_elements: usize,
+    error: usize,
+}
+
+impl IndexedList {
+    pub fn get(&self, graph: &mut Graph, idx: Ref) -> Result<Ref, Error> {
+        graph.insert(
+            op::Index {
+                element: self.element,
+                n_elements: self.n_elements,
+                error: self.error,
+            },
+            vec![self.list, idx],
+        )
+    }
 }

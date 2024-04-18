@@ -22,7 +22,7 @@ use dyn_clone::DynClone;
 use std::fmt::Debug;
 use std::panic::RefUnwindSafe;
 
-use super::{Error, Graph, Ref, Type};
+use super::{Graph, Ref, Type};
 
 #[typetag::serde(tag = "type")]
 pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcast {

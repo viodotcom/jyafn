@@ -182,7 +182,83 @@ def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
 ```
 You would be tempted to just `return revenue[n_days]`. However, as the exception you will get will remind you, "only integers, slices (`:`), ellipsis (`...`), numpy.newaxis (`None`) and integer or boolean arrays are valid indices" in NumPy. And we have a `Ref`...
 
-This is a limitation in Python. The method that overloads indexes is implemented in NumPy and not in JYAFN, so we will have to do without it. Enter `index`. This method is a method in `Ref` that lets you index lists and dictionaries. This of it as the `a[i]` notation, just backwards:
+This is a limitation in Python. The method that overloads indexes is implemented in NumPy and not in JYAFN, so we will have to do without it, or will we? Enter `fn.index`. This function is a wrapper that allows you to index lists (and dictionaries) using refs, as simply as this:
 ```python
-n_days.index(revenue.tolist())
+fn.index(revenue)[n_days]
 ```
+
+Under the hood, this function stores all the elements of `revenue` in the function _stack_ and provides an interface for accessing elements.
+
+Note that this is not the best way to code the function. It would have been better if we have divided the rows of `a` and `b` per `n_days` and put _that_ into a _mapping_ instead, thus calculating only the expected revenue for the specific given date. But that would not have allowed for a demonstration of `fn.index`, would it? However, that shocases the difference using mappings and indexes:
+* mappings are read-only and only work with data knwon _a priori_. For example, you cannot have calcuated data put into a mapping. With `fn.index`, you can.
+* `fn.index` copies all the data passed to it to memory. This can be very wasteful for storing large objects, e.g., a matrix. This also means that `fn.index` calls should be minimized. For example, if an index is going to be used more than once, it's best to store it in a variable, instead of calling `fn.index` every time. 
+
+### Wrapping it up
+
+So, there you have it, the full code:
+```python
+import json
+import jyafn as fn
+import numpy as np
+from datetime import date
+
+# Inputs:
+df = pd.read_csv("campaign-pca.csv")
+a = np.load("pca_a.npy")
+b = np.load("pca_b.npy")
+start = date(2024, 1, 1)
+
+# Create mapping for campaign_id -> components:
+pcas = {
+    line.campaign_id: json.loads(line.components) # decode list of floats
+    for _, line in df.iterrows()
+}
+n_components = len(next(iter(pcas.values())))
+pca_mapping = fn.mapping("pca", fn.scalar, fn.list[fn.scalar, n_components], pcas)
+
+
+@fn.func
+def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+    """Predicts the revenue of a given marketing campaign for a given date."""
+    components = pca_mapping.get(campaign_id, [0.0] * n_components)
+    revenue = a @ np.array(components) + b
+    n_days = (date.timestamp() - fn.make_timestamp(start)) // fn.DAY
+    return fn.index(revenue)[n_days]
+```
+
+You can now do two very useful things with it. First, you can call `predict_revenue` just as if it were a regular Python function, like so:
+```python
+predict_revenue(12345, "2024-01-15")
+```
+And you can can also call the function on a JSON directly, using `eval_json`:
+```python
+predict_revenue.call_json('{"campaign_id": 12345, "date": "2024-01-15"}')
+```
+This is faster than deserializing a string into a dictionary using the `json` package and then passing it to the function. It's also way simpler to code if you are writing a web server that will serve that function as a route.
+
+Lastly, you can _export_ this function as a `.jyafn` file using write:
+```python
+predict_revenue.write("predict-revenue.jyafn")
+```
+
+If you load it in another process, you will get the same function with the same behavior back:
+```python
+predict_revenue = fn.read_fn("predict-revenue.jyafn")
+```
+
+That is basically the [whole point](./why-jyafn.md) of JYAFN. 
+
+
+## What's next?
+
+Now that you have a JYAFN which you can send your devs to use in production, the world is your oyster! To get better at JYAFN, you could check out the following next:
+
+* Take a look at the `jyafn` CLI tool. There you will find some nice debugging gadgets for your exported functions, such as
+    * `desc`: describes the JYAFN, showing name, input and output types, documentation and (what is very important) _memory usage_ of your function. You know, devs don't like when you go about gobbling up all the memory in their machines destrying their servers. It's important to know how much _in-memory_ data your function will cost.
+    * `run`: runs your function with a given JSON input.
+    * `serve`: serves your function as a simple HTTP server (not at all suitable for production use).
+    * `timeit`: runs a performance benchmark on a given input to get to know how much time your function takes to execute.
+
+* Take a quick look (or just tab) the "To Serve JYAFN", the JYAFN cookbook, a growing collection of tidbits on how to solve the most common issues you will get when working with the `jyafn` package.
+
+And that is it for today, folks! That is JYAFN for you.
