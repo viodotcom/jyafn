@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use function::Function;
-use graph::{Graph, Ref};
+use graph::{Graph, Ref, IndexedList};
 use layout::Layout;
 
 #[pymodule]
@@ -22,6 +22,7 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Ref>()?;
     m.add_class::<Type>()?;
     m.add_class::<Function>()?;
+    m.add_class::<IndexedList>()?;
     m.add_function(wrap_pyfunction!(read_graph, m)?)?;
     m.add_function(wrap_pyfunction!(read_fn, m)?)?;
     m.add_function(wrap_pyfunction!(graph::current_graph, m)?)?;

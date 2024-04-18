@@ -10,7 +10,7 @@ import numpy as np
 import datetime as pydatetime
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 from dataclasses import dataclass
 
 from .np_dropin import *
@@ -433,3 +433,25 @@ MILLISECOND: float = SECOND / 1_000
 """A millisecond, in seconds"""
 MICROSECOND: float = SECOND / 1_000_000
 """A microsecond, in seconds"""
+
+
+def index(indexable: list | np.ndarray | Iterable) -> IndexedList:
+    """
+    Creates an object that can be indexed by `fn.Ref`. Normally, `lists` and `ndarrays`
+    can only be indexed by numbers and passing an `fn.Ref` as an index will return an
+    `IndexError`. This function creates an object that understands that.
+
+    Note however that _most of the time_ what you need is an `fn.mapping`. The
+    implementation of `fn.index` can be quite costly, involving copying all of the
+    indexable data in the stack. If your data is knwon beforehand (i.e., it's a big CSV
+    file), you are surely better off with a mapping. However, if you data is comprised of
+    non-constant `fn.Ref`s, `fn.index` is the way to go.
+    """
+    match indexable:
+        case list():
+            return IndexedList(indexable)
+        case np.ndarray():
+            return IndexedList(indexable.tolist())
+        case _:
+            # `list` has been redefined at this point, so cannot use the `list` constructor.
+            return IndexedList([item for item in indexable])

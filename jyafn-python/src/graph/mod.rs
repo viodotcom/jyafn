@@ -1,6 +1,8 @@
+mod indexed;
 mod r#ref;
 
 pub use r#ref::Ref;
+pub use indexed::IndexedList;
 
 use pyo3::exceptions;
 use pyo3::prelude::*;

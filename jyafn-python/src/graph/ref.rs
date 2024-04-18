@@ -3,7 +3,9 @@ use pyo3::prelude::*;
 
 use crate::r#const;
 
-use super::insert_in_current;
+use super::{
+    depythonize_ref_value, insert_in_current, pythonize_ref_value, try_with_current, ToPyErr,
+};
 
 #[pyclass]
 #[derive(Clone)]
@@ -171,14 +173,40 @@ impl Ref {
         insert_in_current(rust::op::Or, vec![other.0, self.0])
     }
 
-    fn choose(&self, if_true: &Bound<PyAny>, if_false: &Bound<PyAny>) -> PyResult<Ref> {
-        let if_true = Ref::make(if_true)?;
-        let if_false = Ref::make(if_false)?;
-        insert_in_current(rust::op::Choose, vec![self.0, if_true.0, if_false.0])
-    }
+    fn choose(&self, if_true: &Bound<PyAny>, if_false: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        let branched = try_with_current(|g| {
+            let if_true = depythonize_ref_value(g, if_true)?;
+            let if_false = depythonize_ref_value(g, if_false)?;
+            let if_true_layout = if_true.putative_layout();
+            let if_false_layout = if_false.putative_layout();
 
-    fn index(&self, indexable: &Bound<PyAny>) -> PyResult<()> {
-        Ok(())
+            if if_true_layout != if_false_layout {
+                return Err(exceptions::PyTypeError::new_err(format!(
+                    "different layouts in branches: `true` has {if_true_layout} while `false` has \
+                    {if_false_layout}"
+                )));
+            }
+
+            let true_vec = if_true
+                .output_vec(&if_true_layout)
+                .expect("putative layout should work on the value it corresponds to");
+            let false_vec = if_false
+                .output_vec(&if_false_layout)
+                .expect("putative layout should work on the value it corresponds to");
+
+            let branches = true_vec
+                .into_iter()
+                .zip(false_vec)
+                .map(|(t, f)| g.insert(rust::op::Choose, vec![self.0, t, f]))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ToPyErr)?;
+
+            Ok(if_true_layout
+                .build_ref_value(branches)
+                .expect("can build ref-value from layout here"))
+        })?;
+
+        pythonize_ref_value(if_true.py(), branched)
     }
 
     fn to_bool(&self) -> PyResult<Ref> {

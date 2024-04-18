@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import click
 from click_default_group import DefaultGroup  # type:ignore
+import timeit as pytimeit
 import jyafn as fn
 
 from .describe import describe, describe_graph  # type:ignore
@@ -32,6 +33,32 @@ def desc(graph, file):
 def run(file, input):
     try:
         click.echo(fn.read_fn(file).eval_json(input, pretty=True))
+    except Exception as e:
+        click.echo(e)
+        click.echo(f"hint: try `jyafn desc {file}` for help on this function")
+
+
+@main.command(help="Runs a benchmark for input against a given file.")
+@click.option("--number", "-n", default=10_000, help="the number of times to run the simulation")
+@click.argument("file")
+@click.argument("input")
+def timeit(number,file, input):
+    def fmt_time(time_ns: float) -> str:
+        rel_time = time_ns
+        units = ["n", "u", "m", ""]
+        unit_id = 0
+        while rel_time > 1_000.0 and unit_id < len(units):
+            rel_time /= 1_000.0
+            unit_id += 1
+        return f"{rel_time:.2f}{units[unit_id]}s"
+
+    try:
+        func = fn.read_fn(file)
+        click.echo(f"\n    Call result is: {func.eval_json(input, pretty=True)}")
+        click.echo(f"\n    Running {number} simulations...")
+        mean_ms = pytimeit.timeit(lambda: func.eval_json(input), number=number)
+
+        click.echo(f"    Time per call: {fmt_time(mean_ms*1e6)}\n")
     except Exception as e:
         click.echo(e)
         click.echo(f"hint: try `jyafn desc {file}` for help on this function")
