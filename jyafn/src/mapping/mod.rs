@@ -90,7 +90,7 @@ impl StorageType for HashMapStorage {
     }
 
     fn read(&self, f: ZipFile<'_>) -> Result<Box<dyn Storage>, Error> {
-        let map = bincode::deserialize_from(f).map_err(Error::Deserialization)?;
+        let map = bincode::deserialize_from(f).map_err(Error::Bincode)?;
         Ok(Box::new(HashTable(map)))
     }
 }

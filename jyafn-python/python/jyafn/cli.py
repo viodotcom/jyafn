@@ -39,10 +39,12 @@ def run(file, input):
 
 
 @main.command(help="Runs a benchmark for input against a given file.")
-@click.option("--number", "-n", default=10_000, help="the number of times to run the simulation")
+@click.option(
+    "--number", "-n", default=10_000, help="the number of times to run the simulation"
+)
 @click.argument("file")
 @click.argument("input")
-def timeit(number,file, input):
+def timeit(number, file, input):
     def fmt_time(time_ns: float) -> str:
         rel_time = time_ns
         units = ["n", "u", "m", ""]

@@ -470,4 +470,14 @@ impl IndexedList {
             vec![self.list, idx],
         )
     }
+
+    pub fn index_of(&self, graph: &mut Graph, value: Ref) -> Result<Ref, Error> {
+        graph.insert(
+            op::IndexOf {
+                element: self.element,
+                n_elements: self.n_elements,
+            },
+            vec![self.list, value],
+        )
+    }
 }

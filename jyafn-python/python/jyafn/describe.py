@@ -1,5 +1,6 @@
 # type:ignore
 import jyafn as fn
+import sys
 
 
 def fmt_layout(layout: fn.Layout, indent=0) -> str:
@@ -94,3 +95,19 @@ def describe(thing: str | fn.Graph | fn.Function) -> str:
         return describe_fn(thing)
     else:
         raise TypeError(f"jyafn cannot descrbe object of type {type(thing)}")
+
+
+def get_size(thing: str | fn.Graph | fn.Function) -> int:
+    if isinstance(thing, str):
+        try:
+            return int(fn.read_metadata(thing)["jyafn.mem_size_estimate"])
+        except KeyError, ValueError:
+            return sys.maxsize
+    elif isinstance(thing, fn.Graph):
+        return thing.get_size()
+    elif isinstance(thing, fn.Function):
+        return thing.get_size()
+    else:
+        raise TypeError(f"jyafn cannot descrbe object of type {type(thing)}")
+
+    

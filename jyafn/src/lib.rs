@@ -57,8 +57,10 @@ pub enum Error {
         expected: layout::Layout,
         got: layout::RefValue,
     },
-    #[error("deserialization error: {0}")]
-    Deserialization(bincode::Error),
+    #[error("bincode error: {0}")]
+    Bincode(bincode::Error),
+    #[error("json error: {0}")]
+    Json(serde_json::Error),
     #[error("zip error: {0}")]
     Zip(zip::result::ZipError),
     #[error("{0}")]
