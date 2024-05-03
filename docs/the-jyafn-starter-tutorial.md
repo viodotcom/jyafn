@@ -11,15 +11,16 @@ cd jyafn && make install
 ```
 This will give you the latest and greatest JYAFN, but requires you to have _all_ dev dependencies (more boring stuff, for some). If you want convenience, you can use the `gh` (GitHub CLI) with the following (rather convoluted) command:
 ```sh
-PY=cp311 && \
+PYTHON=python3 &&
+PYN=cp3$($PYTHON --version | cut -d . -f2) && \
 V="0.1.0" && \
 LATEST=$(gh release list -R FindHotel/jyafn | head -n1 | awk '{print $1}') && \
-FILE=jyafn_python-$V-$PY-$PY-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
-rm -f $FILE && \
-gh release download -R FindHotel/jyafn -p $FILE && \
-pip -m pip install --force-reinstall $FILE
+WHEEL=jyafn_python-$V-$PYN-$PYN-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
+rm -f $WHEEL && \
+gh release download -R FindHotel/jyafn -p $WHEEL && \
+$PYTHON -m pip install --force-reinstall $WHEEL
 ```
-Remeber to substitute foryour python version. In the above example, we are using `cp311` (Python 3.11).
+Remember to substitute for your favorite python version. In the above example (see the first line), we are using `python3`, the system's Python 3. You might substitute that for something more specific, e.g., `python3.11`.
 
 To check that everything is working as expected, open your favorite python interpreter and type
 ```python
@@ -89,6 +90,7 @@ import pandas as pd
 
 df = pd.read_csv("campaign-pca.csv")
 ```
+
 And then, we can create a python dictionary associating each campaign id to its components (I know, I know, that is not The Pandas Way™, but bear with me):
 ```python
 import json
@@ -137,6 +139,7 @@ import numpy as np
 a = np.load("pca_a.npy")
 b = np.load("pca_b.npy")
 ```
+> Note: see the `./resources` folder for the sample data used in this tutorial.
 
 Now, comes the magic part. Because NumPy can operate on n-dimensional arrays of Python objects, provided they "look like numbers to Python", this works, out of the box:
 ```python
