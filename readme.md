@@ -2,7 +2,9 @@
 
 > 💡 Don't forget to check out the [docs](./docs/index.md) for more in-depth info.
 
-![There is something going on!](./nothing-going-on.jpg)
+<div style="text-align:center">
+<img src="./nothing-going-on.jpg" alt="There is something going on!"/>
+</div>
 
 Look at this innocent-looking piece of code:
 ```python
