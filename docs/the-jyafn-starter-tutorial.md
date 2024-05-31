@@ -203,12 +203,14 @@ So, there you have it, the full code:
 import json
 import jyafn as fn
 import numpy as np
+import pandas as pd
+
 from datetime import date
 
 # Inputs:
-df = pd.read_csv("campaign-pca.csv")
-a = np.load("pca_a.npy")
-b = np.load("pca_b.npy")
+df = pd.read_csv("../docs/resources/campaign-pca.csv")
+a = np.load("../docs/resources/pca_a.npy")
+b = np.load("../docs/resources/pca_b.npy")
 start = date(2024, 1, 1)
 
 # Create mapping for campaign_id -> components:
@@ -219,12 +221,11 @@ pcas = {
 n_components = len(next(iter(pcas.values())))
 pca_mapping = fn.mapping("pca", fn.scalar, fn.list[fn.scalar, n_components], pcas)
 
-
 @fn.func
 def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
     """Predicts the revenue of a given marketing campaign for a given date."""
     components = pca_mapping.get(campaign_id, [0.0] * n_components)
-    revenue = a @ np.array(components) + b
+    revenue = a.T @ np.array(components) + b
     n_days = (date.timestamp() - fn.make_timestamp(start)) // fn.DAY
     return fn.index(revenue)[n_days]
 ```
@@ -235,7 +236,7 @@ predict_revenue(12345, "2024-01-15")
 ```
 And you can can also call the function on a JSON directly, using `eval_json`:
 ```python
-predict_revenue.call_json('{"campaign_id": 12345, "date": "2024-01-15"}')
+predict_revenue.eval_json('{"campaign_id": 12345, "date": "2024-01-15"}')
 ```
 This is faster than deserializing a string into a dictionary using the `json` package and then passing it to the function. It's also way simpler to code if you are writing a web server that will serve that function as a route.
 
