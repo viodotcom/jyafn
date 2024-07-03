@@ -106,7 +106,7 @@ pip install maturin
 
 You can use this as a Go module:
 ```go
-import "github.com/FindHotel/jyafn/jyafn-go/pkg/jyafn"
+import "github.com/viodotcom/jyafn/jyafn-go/pkg/jyafn"
 ```
 Please note that this package depends on CGO under the hood.
 
