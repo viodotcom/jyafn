@@ -6,8 +6,9 @@ build-backend = "maturin"
 python-source = "python"
 
 [project]
-name = "jyafn-python"
+name = "jyafn"
 requires-python = ">=3.7"
+readme = "../readme.md"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",

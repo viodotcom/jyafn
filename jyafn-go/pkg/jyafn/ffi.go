@@ -90,6 +90,14 @@ func (g *Graph) GetMetadata(key string) string {
 	return C.GoString(value)
 }
 
+func (g *Graph) GetMetadataJSON() string {
+	value := C.graph_get_metadata_json(g.ptr)
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(value))
+
+	return C.GoString(value)
+}
+
 func (g *Graph) ToJSON() string {
 	json := C.graph_to_json(g.ptr)
 	// This is a C string. So, free works.
@@ -176,6 +184,14 @@ func (f *Function) Graph() *Graph {
 func (f *Function) GetMetadata(key string) string {
 	keyBytes := []byte(key)
 	value := C.function_get_metadata(f.ptr, (*C.char)(unsafe.Pointer(&keyBytes[0])))
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(value))
+
+	return C.GoString(value)
+}
+
+func (f *Function) GetMetadataJSON() string {
+	value := C.function_get_metadata_json(f.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(value))
 
@@ -305,9 +321,10 @@ func Call[O any](f *Function, arg any) (O, error) {
 		(*C.uchar)(unsafe.Pointer(&visitor.buf[0])),
 		(*C.uchar)(unsafe.Pointer(&out[0])),
 	)
-	if status != 0 {
+	if status != nil {
+		goStatus := C.GoString(status)
 		return *reflect.New(reflect.TypeFor[O]()).Interface().(*O),
-			fmt.Errorf("function raised status %v", status)
+			fmt.Errorf("function raised status %v", goStatus)
 	}
 
 	decoded := decodeValue(reflect.TypeFor[O](), f.OutputLayout(), symbols, &Visitor{buf: out})
@@ -325,6 +342,11 @@ func Call[O any](f *Function, arg any) (O, error) {
 }
 
 func CallJSON(f *Function, in string) (string, error) {
+	// This prevents the panic of calling a pointer to the first byte of the slice later.
+	if in == "" {
+		return "", fmt.Errorf("input to CallJSON cannot be empty")
+	}
+
 	inBytes := []byte(in)
 	out, err := Outcome(C.function_eval_json(
 		f.ptr,

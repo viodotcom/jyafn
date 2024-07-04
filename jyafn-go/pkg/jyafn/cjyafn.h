@@ -18,6 +18,8 @@ void error_drop(void *error);
 
 const char *graph_get_metadata(const void *graph, const char *key);
 
+const char *graph_get_metadata_json(const void *graph);
+
 struct Outcome graph_load(const uint8_t *bytes, uintptr_t len);
 
 const char *graph_to_json(const void *graph);
@@ -76,15 +78,17 @@ const void *function_graph(const void *func);
 
 const char *function_get_metadata(const void *func, const char *key);
 
+const char *function_get_metadata_json(const void *func);
+
 struct Outcome function_symbols_json(const void *func);
 
-uint64_t (*function_fn_ptr(const void *func))(const uint8_t*, uint8_t*);
+const char *(*function_fn_ptr(const void *func))(const uint8_t*, uint8_t*);
 
 uintptr_t function_get_size(const void *func);
 
 struct Outcome function_load(const uint8_t *bytes, uintptr_t len);
 
-uint64_t function_call_raw(const void *func, const uint8_t *input, uint8_t *output);
+const char *function_call_raw(const void *func, const uint8_t *input, uint8_t *output);
 
 struct Outcome function_eval_raw(const void *func, const uint8_t *input);
 

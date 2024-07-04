@@ -216,7 +216,17 @@ pub extern "C" fn graph_get_metadata(graph: *const (), key: *const c_char) -> *c
         })
     }
 }
-
+#[no_mangle]
+pub extern "C" fn graph_get_metadata_json(graph: *const ()) -> *const c_char {
+    unsafe {
+        with_unchecked(graph, |graph: &Graph| {
+            new_c_str(
+                serde_json::to_string(graph.metadata())
+                    .expect("can always serialize json value"),
+            )
+        })
+    }
+}
 #[no_mangle]
 pub extern "C" fn graph_load(bytes: *const u8, len: usize) -> Outcome {
     try_panic_to_outcome(|| {
@@ -463,6 +473,18 @@ pub extern "C" fn function_get_metadata(func: *const (), key: *const c_char) -> 
             } else {
                 std::ptr::null()
             }
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn function_get_metadata_json(func: *const ()) -> *const c_char {
+    unsafe {
+        with_unchecked(func, |func: &Function| {
+            new_c_str(
+                serde_json::to_string(func.graph().metadata())
+                    .expect("can always serialize json value"),
+            )
         })
     }
 }

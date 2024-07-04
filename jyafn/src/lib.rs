@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)] // ... while we don't know what to do with map-reduce
+
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("Currently `jyafn` only works in 64-bit atchitectures");
 
