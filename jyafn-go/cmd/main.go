@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/FindHotel/jyafn/jyafn-go/pkg/jyafn"
+	"github.com/viodotcom/jyafn/jyafn-go/pkg/jyafn"
 )
 
 func main() {
