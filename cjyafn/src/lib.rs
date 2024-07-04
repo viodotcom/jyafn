@@ -216,13 +216,13 @@ pub extern "C" fn graph_get_metadata(graph: *const (), key: *const c_char) -> *c
         })
     }
 }
+
 #[no_mangle]
 pub extern "C" fn graph_get_metadata_json(graph: *const ()) -> *const c_char {
     unsafe {
         with_unchecked(graph, |graph: &Graph| {
             new_c_str(
-                serde_json::to_string(graph.metadata())
-                    .expect("can always serialize json value"),
+                serde_json::to_string(graph.metadata()).expect("can always serialize json value"),
             )
         })
     }
@@ -272,6 +272,11 @@ pub extern "C" fn graph_drop(graph: *mut ()) {
     unsafe {
         let _ = Box::from_raw(graph as *mut Graph);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn layout_to_string(layout: *const ()) -> *const c_char {
+    unsafe { with_unchecked(layout, |layout: &Layout| new_c_str(layout.to_string())) }
 }
 
 #[no_mangle]

@@ -32,6 +32,8 @@ const void *graph_clone(const void *graph);
 
 void graph_drop(void *graph);
 
+const char *layout_to_string(const void *layout);
+
 const char *layout_to_json(const void *layout);
 
 uintptr_t layout_size(const void *layout);

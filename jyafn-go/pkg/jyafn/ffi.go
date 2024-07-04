@@ -208,6 +208,13 @@ type Layout struct {
 	ownedBy interface{}
 }
 
+func (l *Layout) ToString() string {
+	str := C.layout_to_string(l.ptr)
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(str))
+	return C.GoString(str)
+}
+
 func (l *Layout) ToJSON() string {
 	json := C.layout_to_json(l.ptr)
 	// This is a C string. So, free works.
