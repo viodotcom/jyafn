@@ -205,6 +205,11 @@ pub extern "C" fn error_drop(error: *mut ()) {
 }
 
 #[no_mangle]
+pub extern "C" fn graph_name(graph: *const ()) -> *const c_char {
+    unsafe { with_unchecked(graph, |graph: &Graph| new_c_str(graph.name().to_string())) }
+}
+
+#[no_mangle]
 pub extern "C" fn graph_get_metadata(graph: *const (), key: *const c_char) -> *const c_char {
     unsafe {
         with_unchecked(graph, |graph: &Graph| {
@@ -428,6 +433,15 @@ pub extern "C" fn strct_get_item_layout(strct: *const (), index: usize) -> *cons
             } else {
                 std::ptr::null()
             }
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn function_name(func: *const ()) -> *const c_char {
+    unsafe {
+        with_unchecked(func, |func: &Function| {
+            new_c_str(func.graph().name().to_string())
         })
     }
 }
