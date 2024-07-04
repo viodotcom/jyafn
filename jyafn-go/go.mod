@@ -1,3 +1,3 @@
-module github.com/FindHotel/jyafn/jyafn-go
+module github.com/viodotcom/jyafn/jyafn-go
 
 go 1.22.0
