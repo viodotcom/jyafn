@@ -81,6 +81,13 @@ func LoadGraph(encoded []byte) (*Graph, error) {
 	return graphFromRaw(ptr), nil
 }
 
+func (g *Graph) Name() string {
+	name := C.graph_name(g.ptr)
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(name))
+	return C.GoString(name)
+}
+
 func (g *Graph) GetMetadata(key string) string {
 	keyBytes := []byte(key)
 	value := C.graph_get_metadata(g.ptr, (*C.char)(unsafe.Pointer(&keyBytes[0])))
@@ -159,6 +166,13 @@ func LoadFunction(encoded []byte) (*Function, error) {
 	}
 
 	return functionFromRaw(ptr), nil
+}
+
+func (f *Function) Name() string {
+	name := C.function_name(f.ptr)
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(name))
+	return C.GoString(name)
 }
 
 func (f *Function) InputSize() uint {

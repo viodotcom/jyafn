@@ -16,6 +16,8 @@ const char *error_to_string(const void *error);
 
 void error_drop(void *error);
 
+const char *graph_name(const void *graph);
+
 const char *graph_get_metadata(const void *graph, const char *key);
 
 const char *graph_get_metadata_json(const void *graph);
@@ -67,6 +69,8 @@ uintptr_t strct_size(const void *strct);
 const char *strct_get_item_name(const void *strct, uintptr_t index);
 
 const void *strct_get_item_layout(const void *strct, uintptr_t index);
+
+const char *function_name(const void *func);
 
 uintptr_t function_input_size(const void *func);
 
