@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"runtime"
 	"unsafe"
 )
 
@@ -58,14 +57,14 @@ func FormatDateTime(timestamp int64, fmt string) string {
 }
 
 type Graph struct {
-	ptr unsafe.Pointer
+	wasClosed bool
+	ptr       unsafe.Pointer
 	// This prevents the GC from cleaning the owned object.
 	ownedBy interface{}
 }
 
 func graphFromRaw(ptr unsafe.Pointer) *Graph {
 	graph := &Graph{ptr: ptr}
-	runtime.SetFinalizer(graph, func(g *Graph) { C.graph_drop(g.ptr) })
 	return graph
 }
 
@@ -81,7 +80,21 @@ func LoadGraph(encoded []byte) (*Graph, error) {
 	return graphFromRaw(ptr), nil
 }
 
+func (g *Graph) Close() {
+	if !g.wasClosed {
+		C.graph_drop(g.ptr)
+		g.wasClosed = true
+	}
+}
+
+func (g *Graph) panicOnClosed() {
+	if g.wasClosed {
+		panic(fmt.Sprintf("graph %+v was already closed", g))
+	}
+}
+
 func (g *Graph) Name() string {
+	g.panicOnClosed()
 	name := C.graph_name(g.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(name))
@@ -89,6 +102,7 @@ func (g *Graph) Name() string {
 }
 
 func (g *Graph) GetMetadata(key string) string {
+	g.panicOnClosed()
 	keyBytes := []byte(key)
 	value := C.graph_get_metadata(g.ptr, (*C.char)(unsafe.Pointer(&keyBytes[0])))
 	// This is a C string. So, free works.
@@ -98,6 +112,7 @@ func (g *Graph) GetMetadata(key string) string {
 }
 
 func (g *Graph) GetMetadataJSON() string {
+	g.panicOnClosed()
 	value := C.graph_get_metadata_json(g.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(value))
@@ -106,6 +121,7 @@ func (g *Graph) GetMetadataJSON() string {
 }
 
 func (g *Graph) ToJSON() string {
+	g.panicOnClosed()
 	json := C.graph_to_json(g.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(json))
@@ -113,6 +129,7 @@ func (g *Graph) ToJSON() string {
 }
 
 func (g *Graph) Render() (string, error) {
+	g.panicOnClosed()
 	rendered, err := Outcome(C.graph_render(g.ptr)).get()
 	if err != nil {
 		return "", err
@@ -124,6 +141,7 @@ func (g *Graph) Render() (string, error) {
 }
 
 func (g *Graph) Compile() (*Function, error) {
+	g.panicOnClosed()
 	out, err := Outcome(C.graph_compile(g.ptr)).get()
 	if err != nil {
 		return nil, err
@@ -132,13 +150,13 @@ func (g *Graph) Compile() (*Function, error) {
 }
 
 type Function struct {
-	ptr     unsafe.Pointer
-	symbols []string
+	wasClosed bool
+	ptr       unsafe.Pointer
+	symbols   []string
 }
 
 func functionFromRaw(ptr unsafe.Pointer) *Function {
 	function := &Function{ptr: ptr}
-	runtime.SetFinalizer(function, func(f *Function) { C.function_drop(f.ptr) })
 
 	// Read symbols to the Go side.
 	symbolsJSONPtr, err := Outcome(C.function_symbols_json(ptr)).get()
@@ -168,7 +186,21 @@ func LoadFunction(encoded []byte) (*Function, error) {
 	return functionFromRaw(ptr), nil
 }
 
+func (f *Function) Close() {
+	if !f.wasClosed {
+		C.function_drop(f.ptr)
+		f.wasClosed = true
+	}
+}
+
+func (f *Function) panicOnClosed() {
+	if f.wasClosed {
+		panic(fmt.Sprintf("function %+v was already closed", f))
+	}
+}
+
 func (f *Function) Name() string {
+	f.panicOnClosed()
 	name := C.function_name(f.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(name))
@@ -176,26 +208,32 @@ func (f *Function) Name() string {
 }
 
 func (f *Function) InputSize() uint {
+	f.panicOnClosed()
 	return uint(C.function_input_size(f.ptr))
 }
 
 func (f *Function) OutputSize() uint {
+	f.panicOnClosed()
 	return uint(C.function_output_size(f.ptr))
 }
 
 func (f *Function) InputLayout() *Layout {
+	f.panicOnClosed()
 	return &Layout{ptr: C.function_input_layout(f.ptr), ownedBy: f}
 }
 
 func (f *Function) OutputLayout() *Layout {
+	f.panicOnClosed()
 	return &Layout{ptr: C.function_output_layout(f.ptr), ownedBy: f}
 }
 
 func (f *Function) Graph() *Graph {
+	f.panicOnClosed()
 	return &Graph{ptr: C.function_graph(f.ptr), ownedBy: f}
 }
 
 func (f *Function) GetMetadata(key string) string {
+	f.panicOnClosed()
 	keyBytes := []byte(key)
 	value := C.function_get_metadata(f.ptr, (*C.char)(unsafe.Pointer(&keyBytes[0])))
 	// This is a C string. So, free works.
@@ -205,6 +243,7 @@ func (f *Function) GetMetadata(key string) string {
 }
 
 func (f *Function) GetMetadataJSON() string {
+	f.panicOnClosed()
 	value := C.function_get_metadata_json(f.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(value))
@@ -213,6 +252,7 @@ func (f *Function) GetMetadataJSON() string {
 }
 
 func (f *Function) GetSize() int {
+	f.panicOnClosed()
 	return int(C.function_get_size(f.ptr))
 }
 
@@ -322,6 +362,8 @@ func (s *Struct) GetItemLayout(index uint) *Layout {
 }
 
 func Call[O any](f *Function, arg any) (O, error) {
+	f.panicOnClosed()
+
 	visitor := &Visitor{buf: make([]uint64, 0)}
 	symbols := &Symbols{top: f.symbols}
 	err := encodeValue(reflect.ValueOf(arg), f.InputLayout(), symbols, visitor)
@@ -363,6 +405,8 @@ func Call[O any](f *Function, arg any) (O, error) {
 }
 
 func CallJSON(f *Function, in string) (string, error) {
+	f.panicOnClosed()
+
 	// This prevents the panic of calling a pointer to the first byte of the slice later.
 	if in == "" {
 		return "", fmt.Errorf("input to CallJSON cannot be empty")

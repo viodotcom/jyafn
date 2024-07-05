@@ -20,6 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer fn.Close()
 
 	// Call the function:
 	result, err := jyafn.Call[float64](
