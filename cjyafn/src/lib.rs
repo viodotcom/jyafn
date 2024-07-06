@@ -398,6 +398,15 @@ pub extern "C" fn layout_list_size(layout: *const ()) -> usize {
 }
 
 #[no_mangle]
+pub extern "C" fn layout_is_superset(layout: *mut (), other: *mut ()) -> bool {
+    unsafe {
+        with_unchecked(layout, |layout: &Layout| {
+            with_unchecked(other, |other: &Layout| layout.is_superset(other))
+        })
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn layout_drop(layout: *mut ()) {
     unsafe {
         let _ = Box::from_raw(layout as *mut Layout);

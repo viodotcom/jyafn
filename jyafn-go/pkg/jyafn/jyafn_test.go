@@ -24,6 +24,7 @@ func Test_Simple(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer graph.Close()
 
 	fmt.Println(graph.ToJSON())
 	fmt.Println(graph.Render())
@@ -31,6 +32,7 @@ func Test_Simple(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fn.Close()
 
 	result, err := Call[float64](
 		fn,
@@ -62,6 +64,7 @@ func Test_JSON(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer fn.Close()
 
 	result, err := CallJSON(fn, "{\"a\": 1.0, \"b\": 2.0}")
 	if err != nil {
@@ -87,6 +90,7 @@ func Test_Showcase(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer fn.Close()
 
 	result, err := Call[[]float64](
 		fn,

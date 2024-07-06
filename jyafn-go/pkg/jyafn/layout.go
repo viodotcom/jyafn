@@ -1,10 +1,126 @@
 package jyafn
 
+// #cgo CFLAGS: -I./
+// #cgo LDFLAGS: -L./ -lcjyafn
+// #include "cjyafn.h"
+//
+import "C"
+
 import (
 	"fmt"
 	"math"
 	"reflect"
+	"unsafe"
 )
+
+type Layout struct {
+	ptr unsafe.Pointer
+	// This prevents the GC from cleaning the owned object.
+	ownedBy any
+}
+
+func (l *Layout) ToString() string {
+	str := C.layout_to_string(l.ptr)
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(str))
+	return C.GoString(str)
+}
+
+func (l *Layout) ToJSON() string {
+	json := C.layout_to_json(l.ptr)
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(json))
+	return C.GoString(json)
+}
+
+func (l *Layout) IsUnit() bool {
+	return bool(C.layout_is_unit(l.ptr))
+}
+
+func (l *Layout) IsScalar() bool {
+	return bool(C.layout_is_scalar(l.ptr))
+}
+
+func (l *Layout) IsBool() bool {
+	return bool(C.layout_is_bool(l.ptr))
+}
+
+func (l *Layout) IsDateTime() bool {
+	return bool(C.layout_is_datetime(l.ptr))
+}
+
+func (l *Layout) IsSymbol() bool {
+	return bool(C.layout_is_symbol(l.ptr))
+}
+
+func (l *Layout) IsStruct() bool {
+	return bool(C.layout_is_struct(l.ptr))
+}
+
+func (l *Layout) IsList() bool {
+	return bool(C.layout_is_list(l.ptr))
+}
+
+func (l *Layout) DateTimeFormat() string {
+	ptr := C.layout_datetime_format(l.ptr)
+	if uintptr(unsafe.Pointer(ptr)) == 0 {
+		panic("called DateTimeFormat on a Layout that is not a datatime")
+	}
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(ptr))
+	return C.GoString(ptr)
+}
+
+func (l *Layout) AsStruct() *Struct {
+	ptr := C.layout_as_struct(l.ptr)
+	if uintptr(ptr) == 0 {
+		panic("called AsStruct on a Layout that is not a struct")
+	}
+	return &Struct{ptr: ptr, ownedBy: l.ownedBy}
+}
+
+func (l *Layout) ListElement() *Layout {
+	ptr := C.layout_list_element(l.ptr)
+	if uintptr(ptr) == 0 {
+		panic("called ListElement on a Layout that is not a list")
+	}
+	return &Layout{ptr: ptr, ownedBy: l.ownedBy}
+}
+
+func (l *Layout) ListSize() uint {
+	return uint(C.layout_list_size(l.ptr))
+}
+
+func (l *Layout) IsSuperset(other *Layout) bool {
+	return bool(C.layout_is_superset(l.ptr, other.ptr))
+}
+
+type Struct struct {
+	ptr     unsafe.Pointer
+	ownedBy any
+}
+
+func (s *Struct) Size() uint {
+	return uint(C.strct_size(s.ptr))
+}
+
+func (s *Struct) GetItemName(index uint) string {
+	ptr := C.strct_get_item_name(s.ptr, C.ulong(index))
+	if uintptr(unsafe.Pointer(ptr)) == 0 {
+		panic("called GetItemName on a Struct out of bounds")
+	}
+	// This is a C string. So, free works.
+	defer C.free(unsafe.Pointer(ptr))
+	return C.GoString(ptr)
+}
+
+func (s *Struct) GetItemLayout(index uint) *Layout {
+	ptr := C.strct_get_item_layout(s.ptr, C.ulong(index))
+	if uintptr(ptr) == 0 {
+		panic("called GetItemLayout on a Struct out of bounds")
+	}
+	return &Layout{ptr: ptr, ownedBy: s.ownedBy}
+}
 
 type Symbols struct {
 	top []string

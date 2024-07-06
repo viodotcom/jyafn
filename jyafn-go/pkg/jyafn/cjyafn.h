@@ -62,6 +62,8 @@ const void *layout_list_element(const void *layout);
 
 uintptr_t layout_list_size(const void *layout);
 
+bool layout_is_superset(void *layout, void *other);
+
 void layout_drop(void *layout);
 
 uintptr_t strct_size(const void *strct);
