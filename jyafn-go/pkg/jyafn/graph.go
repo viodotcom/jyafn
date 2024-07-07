@@ -12,8 +12,8 @@ import (
 )
 
 type Graph struct {
-	wasClosed bool
-	ptr       unsafe.Pointer
+	isClosed bool
+	ptr      unsafe.Pointer
 	// This prevents the GC from cleaning the owned object.
 	ownedBy any
 }
@@ -36,14 +36,14 @@ func LoadGraph(encoded []byte) (*Graph, error) {
 }
 
 func (g *Graph) Close() {
-	if !g.wasClosed {
+	if !g.isClosed {
 		C.graph_drop(g.ptr)
-		g.wasClosed = true
+		g.isClosed = true
 	}
 }
 
 func (g *Graph) panicOnClosed() {
-	if g.wasClosed {
+	if g.isClosed {
 		panic(fmt.Sprintf("graph %+v was already closed", g))
 	}
 }

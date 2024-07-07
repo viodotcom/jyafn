@@ -16,52 +16,89 @@ import (
 type Layout struct {
 	ptr unsafe.Pointer
 	// This prevents the GC from cleaning the owned object.
-	ownedBy any
+	ownedBy  any
+	isClosed bool
+}
+
+func (l *Layout) Close() {
+	if l.ownedBy == nil && !l.isClosed {
+		C.layout_drop(l.ptr)
+		l.isClosed = true
+	}
+}
+
+func (l *Layout) panicOnClosed() {
+	if l.isClosed {
+		panic(fmt.Sprintf("layout %+v was already closed", l))
+	}
 }
 
 func (l *Layout) ToString() string {
+	l.panicOnClosed()
 	str := C.layout_to_string(l.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(str))
 	return C.GoString(str)
 }
 
-func (l *Layout) ToJSON() string {
+func (l *Layout) MarshalJSON() ([]byte, error) {
+	l.panicOnClosed()
 	json := C.layout_to_json(l.ptr)
 	// This is a C string. So, free works.
 	defer C.free(unsafe.Pointer(json))
-	return C.GoString(json)
+	return []byte(C.GoString(json)), nil
+}
+
+func (l *Layout) UnmarshalJSON(data []byte) error {
+	l.panicOnClosed()
+	json := []byte(data)
+	value, err := Outcome(C.layout_from_json((*C.char)(unsafe.Pointer(&json[0])))).get()
+	if err != nil {
+		return err
+	}
+
+	l.ptr = value
+
+	return nil
 }
 
 func (l *Layout) IsUnit() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_unit(l.ptr))
 }
 
 func (l *Layout) IsScalar() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_scalar(l.ptr))
 }
 
 func (l *Layout) IsBool() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_bool(l.ptr))
 }
 
 func (l *Layout) IsDateTime() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_datetime(l.ptr))
 }
 
 func (l *Layout) IsSymbol() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_symbol(l.ptr))
 }
 
 func (l *Layout) IsStruct() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_struct(l.ptr))
 }
 
 func (l *Layout) IsList() bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_list(l.ptr))
 }
 
 func (l *Layout) DateTimeFormat() string {
+	l.panicOnClosed()
 	ptr := C.layout_datetime_format(l.ptr)
 	if uintptr(unsafe.Pointer(ptr)) == 0 {
 		panic("called DateTimeFormat on a Layout that is not a datatime")
@@ -72,6 +109,7 @@ func (l *Layout) DateTimeFormat() string {
 }
 
 func (l *Layout) AsStruct() *Struct {
+	l.panicOnClosed()
 	ptr := C.layout_as_struct(l.ptr)
 	if uintptr(ptr) == 0 {
 		panic("called AsStruct on a Layout that is not a struct")
@@ -80,6 +118,7 @@ func (l *Layout) AsStruct() *Struct {
 }
 
 func (l *Layout) ListElement() *Layout {
+	l.panicOnClosed()
 	ptr := C.layout_list_element(l.ptr)
 	if uintptr(ptr) == 0 {
 		panic("called ListElement on a Layout that is not a list")
@@ -88,10 +127,12 @@ func (l *Layout) ListElement() *Layout {
 }
 
 func (l *Layout) ListSize() uint {
+	l.panicOnClosed()
 	return uint(C.layout_list_size(l.ptr))
 }
 
 func (l *Layout) IsSuperset(other *Layout) bool {
+	l.panicOnClosed()
 	return bool(C.layout_is_superset(l.ptr, other.ptr))
 }
 

@@ -18,6 +18,7 @@ func (o Outcome) get() (unsafe.Pointer, error) {
 	if uintptr(o.err) != 0 {
 		defer C.error_drop(o.err)
 		str := C.error_to_string(o.err)
+		defer C.free(unsafe.Pointer(str))
 		return o.ok, fmt.Errorf("%s", C.GoString(str))
 	} else {
 		return o.ok, nil
@@ -67,7 +68,7 @@ func Call[O any](f *Function, arg any) (O, error) {
 			fmt.Errorf(
 				"failed to encode %v to layout %v: %v",
 				reflect.ValueOf(arg),
-				f.InputLayout().ToJSON(),
+				f.InputLayout().ToString(),
 				err,
 			)
 	}
@@ -91,7 +92,7 @@ func Call[O any](f *Function, arg any) (O, error) {
 			fmt.Errorf(
 				"failed to decode %v from layout %v",
 				reflect.TypeFor[O](),
-				f.OutputLayout().ToJSON(),
+				f.OutputLayout().ToString(),
 			)
 	}
 

@@ -294,6 +294,16 @@ pub extern "C" fn layout_to_json(layout: *const ()) -> *const c_char {
 }
 
 #[no_mangle]
+pub extern "C" fn layout_from_json(json: *const c_char) -> Outcome {
+    unsafe {
+        from_result(
+            serde_json::from_str::<Layout>(&*from_c_str(json))
+                .map_err(|err| err.to_string().into()),
+        )
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn layout_size(layout: *const ()) -> usize {
     unsafe { with_unchecked(layout, |layout: &Layout| layout.size()) }
 }

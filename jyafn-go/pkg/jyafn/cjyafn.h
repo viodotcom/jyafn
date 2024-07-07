@@ -38,6 +38,8 @@ const char *layout_to_string(const void *layout);
 
 const char *layout_to_json(const void *layout);
 
+struct Outcome layout_from_json(const char *json);
+
 uintptr_t layout_size(const void *layout);
 
 bool layout_is_unit(const void *layout);

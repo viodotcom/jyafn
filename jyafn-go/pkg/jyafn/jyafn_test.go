@@ -1,6 +1,7 @@
 package jyafn
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -9,7 +10,7 @@ import (
 )
 
 func Test_Simple(t *testing.T) {
-	f, err := os.Open("../jyafn-python/a_fun.jyafn")
+	f, err := os.Open("testdata/a_fun.jyafn")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,7 +50,7 @@ func Test_Simple(t *testing.T) {
 }
 
 func Test_JSON(t *testing.T) {
-	f, err := os.Open("../jyafn-python/a_fun.jyafn")
+	f, err := os.Open("testdata/a_fun.jyafn")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,6 +73,37 @@ func Test_JSON(t *testing.T) {
 	}
 
 	fmt.Println(result)
+}
+
+func Test_MetadataJSON(t *testing.T) {
+	f, err := os.Open("testdata/a_fun.jyafn")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	code, err := io.ReadAll(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fn, err := LoadFunction(code)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer fn.Close()
+
+	marshaled, err := json.Marshal(fn.InputLayout())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var layout Layout
+	err = json.Unmarshal(marshaled, &layout)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer layout.Close()
 }
 
 func Test_Showcase(t *testing.T) {
