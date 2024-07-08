@@ -51,16 +51,11 @@ func (l *Layout) MarshalJSON() ([]byte, error) {
 
 func (l *Layout) UnmarshalJSON(json []byte) error {
 	l.panicOnClosed()
-	fmt.Println(string(json), "xxx")
 
 	value, err := Outcome(C.layout_from_json((*C.char)(unsafe.Pointer(&json[0])))).get()
-	fmt.Println(string(json), "xxx")
-
 	if err != nil {
 		return err
 	}
-
-	fmt.Println(string(json), "xxx")
 
 	l.ptr = value
 
