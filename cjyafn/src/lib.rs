@@ -296,10 +296,15 @@ pub extern "C" fn layout_to_json(layout: *const ()) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn layout_from_json(json: *const c_char) -> Outcome {
     unsafe {
-        from_result(
-            serde_json::from_str::<Layout>(&*from_c_str(json))
-                .map_err(|err| err.to_string().into()),
-        )
+        let decode = || -> Result<Layout, Error> {
+            Ok(serde_json::Deserializer::from_str(&from_c_str(json))
+                .into_iter::<Layout>()
+                .next()
+                .ok_or_else(|| "empty string".to_string())?
+                .map_err(|err| err.to_string())?)
+        };
+
+        from_result(decode())
     }
 }
 
@@ -601,7 +606,7 @@ pub extern "C" fn function_eval_json(func: *const (), input: *mut c_char) -> Out
                 let input_cstr = CStr::from_ptr(input);
                 let input_str = input_cstr.to_string_lossy();
                 let input_value: serde_json::Value =
-                    serde_json::from_str(&*input_str).map_err(|e| e.to_string())?;
+                    serde_json::from_str(input_str.trim()).map_err(|e| e.to_string())?;
                 let output_value: serde_json::Value = func.eval(&input_value)?;
                 let output_str = serde_json::to_string(&output_value).expect("can serialize");
                 Ok(new_c_str(output_str))

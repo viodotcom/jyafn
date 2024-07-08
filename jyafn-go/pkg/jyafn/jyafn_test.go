@@ -104,6 +104,23 @@ func Test_MetadataJSON(t *testing.T) {
 		log.Fatal(err)
 	}
 	defer layout.Close()
+
+	type Embedder struct {
+		Embeded *Layout `json:"embeded"`
+	}
+
+	marshaled, err = json.Marshal(Embedder{Embeded: fn.InputLayout()})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(marshaled))
+
+	var embedder Embedder
+	err = json.Unmarshal(marshaled, &embedder)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer layout.Close()
 }
 
 func Test_Showcase(t *testing.T) {
