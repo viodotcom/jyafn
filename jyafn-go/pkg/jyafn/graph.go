@@ -1,8 +1,8 @@
 package jyafn
 
 // #cgo CFLAGS: -I./
-// #cgo darwin LDFLAGS: -L./ -lcjyafn_darwin
-// #cgo linux LDFLAGS: -L./ -lcjyafn_linux
+// #cgo darwin,arm64 LDFLAGS: -L./ -lcjyafn_darwin_arm64
+// #cgo linux LDFLAGS: -L./ -lcjyafn_linux_x64
 // #include "cjyafn.h"
 //
 import "C"
