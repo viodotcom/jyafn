@@ -157,6 +157,17 @@ impl Layout {
         self.0.to_string()
     }
 
+    fn to_json(&self) -> String {
+        serde_json::to_string(&self.0).expect("can always serializer")
+    }
+
+    #[staticmethod]
+    fn from_json(json: &str) -> PyResult<Layout> {
+        Ok(Layout(serde_json::from_str(json).map_err(|err| {
+            exceptions::PyException::new_err(err.to_string())
+        })?))
+    }
+
     fn pretty(&self) -> String {
         self.0.pretty()
     }

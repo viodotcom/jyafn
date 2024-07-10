@@ -400,6 +400,13 @@ class Layout:
     since it does all the heavy lifting behind the scenes for you.
     """
 
+    def to_json(self) -> str:
+        """Returns a JSON string representation of this layout."""
+
+    @staticmethod
+    def from_json(json: str) -> Layout:
+        """Creates a layout from a JSON string representation."""
+
     def pretty(self) -> str:
         """
         Returns a prettified representation of this layout. This is an alternative to the
