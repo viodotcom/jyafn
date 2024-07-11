@@ -63,7 +63,7 @@ uninstall:
 	rm -f "$(DESTDIR)$(BINDIR)/qbe"
 
 clean:
-	rm -f *.o */*.o qbe
+	rm -f *.o */*.o config.h qbe
 
 clean-gen: clean
 	rm -f config.h
