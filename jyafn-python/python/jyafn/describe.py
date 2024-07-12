@@ -101,7 +101,7 @@ def get_size(thing: str | fn.Graph | fn.Function) -> int:
     if isinstance(thing, str):
         try:
             return int(fn.read_metadata(thing)["jyafn.mem_size_estimate"])
-        except KeyError, ValueError:
+        except (KeyError, ValueError):
             return sys.maxsize
     elif isinstance(thing, fn.Graph):
         return thing.get_size()

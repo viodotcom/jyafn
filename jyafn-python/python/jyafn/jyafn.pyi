@@ -62,7 +62,7 @@ class Graph:
         default.
         """
 
-    def render() -> str:
+    def render(self) -> str:
         """Renders the QBE IR code associated with this graph."""
 
     def render_assembly(self) -> str:

@@ -602,14 +602,23 @@ pub extern "C" fn function_eval_raw(func: *const (), input: *const u8) -> Outcom
 pub extern "C" fn function_eval_json(func: *const (), input: *mut c_char) -> Outcome {
     unsafe {
         try_with(func, |func: &Function| {
+            println!("deref function");
             from_ptr_result((|| {
                 let input_cstr = CStr::from_ptr(input);
+                println!("input_cstr created");
                 let input_str = input_cstr.to_string_lossy();
+                println!("input_str created");
                 let input_value: serde_json::Value =
                     serde_json::from_str(input_str.trim()).map_err(|e| e.to_string())?;
+                println!("input_value created");
                 let output_value: serde_json::Value = func.eval(&input_value)?;
+                println!("func evaled");
                 let output_str = serde_json::to_string(&output_value).expect("can serialize");
-                Ok(new_c_str(output_str))
+                println!("output_str created");
+                let output_cstr = new_c_str(output_str);
+                println!("output_cstr created");
+
+                Ok(output_cstr)
             })())
         })
     }
