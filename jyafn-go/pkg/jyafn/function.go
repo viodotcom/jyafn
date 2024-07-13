@@ -106,7 +106,6 @@ func (f *Function) CallJSON(json string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("got:0x%x\n", output)
 	defer ffi.freeStr(AllocatedStr(output))
 	return ffi.transmuteAsStr(AllocatedStr(output)), nil
 }
