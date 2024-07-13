@@ -154,8 +154,6 @@ impl Function {
         assert_eq!(self.data.input_size, input.len());
         assert_eq!(self.data.output_size, output.len());
 
-        println!("doing the very, very dangerous call");
-        println!("calling function at {:?}", self.data.fn_ptr);
         // Safety: input and output sizes are checked and function pinky-promisses not to
         // accesses anything out of bounds.
         unsafe { (self.data.fn_ptr)(input.as_ptr(), output.as_mut_ptr()) }
@@ -182,29 +180,23 @@ impl Function {
         E: ?Sized + layout::Encode,
         D: layout::Decoder,
     {
-        println!("starting eval wit decoder");
         // Access buffers:
         let local_input = self
             .data
             .input
             .get_or(|| RefCell::new(layout::Visitor::new(self.data.input_size / 8)));
-        println!("local input created");
         let local_output = self
             .data
             .output
             .get_or(|| RefCell::new(layout::Visitor::new(self.data.output_size / 8)));
-        println!("local output created");
         let mut encode_visitor = local_input.borrow_mut();
         encode_visitor.reset();
-        println!("encode visitor reset");
         let mut decode_visitor = local_output.borrow_mut();
         decode_visitor.reset();
-        println!("decode visitor reset");
 
         // Define a symbols view (to store symbols present in the input not present in the
         // graph)
         let mut symbols_view = layout::SymbolsView::new(&self.data.graph.symbols);
-        println!("symbols view created");
 
         // Serialization dance:
         input
@@ -214,22 +206,17 @@ impl Function {
                 &mut encode_visitor,
             )
             .map_err(|err| Error::EncodeError(Box::new(err)))?;
-        println!("serialization dance done... time for the big surprise");
 
         // Call:
         let status = self.call_raw(&encode_visitor.0, &mut decode_visitor.0);
-        println!("called raw");
         if status != std::ptr::null() {
-            println!("status is not null");
             // Safety: null was checked and the function pinky-promisses to return a valid
             // C string in case of error.
             let error = unsafe { CStr::from_ptr(status) };
-            println!("raising status");
             return Err(Error::StatusRaised(error.to_string_lossy().to_string()));
         }
 
         // Deserialization dance:
-        println!("doing decoder dance");
         Ok(decoder.build(&self.data.output_layout, &symbols_view, &mut decode_visitor))
     }
 
