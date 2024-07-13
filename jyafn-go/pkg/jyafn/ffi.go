@@ -2,6 +2,7 @@ package jyafn
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/ebitengine/purego"
@@ -126,69 +127,84 @@ func init() {
 		panic(err)
 	}
 
+	var isDebug bool
+	debugVal := os.Getenv("JYAFN_DEBUG")
+	if debugVal != "" {
+		isDebug = true
+	} else {
+		isDebug = false
+	}
+
 	ffi = &ffiType{
 		so: so,
 	}
 
-	purego.RegisterLibFunc(&ffi.freeStr, so, "free_str")
-	purego.RegisterLibFunc(&ffi.transmuteAsStr, so, "transmute_as_str")
+	register := func(fptr any, name string) {
+		if isDebug {
+			fmt.Printf("registering %s...\n", name)
+		}
+		purego.RegisterLibFunc(fptr, so, name)
+	}
 
-	purego.RegisterLibFunc(&ffi.outcomeIsOk, so, "outcome_is_ok")
-	purego.RegisterLibFunc(&ffi.outcomeConsumeOk, so, "outcome_consume_ok")
-	purego.RegisterLibFunc(&ffi.outcomeConsumeOkPtr, so, "outcome_consume_ok_ptr")
-	purego.RegisterLibFunc(&ffi.outcomeConsumeErr, so, "outcome_consume_err")
+	register(&ffi.freeStr, "free_str")
+	register(&ffi.transmuteAsStr, "transmute_as_str")
 
-	purego.RegisterLibFunc(&ffi.parseDatetime, so, "parse_datetime")
-	purego.RegisterLibFunc(&ffi.formatDatetime, so, "format_datetime")
-	purego.RegisterLibFunc(&ffi.consumeI64Ptr, so, "consume_i64_ptr")
+	register(&ffi.outcomeIsOk, "outcome_is_ok")
+	register(&ffi.outcomeConsumeOk, "outcome_consume_ok")
+	register(&ffi.outcomeConsumeOkPtr, "outcome_consume_ok_ptr")
+	register(&ffi.outcomeConsumeErr, "outcome_consume_err")
 
-	purego.RegisterLibFunc(&ffi.graphName, so, "graph_name")
-	purego.RegisterLibFunc(&ffi.graphGetMetadata, so, "graph_get_metadata")
-	purego.RegisterLibFunc(&ffi.graphGetMetadataJson, so, "graph_get_metadata_json")
-	purego.RegisterLibFunc(&ffi.graphLoad, so, "graph_load")
-	purego.RegisterLibFunc(&ffi.graphToJson, so, "graph_to_json")
-	purego.RegisterLibFunc(&ffi.graphRender, so, "graph_render")
-	purego.RegisterLibFunc(&ffi.graphCompile, so, "graph_compile")
-	purego.RegisterLibFunc(&ffi.graphClone, so, "graph_clone")
-	purego.RegisterLibFunc(&ffi.graphDrop, so, "graph_drop")
+	register(&ffi.parseDatetime, "parse_datetime")
+	register(&ffi.formatDatetime, "format_datetime")
+	register(&ffi.consumeI64Ptr, "consume_i64_ptr")
 
-	purego.RegisterLibFunc(&ffi.layoutToString, so, "layout_to_string")
-	purego.RegisterLibFunc(&ffi.layoutToJson, so, "layout_to_json")
-	purego.RegisterLibFunc(&ffi.layoutFromJson, so, "layout_from_json")
-	purego.RegisterLibFunc(&ffi.layoutSize, so, "layout_size")
-	purego.RegisterLibFunc(&ffi.layoutIsUnit, so, "layout_is_unit")
-	purego.RegisterLibFunc(&ffi.layoutIsScalar, so, "layout_is_scalar")
-	purego.RegisterLibFunc(&ffi.layoutIsBool, so, "layout_is_bool")
-	purego.RegisterLibFunc(&ffi.layoutIsDatetime, so, "layout_is_datetime")
-	purego.RegisterLibFunc(&ffi.layoutIsSymbol, so, "layout_is_symbol")
-	purego.RegisterLibFunc(&ffi.layoutIsStruct, so, "layout_is_struct")
-	purego.RegisterLibFunc(&ffi.layoutIsList, so, "layout_is_list")
-	purego.RegisterLibFunc(&ffi.layoutDatetimeFormat, so, "layout_datetime_format")
-	purego.RegisterLibFunc(&ffi.layoutAsStruct, so, "layout_as_struct")
-	purego.RegisterLibFunc(&ffi.layoutListElement, so, "layout_list_element")
-	purego.RegisterLibFunc(&ffi.layoutListSize, so, "layout_list_size")
-	purego.RegisterLibFunc(&ffi.layoutIsSuperset, so, "layout_is_superset")
-	purego.RegisterLibFunc(&ffi.layoutClone, so, "layout_clone")
-	purego.RegisterLibFunc(&ffi.layoutDrop, so, "layout_drop")
+	register(&ffi.graphName, "graph_name")
+	register(&ffi.graphGetMetadata, "graph_get_metadata")
+	register(&ffi.graphGetMetadataJson, "graph_get_metadata_json")
+	register(&ffi.graphLoad, "graph_load")
+	register(&ffi.graphToJson, "graph_to_json")
+	register(&ffi.graphRender, "graph_render")
+	register(&ffi.graphCompile, "graph_compile")
+	register(&ffi.graphClone, "graph_clone")
+	register(&ffi.graphDrop, "graph_drop")
 
-	purego.RegisterLibFunc(&ffi.strctSize, so, "strct_size")
-	purego.RegisterLibFunc(&ffi.strctGetItemName, so, "strct_get_item_name")
-	purego.RegisterLibFunc(&ffi.strctGetItemLayout, so, "strct_get_item_layout")
+	register(&ffi.layoutToString, "layout_to_string")
+	register(&ffi.layoutToJson, "layout_to_json")
+	register(&ffi.layoutFromJson, "layout_from_json")
+	register(&ffi.layoutSize, "layout_size")
+	register(&ffi.layoutIsUnit, "layout_is_unit")
+	register(&ffi.layoutIsScalar, "layout_is_scalar")
+	register(&ffi.layoutIsBool, "layout_is_bool")
+	register(&ffi.layoutIsDatetime, "layout_is_datetime")
+	register(&ffi.layoutIsSymbol, "layout_is_symbol")
+	register(&ffi.layoutIsStruct, "layout_is_struct")
+	register(&ffi.layoutIsList, "layout_is_list")
+	register(&ffi.layoutDatetimeFormat, "layout_datetime_format")
+	register(&ffi.layoutAsStruct, "layout_as_struct")
+	register(&ffi.layoutListElement, "layout_list_element")
+	register(&ffi.layoutListSize, "layout_list_size")
+	register(&ffi.layoutIsSuperset, "layout_is_superset")
+	register(&ffi.layoutClone, "layout_clone")
+	register(&ffi.layoutDrop, "layout_drop")
 
-	purego.RegisterLibFunc(&ffi.functionName, so, "function_name")
-	purego.RegisterLibFunc(&ffi.functionInputSize, so, "function_input_size")
-	purego.RegisterLibFunc(&ffi.functionOutputSize, so, "function_output_size")
-	purego.RegisterLibFunc(&ffi.functionInputLayout, so, "function_input_layout")
-	purego.RegisterLibFunc(&ffi.functionOutputLayout, so, "function_output_layout")
-	purego.RegisterLibFunc(&ffi.functionSymbolsJson, so, "function_symbols_json")
-	purego.RegisterLibFunc(&ffi.functionGraph, so, "function_graph")
-	purego.RegisterLibFunc(&ffi.functionGetMetadata, so, "function_get_metadata")
-	purego.RegisterLibFunc(&ffi.functionGetMetadataJson, so, "function_get_metadata_json")
-	purego.RegisterLibFunc(&ffi.functionFnPtr, so, "function_fn_ptr")
-	purego.RegisterLibFunc(&ffi.functionGetSize, so, "function_get_size")
-	purego.RegisterLibFunc(&ffi.functionLoad, so, "function_load")
-	purego.RegisterLibFunc(&ffi.functionCallRaw, so, "function_call_raw")
-	purego.RegisterLibFunc(&ffi.functionEvalRaw, so, "function_eval_raw")
-	purego.RegisterLibFunc(&ffi.functionEvalJson, so, "function_eval_json")
-	purego.RegisterLibFunc(&ffi.functionDrop, so, "function_drop")
+	register(&ffi.strctSize, "strct_size")
+	register(&ffi.strctGetItemName, "strct_get_item_name")
+	register(&ffi.strctGetItemLayout, "strct_get_item_layout")
+
+	register(&ffi.functionName, "function_name")
+	register(&ffi.functionInputSize, "function_input_size")
+	register(&ffi.functionOutputSize, "function_output_size")
+	register(&ffi.functionInputLayout, "function_input_layout")
+	register(&ffi.functionOutputLayout, "function_output_layout")
+	register(&ffi.functionSymbolsJson, "function_symbols_json")
+	register(&ffi.functionGraph, "function_graph")
+	register(&ffi.functionGetMetadata, "function_get_metadata")
+	register(&ffi.functionGetMetadataJson, "function_get_metadata_json")
+	register(&ffi.functionFnPtr, "function_fn_ptr")
+	register(&ffi.functionGetSize, "function_get_size")
+	register(&ffi.functionLoad, "function_load")
+	register(&ffi.functionCallRaw, "function_call_raw")
+	register(&ffi.functionEvalRaw, "function_eval_raw")
+	register(&ffi.functionEvalJson, "function_eval_json")
+	register(&ffi.functionDrop, "function_drop")
 }
