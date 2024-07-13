@@ -173,6 +173,9 @@ where
         });
     }
 
+    println!("{rendered}");
+    println!("{}", String::from_utf8_lossy(&qbe_output.stdout));
+
     Ok(String::from_utf8_lossy(&qbe_output.stdout).to_string())
 }
 

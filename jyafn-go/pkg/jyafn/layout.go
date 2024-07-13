@@ -1,167 +1,162 @@
 package jyafn
 
-// #cgo CFLAGS: -I./
-// #cgo darwin,arm64 LDFLAGS: -L./ -lcjyafn_darwin_arm64
-// #cgo linux LDFLAGS: -L./ -lcjyafn_linux_x64 -lm
-// #include "cjyafn.h"
-//
-import "C"
-
 import (
 	"fmt"
 	"math"
 	"reflect"
-	"unsafe"
 )
 
-type Layout struct {
-	ptr unsafe.Pointer
-	// This prevents the GC from cleaning the owned object.
-	ownedBy  any
+type OwnedLayout struct {
+	ptr      OwnedLayoutPtr
 	isClosed bool
 }
 
-func (l *Layout) Close() {
-	if l.ownedBy == nil && !l.isClosed {
-		C.layout_drop(l.ptr)
+func (l *OwnedLayout) Close() {
+	if !l.isClosed {
+		ffi.layoutDrop(l.ptr)
 		l.isClosed = true
 	}
 }
 
-func (l *Layout) panicOnClosed() {
+func (l *OwnedLayout) panicOnClosed() {
 	if l.isClosed {
 		panic(fmt.Sprintf("layout %+v was already closed", l))
 	}
 }
 
-func (l *Layout) ToString() string {
+func (l *OwnedLayout) GetRef() Layout {
 	l.panicOnClosed()
-	str := C.layout_to_string(l.ptr)
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(str))
-	return C.GoString(str)
+	return Layout{ptr: l.ptr.getRef()}
 }
 
-func (l *Layout) MarshalJSON() ([]byte, error) {
-	l.panicOnClosed()
-	json := C.layout_to_json(l.ptr)
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(json))
-	return []byte(C.GoString(json)), nil
+func LayoutFromJSON(json string) (*OwnedLayout, error) {
+	ptr, err := ffi.layoutFromJson(json).get()
+	if err != nil {
+		return &OwnedLayout{}, nil
+	}
+
+	return &OwnedLayout{ptr: OwnedLayoutPtr(ptr), isClosed: false}, nil
 }
 
-func (l *Layout) UnmarshalJSON(json []byte) error {
-	l.panicOnClosed()
+func (l *OwnedLayout) MarshalJSON() ([]byte, error) {
+	return l.GetRef().MarshalJSON()
+}
 
-	value, err := Outcome(C.layout_from_json((*C.char)(unsafe.Pointer(&json[0])))).get()
+func (l *OwnedLayout) UnmarshalJSON(json []byte) error {
+	if l.ptr != 0 {
+		return fmt.Errorf("cannot unmarshal layout on already-filled layout")
+	}
+
+	ptr, err := ffi.layoutFromJson(string(json)).get()
 	if err != nil {
 		return err
 	}
 
-	l.ptr = value
-
+	l.ptr = OwnedLayoutPtr(ptr)
+	l.isClosed = false // for good measure
 	return nil
 }
 
-func (l *Layout) IsUnit() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_unit(l.ptr))
+type Layout struct {
+	ptr LayoutPtr
 }
 
-func (l *Layout) IsScalar() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_scalar(l.ptr))
+func (l Layout) Clone() *OwnedLayout {
+	return &OwnedLayout{ptr: ffi.layoutClone(l.ptr), isClosed: false}
 }
 
-func (l *Layout) IsBool() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_bool(l.ptr))
+func (l Layout) ToString() string {
+	value := ffi.layoutToString(l.ptr)
+	defer ffi.freeStr(value)
+	return ffi.transmuteAsStr(value)
 }
 
-func (l *Layout) IsDateTime() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_datetime(l.ptr))
+func (l Layout) MarshalJSON() ([]byte, error) {
+	value := ffi.layoutToJson(l.ptr)
+	defer ffi.freeStr(value)
+	return []byte(ffi.transmuteAsStr(value)), nil
 }
 
-func (l *Layout) IsSymbol() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_symbol(l.ptr))
+func (l Layout) IsUnit() bool {
+	return ffi.layoutIsUnit(l.ptr)
 }
 
-func (l *Layout) IsStruct() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_struct(l.ptr))
+func (l Layout) IsScalar() bool {
+	return ffi.layoutIsScalar(l.ptr)
 }
 
-func (l *Layout) IsList() bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_list(l.ptr))
+func (l Layout) IsBool() bool {
+	return ffi.layoutIsBool(l.ptr)
 }
 
-func (l *Layout) DateTimeFormat() string {
-	l.panicOnClosed()
-	ptr := C.layout_datetime_format(l.ptr)
-	if uintptr(unsafe.Pointer(ptr)) == 0 {
+func (l Layout) IsDateTime() bool {
+	return ffi.layoutIsDatetime(l.ptr)
+}
+
+func (l Layout) IsSymbol() bool {
+	return ffi.layoutIsSymbol(l.ptr)
+}
+
+func (l Layout) IsStruct() bool {
+	return ffi.layoutIsStruct(l.ptr)
+}
+
+func (l Layout) IsList() bool {
+	return ffi.layoutIsList(l.ptr)
+}
+
+func (l Layout) AsStruct() Struct {
+	return Struct{ptr: ffi.layoutAsStruct(l.ptr)}
+}
+
+func (l Layout) DateTimeFormat() string {
+	format := ffi.layoutDatetimeFormat(l.ptr)
+	if format == 0 {
 		panic("called DateTimeFormat on a Layout that is not a datatime")
 	}
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(ptr))
-	return C.GoString(ptr)
+	defer ffi.freeStr(format)
+	return ffi.transmuteAsStr(format)
 }
 
-func (l *Layout) AsStruct() *Struct {
-	l.panicOnClosed()
-	ptr := C.layout_as_struct(l.ptr)
-	if uintptr(ptr) == 0 {
-		panic("called AsStruct on a Layout that is not a struct")
-	}
-	return &Struct{ptr: ptr, ownedBy: l.ownedBy}
-}
-
-func (l *Layout) ListElement() *Layout {
-	l.panicOnClosed()
-	ptr := C.layout_list_element(l.ptr)
+func (l Layout) ListElement() Layout {
+	ptr := ffi.layoutListElement(l.ptr)
 	if uintptr(ptr) == 0 {
 		panic("called ListElement on a Layout that is not a list")
 	}
-	return &Layout{ptr: ptr, ownedBy: l.ownedBy}
+	return Layout{ptr: ptr}
 }
 
-func (l *Layout) ListSize() uint {
-	l.panicOnClosed()
-	return uint(C.layout_list_size(l.ptr))
+func (l Layout) ListSize() uint {
+	return uint(ffi.layoutListSize(l.ptr))
 }
 
-func (l *Layout) IsSuperset(other *Layout) bool {
-	l.panicOnClosed()
-	return bool(C.layout_is_superset(l.ptr, other.ptr))
+func (l Layout) IsSuperset(other Layout) bool {
+	return bool(ffi.layoutIsSuperset(l.ptr, other.ptr))
 }
 
 type Struct struct {
-	ptr     unsafe.Pointer
-	ownedBy any
+	ptr StructPtr
 }
 
-func (s *Struct) Size() uint {
-	return uint(C.strct_size(s.ptr))
+func (s Struct) Size() uint {
+	return uint(ffi.strctSize(s.ptr))
 }
 
-func (s *Struct) GetItemName(index uint) string {
-	ptr := C.strct_get_item_name(s.ptr, C.ulong(index))
-	if uintptr(unsafe.Pointer(ptr)) == 0 {
+func (s Struct) GetItemName(index uint) string {
+	ptr := ffi.strctGetItemName(s.ptr, uintptr(index))
+	if ptr == 0 {
 		panic("called GetItemName on a Struct out of bounds")
 	}
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(ptr))
-	return C.GoString(ptr)
+	defer ffi.freeStr(ptr)
+	return ffi.transmuteAsStr(ptr)
 }
 
-func (s *Struct) GetItemLayout(index uint) *Layout {
-	ptr := C.strct_get_item_layout(s.ptr, C.ulong(index))
+func (s Struct) GetItemLayout(index uint) Layout {
+	ptr := ffi.strctGetItemLayout(s.ptr, uintptr(index))
 	if uintptr(ptr) == 0 {
 		panic("called GetItemLayout on a Struct out of bounds")
 	}
-	return &Layout{ptr: ptr, ownedBy: s.ownedBy}
+	return Layout{ptr: ptr}
 }
 
 type Symbols struct {
@@ -229,7 +224,7 @@ func (v *Visitor) PopInt() int {
 	return int(top)
 }
 
-func encodeValue(value reflect.Value, layout *Layout, symbols *Symbols, visitor *Visitor) error {
+func encodeValue(value reflect.Value, layout Layout, symbols *Symbols, visitor *Visitor) error {
 	if layout.IsUnit() {
 		return nil
 	}
@@ -305,7 +300,7 @@ func encodeValue(value reflect.Value, layout *Layout, symbols *Symbols, visitor 
 	return fmt.Errorf("no layout rules to match %v to %v", value.Type(), layout)
 }
 
-func decodeValue(ty reflect.Type, layout *Layout, symbols *Symbols, visitor *Visitor) reflect.Value {
+func decodeValue(ty reflect.Type, layout Layout, symbols *Symbols, visitor *Visitor) reflect.Value {
 	if layout.IsUnit() {
 		return reflect.New(ty)
 	}
@@ -337,7 +332,11 @@ func decodeValue(ty reflect.Type, layout *Layout, symbols *Symbols, visitor *Vis
 
 	if (kind == reflect.String) && layout.IsDateTime() {
 		timestamp := visitor.PopInt()
-		return reflect.ValueOf(FormatDateTime(int64(timestamp), layout.DateTimeFormat()))
+		formated, err := FormatDateTime(int64(timestamp), layout.DateTimeFormat())
+		if err != nil {
+			panic(err)
+		}
+		return reflect.ValueOf(formated)
 	}
 
 	if layout.IsSymbol() && kind == reflect.String {

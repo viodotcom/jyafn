@@ -215,10 +215,13 @@ impl Mapping {
     }
 
     unsafe fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {
+        println!("calling mapping at {:?}", mapping);
         let mapping = &*mapping;
         if let Some(line) = mapping.storage.as_ref().and_then(|s| s.get(hash)) {
+            println!("found line at {:?}", line.as_ptr());
             line.as_ptr()
         } else {
+            println!("line not found");
             std::ptr::null()
         }
     }

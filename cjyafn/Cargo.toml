@@ -8,7 +8,7 @@ edition = "2021"
 [lib]
 doc = false
 name = "cjyafn"
-crate-type = ["staticlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 get-size = "0.1.4"

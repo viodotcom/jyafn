@@ -1,36 +1,29 @@
 package jyafn
 
-// #cgo CFLAGS: -I./
-// #cgo darwin,arm64 LDFLAGS: -L./ -lcjyafn_darwin_arm64
-// #cgo linux LDFLAGS: -L./ -lcjyafn_linux_x64 -lm
-// #include "cjyafn.h"
-//
-import "C"
-
 import (
 	"encoding/json"
 	"fmt"
-	"unsafe"
 )
 
 type Function struct {
-	wasClosed bool
-	ptr       unsafe.Pointer
-	symbols   []string
+	ptr      FunctionPtr
+	isClosed bool
+	symbols  []string
 }
 
-func functionFromRaw(ptr unsafe.Pointer) *Function {
-	function := &Function{ptr: ptr}
-
-	// Read symbols to the Go side.
-	symbolsJSONPtr, err := Outcome(C.function_symbols_json(ptr)).get()
-	if err != nil {
-		panic(err)
+func (f *Function) panicOnClosed() {
+	if f.isClosed {
+		panic(fmt.Sprintf("function %+v was already closed", f))
 	}
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(symbolsJSONPtr))
+}
 
-	err = json.Unmarshal([]byte(C.GoString((*C.char)(symbolsJSONPtr))), &function.symbols)
+func functionFromRaw(ptr FunctionPtr) *Function {
+	function := &Function{ptr: ptr, isClosed: false}
+
+	symbolsJSON := ffi.functionSymbolsJson(ptr)
+	defer ffi.freeStr(symbolsJSON)
+
+	err := json.Unmarshal([]byte(ffi.transmuteAsStr(symbolsJSON)), &function.symbols)
 	if err != nil {
 		panic(err)
 	}
@@ -39,83 +32,81 @@ func functionFromRaw(ptr unsafe.Pointer) *Function {
 }
 
 func LoadFunction(encoded []byte) (*Function, error) {
-	codePtr := unsafe.Pointer(&encoded[0])
-	ptr, err := Outcome(
-		C.function_load((*C.uchar)(codePtr), (C.ulong)(len(encoded))),
-	).get()
+	ptr, err := ffi.functionLoad(encoded, uintptr(len(encoded))).get()
 	if err != nil {
 		return nil, err
 	}
 
-	return functionFromRaw(ptr), nil
+	return functionFromRaw(FunctionPtr(ptr)), nil
 }
 
 func (f *Function) Close() {
-	if !f.wasClosed {
-		C.function_drop(f.ptr)
-		f.wasClosed = true
-	}
-}
-
-func (f *Function) panicOnClosed() {
-	if f.wasClosed {
-		panic(fmt.Sprintf("function %+v was already closed", f))
+	if !f.isClosed {
+		ffi.functionDrop(f.ptr)
+		f.isClosed = true
 	}
 }
 
 func (f *Function) Name() string {
 	f.panicOnClosed()
-	name := C.function_name(f.ptr)
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(name))
-	return C.GoString(name)
+	name := ffi.functionName(f.ptr)
+	defer ffi.freeStr(name)
+	return ffi.transmuteAsStr(name)
 }
 
 func (f *Function) InputSize() uint {
 	f.panicOnClosed()
-	return uint(C.function_input_size(f.ptr))
+	return uint(ffi.functionInputSize(f.ptr))
 }
 
 func (f *Function) OutputSize() uint {
 	f.panicOnClosed()
-	return uint(C.function_output_size(f.ptr))
+	return uint(ffi.functionOutputSize(f.ptr))
 }
 
-func (f *Function) InputLayout() *Layout {
+func (f *Function) InputLayout() Layout {
 	f.panicOnClosed()
-	return &Layout{ptr: C.function_input_layout(f.ptr), ownedBy: f}
+	return Layout{ptr: ffi.functionInputLayout(f.ptr)}
 }
 
-func (f *Function) OutputLayout() *Layout {
+func (f *Function) OutputLayout() Layout {
 	f.panicOnClosed()
-	return &Layout{ptr: C.function_output_layout(f.ptr), ownedBy: f}
+	return Layout{ptr: ffi.functionOutputLayout(f.ptr)}
 }
 
 func (f *Function) Graph() *Graph {
 	f.panicOnClosed()
-	return &Graph{ptr: C.function_graph(f.ptr), ownedBy: f}
+	return &Graph{ptr: ffi.functionGraph(f.ptr)}
 }
 
 func (f *Function) GetMetadata(key string) string {
 	f.panicOnClosed()
-	keyBytes := []byte(key)
-	value := C.function_get_metadata(f.ptr, (*C.char)(unsafe.Pointer(&keyBytes[0])))
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(value))
-
-	return C.GoString(value)
+	value := ffi.functionGetMetadata(f.ptr, key)
+	if value == 0 {
+		return ""
+	}
+	defer ffi.freeStr(value)
+	return ffi.transmuteAsStr(value)
 }
 
 func (f *Function) GetMetadataJSON() string {
 	f.panicOnClosed()
-	value := C.function_get_metadata_json(f.ptr)
-	// This is a C string. So, free works.
-	defer C.free(unsafe.Pointer(value))
-
-	return C.GoString(value)
+	value := ffi.functionGetMetadataJson(f.ptr)
+	defer ffi.freeStr(value)
+	return ffi.transmuteAsStr(value)
 }
 
 func (f *Function) GetSize() int {
 	f.panicOnClosed()
-	return int(C.function_get_size(f.ptr))
+	return int(ffi.functionGetSize(f.ptr))
+}
+
+func (f *Function) CallJSON(json string) (string, error) {
+	output, err := ffi.functionEvalJson(f.ptr, json).getPtr()
+	if err != nil {
+		return "", err
+	}
+	fmt.Printf("got:0x%x\n", output)
+	defer ffi.freeStr(AllocatedStr(output))
+	return ffi.transmuteAsStr(AllocatedStr(output)), nil
 }
