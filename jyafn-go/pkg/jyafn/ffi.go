@@ -120,7 +120,7 @@ func getLibraryPath() string {
 	case "darwin":
 		return "libcjyafn.dylib"
 	case "linux":
-		return "libcjyafn.so"
+		return "/usr/local/lib/libcjyafn.so"
 	default:
 		panic(fmt.Errorf("GOOS=%s is not supported", runtime.GOOS))
 	}
