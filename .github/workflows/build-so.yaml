@@ -1,0 +1,42 @@
+name: Build CJyafn Shared Object
+
+on:
+  push:
+    branches:
+      - stable
+  workflow_dispatch:
+
+
+jobs:
+  build-so:
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        ref: stable
+    - name: Build shared object
+      run: |
+        bash ./utils/build-linux-so.sh
+    - name: Artifact update
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-x64
+        if-no-files-found: error
+        path: target/release/libcjyafn.so
+        retention-days: 1
+
+  release:
+    needs: [build-so]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download so
+      uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: "*.so"
+        tag_name: commit-id=${{ github.sha }}
+        prerelease: false
+        make_latest: true

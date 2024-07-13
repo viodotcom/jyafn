@@ -15,80 +15,28 @@ use std::borrow::Cow;
 use std::ffi::{c_char, CStr, CString};
 use std::panic::UnwindSafe;
 
-#[repr(C)]
-pub struct Outcome {
-    ok: *mut (),
-    err: *const (),
+/// Every time this function is called, there needs to be an accompaning `free_str` on the
+/// other side.
+fn new_c_str(s: String) -> *const c_char {
+    let c_str = CString::new(s)
+        .unwrap_or_else(|err| {
+            CString::new(String::from_utf8_lossy(&err.into_vec()).replace("\u{0}", ""))
+                .expect("nulls have already been removed")
+        })
+        .into_boxed_c_str();
+    Box::leak(c_str) as *mut CStr as *const c_char
 }
 
-fn from_result<T>(result: Result<T, Error>) -> Outcome {
-    match result {
-        Ok(ok) => {
-            let boxed = Box::new(ok);
-            Outcome {
-                ok: Box::leak(boxed) as *mut T as *mut (),
-                err: std::ptr::null(),
-            }
-        }
-        Err(error) => {
-            let boxed = Box::new(error);
-            Outcome {
-                ok: std::ptr::null_mut(),
-                err: Box::leak(boxed) as *const Error as *const (),
-            }
-        }
-    }
-}
-
-fn from_ptr_result<T>(result: Result<*const T, Error>) -> Outcome {
-    match result {
-        Ok(ok) => Outcome {
-            ok: ok as *mut (),
-            err: std::ptr::null(),
-        },
-        Err(error) => {
-            let boxed = Box::new(error);
-            Outcome {
-                ok: std::ptr::null_mut(),
-                err: Box::leak(boxed) as *const Error as *const (),
-            }
-        }
-    }
-}
-
-fn from_ptr<T>(ok: *const T) -> Outcome {
-    Outcome {
-        ok: ok as *const () as *mut (),
-        err: std::ptr::null(),
+#[no_mangle]
+pub extern "C" fn free_str(s: *const c_char) {
+    unsafe {
+        let _c_str = Box::from_raw(s as *mut c_char);
     }
 }
 
 #[no_mangle]
-pub extern "C" fn parse_datetime(s: *const c_char, fmt: *const c_char) -> Outcome {
-    unsafe {
-        try_panic_to_outcome(|| {
-            from_ptr_result(
-                rust::utils::parse_datetime(&from_c_str(s), &from_c_str(fmt))
-                    .map(|dt| {
-                        Box::leak(Box::new(i64::from(rust::utils::Timestamp::from(dt)))) as *mut i64
-                            as *const i64
-                    })
-                    .map_err(|e| e.to_string().into()),
-            )
-        })
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn format_datetime(timestamp: i64, fmt: *const c_char) -> Outcome {
-    unsafe {
-        try_panic_to_outcome(|| {
-            from_ptr(new_c_str(rust::utils::format_datetime(
-                timestamp,
-                &from_c_str(fmt),
-            )))
-        })
-    }
+pub extern "C" fn transmute_as_str(s: *mut ()) -> *mut c_char {
+    s as *mut c_char
 }
 
 unsafe fn from_c_str<'a>(s: *const c_char) -> Cow<'a, str> {
@@ -96,13 +44,77 @@ unsafe fn from_c_str<'a>(s: *const c_char) -> Cow<'a, str> {
     cstr.to_string_lossy()
 }
 
-/// Every time this function is called, there needs to be an accompaning `free` on the
-/// other side.
-fn new_c_str(s: String) -> *const c_char {
-    let c_str = CString::new(s)
-        .expect("string representation should never contain \\0")
-        .into_boxed_c_str();
-    Box::leak(c_str) as *mut CStr as *const c_char
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Outcome(*mut ());
+
+impl Outcome {
+    fn from_result<T>(result: Result<T, Error>) -> Outcome {
+        match result {
+            Ok(ok) => {
+                let boxed = Box::new(ok);
+                let boxed_result = Box::new(Result::<*mut (), Error>::Ok(
+                    Box::leak(boxed) as *mut T as *mut (),
+                ));
+                Outcome(Box::leak(boxed_result) as *mut Result<*mut (), Error> as *mut ())
+            }
+            Err(error) => {
+                let boxed_result = Box::new(Result::<*mut (), Error>::Err(error));
+                Outcome(Box::leak(boxed_result) as *mut Result<*mut (), Error> as *mut ())
+            }
+        }
+    }
+
+    fn from_ptr_result<T>(result: Result<*const T, Error>) -> Outcome {
+        match result {
+            Ok(ok) => {
+                let boxed_result = Box::new(Result::<*mut (), Error>::Ok(ok as *mut ()));
+                Outcome(Box::leak(boxed_result) as *mut Result<*mut (), Error> as *mut ())
+            }
+            Err(error) => {
+                let boxed_result = Box::new(Result::<*mut (), Error>::Err(error));
+                Outcome(Box::leak(boxed_result) as *mut Result<*mut (), Error> as *mut ())
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn outcome_is_ok(outcome: Outcome) -> bool {
+    unsafe {
+        let outcome = Box::from_raw(outcome.0 as *mut () as *mut Result<*mut (), Error>);
+        let is_ok = outcome.is_ok();
+        Box::leak(outcome);
+        is_ok
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn outcome_consume_ok(outcome: Outcome) -> *mut () {
+    unsafe {
+        let outcome = Box::from_raw(outcome.0 as *mut () as *mut Result<*mut (), Error>);
+        let ok = outcome.expect("is supposed to be ok");
+        ok
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn outcome_consume_ok_ptr(outcome: Outcome) -> *mut () {
+    unsafe {
+        let outcome = Box::from_raw(outcome.0 as *mut () as *mut Result<*mut (), Error>);
+        let ok = outcome.expect("is supposed to be ok");
+        let boxed_ptr = Box::from_raw(ok as *mut *mut ());
+        *boxed_ptr
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn outcome_consume_err(outcome: Outcome) -> *const c_char {
+    unsafe {
+        let outcome = Box::from_raw(outcome.0 as *mut () as *mut Result<*mut (), Error>);
+        let err = outcome.expect_err("is supposed to be err");
+        new_c_str(err.to_string())
+    }
 }
 
 fn panic_to_outcome<F, T>(f: F) -> Outcome
@@ -110,34 +122,58 @@ where
     F: FnOnce() -> T + UnwindSafe,
 {
     match std::panic::catch_unwind(f) {
-        Ok(outcome) => {
-            let boxed = Box::new(outcome);
-            Outcome {
-                ok: Box::leak(boxed) as *mut T as *mut (),
-                err: std::ptr::null(),
-            }
-        }
-        Err(_le_oops) => Outcome {
-            ok: std::ptr::null_mut(),
-            err: Box::leak(Box::new(rust::Error::Other(
-                "operation panicked (see stderr)".to_string(),
-            ))) as *const Error as *const (),
-        },
+        Ok(outcome) => Outcome::from_result::<T>(Ok(outcome)),
+        Err(_le_oops) => Outcome::from_result::<T>(Err(rust::Error::Other(
+            "operation panicked (see stderr)".to_string(),
+        ))),
     }
 }
 
-fn try_panic_to_outcome<F>(f: F) -> Outcome
+fn try_panic_to_outcome<F, T>(f: F) -> Outcome
 where
-    F: FnOnce() -> Outcome + UnwindSafe,
+    F: FnOnce() -> Result<T, Error> + UnwindSafe,
 {
     match std::panic::catch_unwind(f) {
-        Ok(outcome) => outcome,
-        Err(_le_oops) => Outcome {
-            ok: std::ptr::null_mut(),
-            err: Box::leak(Box::new(rust::Error::Other(
-                "operation panicked (see stderr)".to_string(),
-            ))) as *const Error as *const (),
-        },
+        Ok(result) => Outcome::from_result::<T>(result),
+        Err(_le_oops) => Outcome::from_result::<T>(Err(rust::Error::Other(
+            "operation panicked (see stderr)".to_string(),
+        ))),
+    }
+}
+
+// fn from_ptr<T>(ok: *const T) -> Outcome {
+//     Outcome {
+//         ok: ok as *const () as *mut (),
+//         err: std::ptr::null(),
+//     }
+// }
+
+#[no_mangle]
+pub extern "C" fn parse_datetime(s: *const c_char, fmt: *const c_char) -> Outcome {
+    unsafe {
+        try_panic_to_outcome(|| {
+            rust::utils::parse_datetime(&from_c_str(s), &from_c_str(fmt))
+                .map(|dt| {
+                    Box::leak(Box::new(i64::from(rust::utils::Timestamp::from(dt)))) as *mut i64
+                        as *const i64
+                })
+                .map_err(|e| e.to_string().into())
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn format_datetime(timestamp: i64, fmt: *const c_char) -> Outcome {
+    unsafe {
+        panic_to_outcome(|| new_c_str(rust::utils::format_datetime(timestamp, &from_c_str(fmt))))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn consume_i64_ptr(ptr: *mut i64) -> i64 {
+    unsafe {
+        let boxed = Box::from_raw(ptr);
+        *boxed
     }
 }
 
@@ -158,9 +194,9 @@ where
     panic_to_outcome(|| with_unchecked(thing, f))
 }
 
-unsafe fn try_with<T, F>(thing: *const (), f: F) -> Outcome
+unsafe fn try_with<T, U, F>(thing: *const (), f: F) -> Outcome
 where
-    F: FnOnce(&T) -> Outcome + UnwindSafe,
+    F: FnOnce(&T) -> Result<U, Error> + UnwindSafe,
 {
     try_panic_to_outcome(|| with_unchecked(thing, f))
 }
@@ -187,21 +223,9 @@ where
 #[allow(dead_code)]
 unsafe fn try_with_mut<T, F>(thing: *mut (), f: F) -> Outcome
 where
-    F: FnOnce(&mut T) -> Outcome + UnwindSafe,
+    F: FnOnce(&mut T) -> Result<T, Error> + UnwindSafe,
 {
     try_panic_to_outcome(|| with_mut_unchecked(thing, f))
-}
-
-#[no_mangle]
-pub extern "C" fn error_to_string(error: *const ()) -> *const c_char {
-    unsafe { with_unchecked(error, |error: &Error| new_c_str(error.to_string())) }
-}
-
-#[no_mangle]
-pub extern "C" fn error_drop(error: *mut ()) {
-    unsafe {
-        let _ = Box::from_raw(error as *mut Error);
-    }
 }
 
 #[no_mangle]
@@ -232,14 +256,11 @@ pub extern "C" fn graph_get_metadata_json(graph: *const ()) -> *const c_char {
         })
     }
 }
+
 #[no_mangle]
 pub extern "C" fn graph_load(bytes: *const u8, len: usize) -> Outcome {
-    try_panic_to_outcome(|| {
-        fn graph_load(bytes: *const u8, len: usize) -> Result<Graph, Error> {
-            unsafe { Graph::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len))) }
-        }
-
-        from_result(graph_load(bytes, len))
+    try_panic_to_outcome(|| unsafe {
+        Graph::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len)))
     })
 }
 
@@ -250,16 +271,12 @@ pub extern "C" fn graph_to_json(graph: *const ()) -> *const c_char {
 
 #[no_mangle]
 pub extern "C" fn graph_render(graph: *const ()) -> Outcome {
-    unsafe {
-        try_with(graph, |graph: &Graph| {
-            from_ptr(new_c_str(graph.render().to_string()))
-        })
-    }
+    unsafe { with(graph, |graph: &Graph| new_c_str(graph.render().to_string())) }
 }
 
 #[no_mangle]
 pub extern "C" fn graph_compile(graph: *const ()) -> Outcome {
-    unsafe { try_with(graph, |graph: &Graph| from_result(graph.compile())) }
+    unsafe { try_with(graph, |graph: &Graph| graph.compile()) }
 }
 
 #[no_mangle]
@@ -304,7 +321,7 @@ pub extern "C" fn layout_from_json(json: *const c_char) -> Outcome {
                 .map_err(|err| err.to_string())?)
         };
 
-        from_result(decode())
+        Outcome::from_result(decode())
     }
 }
 
@@ -422,6 +439,16 @@ pub extern "C" fn layout_is_superset(layout: *mut (), other: *mut ()) -> bool {
 }
 
 #[no_mangle]
+pub extern "C" fn layout_clone(layout: *mut ()) -> *mut Layout {
+    unsafe {
+        with_unchecked(layout, |layout: &Layout| {
+            let boxed = Box::new(layout.clone());
+            Box::leak(boxed)
+        })
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn layout_drop(layout: *mut ()) {
     unsafe {
         let _ = Box::from_raw(layout as *mut Layout);
@@ -533,12 +560,10 @@ pub extern "C" fn function_get_metadata_json(func: *const ()) -> *const c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn function_symbols_json(func: *const ()) -> Outcome {
+pub extern "C" fn function_symbols_json(func: *const ()) -> *const c_char {
     unsafe {
-        try_with(func, |func: &Function| {
-            from_ptr(new_c_str(
-                serde_json::to_string(func.graph().symbols()).expect("can always serialize"),
-            ))
+        with_unchecked(func, |func: &Function| {
+            new_c_str(serde_json::to_string(func.graph().symbols()).expect("can always serialize"))
         })
     }
 }
@@ -557,11 +582,9 @@ pub extern "C" fn function_get_size(func: *const ()) -> usize {
 
 #[no_mangle]
 pub extern "C" fn function_load(bytes: *const u8, len: usize) -> Outcome {
-    fn function_load(bytes: *const u8, len: usize) -> Result<Function, Error> {
-        unsafe { Function::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len))) }
-    }
-
-    try_panic_to_outcome(|| from_result(function_load(bytes, len)))
+    try_panic_to_outcome(|| unsafe {
+        Function::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len)))
+    })
 }
 
 #[no_mangle]
@@ -590,7 +613,7 @@ pub extern "C" fn function_eval_raw(func: *const (), input: *const u8) -> Outcom
     unsafe {
         with(func, |func: &Function| {
             let input = std::slice::from_raw_parts(input, func.input_size());
-            from_result(
+            Outcome::from_result(
                 func.eval_raw(input)
                     .map(|output| Box::leak(output) as *const [u8] as *const ()),
             )
@@ -602,24 +625,22 @@ pub extern "C" fn function_eval_raw(func: *const (), input: *const u8) -> Outcom
 pub extern "C" fn function_eval_json(func: *const (), input: *mut c_char) -> Outcome {
     unsafe {
         try_with(func, |func: &Function| {
-            println!("deref function");
-            from_ptr_result((|| {
-                let input_cstr = CStr::from_ptr(input);
-                println!("input_cstr created");
-                let input_str = input_cstr.to_string_lossy();
-                println!("input_str created");
-                let input_value: serde_json::Value =
-                    serde_json::from_str(input_str.trim()).map_err(|e| e.to_string())?;
-                println!("input_value created");
-                let output_value: serde_json::Value = func.eval(&input_value)?;
-                println!("func evaled");
-                let output_str = serde_json::to_string(&output_value).expect("can serialize");
-                println!("output_str created");
-                let output_cstr = new_c_str(output_str);
-                println!("output_cstr created");
+            let input_cstr = CStr::from_ptr(input);
+            println!("input_cstr created");
+            let input_str = input_cstr.to_string_lossy();
+            println!("input_str created");
+            let input_value: serde_json::Value =
+                serde_json::from_str(input_str.trim()).map_err(|e| e.to_string())?;
+            println!("input_value created");
+            let output_value: serde_json::Value = func.eval(&input_value)?;
+            println!("func evaled");
+            let output_str = serde_json::to_string(&output_value).expect("can serialize");
+            println!("output_str created");
+            let output_cstr = new_c_str(output_str);
+            println!("output_cstr created");
 
-                Ok(output_cstr)
-            })())
+            println!("out:{:?}", output_cstr);
+            Ok(output_cstr)
         })
     }
 }
@@ -631,29 +652,29 @@ pub extern "C" fn function_drop(func: *mut ()) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn pfunc_inscribe(
-    name: *const c_char,
-    fn_ptr: *const (),
-    signature: *const u8,
-    signature_len: usize,
-    returns: u8,
-) -> Outcome {
-    unsafe {
-        try_panic_to_outcome(|| {
-            from_ptr_result((|| {
-                let name_cstr = CStr::from_ptr(name);
-                let name_str = name_cstr.to_string_lossy();
-                let signature = std::slice::from_raw_parts(signature, signature_len)
-                    .iter()
-                    .copied()
-                    .map(rust::Type::try_from)
-                    .collect::<Result<Vec<_>, _>>()?;
-                let returns: rust::Type = returns.try_into()?;
+// #[no_mangle]
+// pub extern "C" fn pfunc_inscribe(
+//     name: *const c_char,
+//     fn_ptr: *const (),
+//     signature: *const u8,
+//     signature_len: usize,
+//     returns: u8,
+// ) -> Outcome {
+//     unsafe {
+//         try_panic_to_outcome(|| {
+//             from_ptr_result((|| {
+//                 let name_cstr = CStr::from_ptr(name);
+//                 let name_str = name_cstr.to_string_lossy();
+//                 let signature = std::slice::from_raw_parts(signature, signature_len)
+//                     .iter()
+//                     .copied()
+//                     .map(rust::Type::try_from)
+//                     .collect::<Result<Vec<_>, _>>()?;
+//                 let returns: rust::Type = returns.try_into()?;
 
-                rust::pfunc::inscribe(&name_str, fn_ptr, &signature, returns)
-                    .map(|_| std::ptr::null::<()>())
-            })())
-        })
-    }
-}
+//                 rust::pfunc::inscribe(&name_str, fn_ptr, &signature, returns)
+//                     .map(|_| std::ptr::null::<()>())
+//             })())
+//         })
+//     }
+// }

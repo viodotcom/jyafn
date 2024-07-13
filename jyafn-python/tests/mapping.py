@@ -34,4 +34,4 @@ print(foo("a"))
 print(foo("b"))
 print(foo("c"))
 
-foo.write("foo.jyafn")
+foo.write("silly-map.jyafn")
