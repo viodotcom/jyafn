@@ -111,6 +111,11 @@ type ffiType struct {
 var ffi *ffiType
 
 func getLibraryPath() string {
+	override := os.Getenv("JYAFN_SOPATH")
+	if override != "" {
+		return override
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
 		return "libcjyafn.dylib"
