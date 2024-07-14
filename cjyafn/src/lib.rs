@@ -14,6 +14,11 @@ use rust::{
 use std::borrow::Cow;
 use std::ffi::{c_char, CStr, CString};
 use std::panic::UnwindSafe;
+use std::sync::atomic::{AtomicIsize, Ordering};
+
+/// Counts the number of strings allocated via `new_c_str` and freed through `free_str`.
+/// This is meant for debugging, to detect leakages.
+const N_ALLOCATED_STRS: AtomicIsize = AtomicIsize::new(0);
 
 /// Every time this function is called, there needs to be an accompaning `free_str` on the
 /// other side.
@@ -24,6 +29,7 @@ fn new_c_str(s: String) -> *const c_char {
                 .expect("nulls have already been removed")
         })
         .into_boxed_c_str();
+    N_ALLOCATED_STRS.fetch_add(1, Ordering::Relaxed);
     Box::leak(c_str) as *mut CStr as *const c_char
 }
 
@@ -31,7 +37,13 @@ fn new_c_str(s: String) -> *const c_char {
 pub extern "C" fn free_str(s: *const c_char) {
     unsafe {
         let _c_str = Box::from_raw(s as *mut c_char);
+        N_ALLOCATED_STRS.fetch_add(-1, Ordering::Relaxed);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn n_allocated_strs() -> isize {
+    N_ALLOCATED_STRS.load(Ordering::Relaxed)
 }
 
 #[no_mangle]

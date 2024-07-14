@@ -5,6 +5,10 @@ import (
 	"reflect"
 )
 
+func NAllocatedStrs() int {
+	return int(ffi.nAllocatedStrs())
+}
+
 func Call[O any](f *Function, arg any) (O, error) {
 	f.panicOnClosed()
 

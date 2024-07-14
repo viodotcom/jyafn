@@ -47,6 +47,7 @@ type ffiType struct {
 
 	freeStr        func(AllocatedStr)
 	transmuteAsStr func(AllocatedStr) string
+	nAllocatedStrs func() uintptr // it's signed!
 
 	outcomeIsOk         func(OutcomePtr) bool
 	outcomeConsumeOk    func(OutcomePtr) uintptr
@@ -153,6 +154,7 @@ func init() {
 
 	register(&ffi.freeStr, "free_str")
 	register(&ffi.transmuteAsStr, "transmute_as_str")
+	register(&ffi.nAllocatedStrs, "n_allocated_strs")
 
 	register(&ffi.outcomeIsOk, "outcome_is_ok")
 	register(&ffi.outcomeConsumeOk, "outcome_consume_ok")
