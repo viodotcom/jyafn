@@ -231,4 +231,5 @@ func Test_JSON2(t *testing.T) {
 	}
 
 	fmt.Println(result)
+	fmt.Println(NAllocatedStrs())
 }

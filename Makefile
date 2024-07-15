@@ -28,7 +28,7 @@ build-linux-so:
 	bash ./utils/build-linux-so.sh
 
 install-dylib: cjyafn
-	sudo cp target/release/libcjyafn.dylib /usr/local/lib
+	mv target/release/libcjyafn.dylib /usr/local/lib/
 
 install-so: cjyafn
-	sudo cp target/release/libcjyafn.so /usr/local/lib
+	cp target/release/libcjyafn.so /usr/local/lib/
