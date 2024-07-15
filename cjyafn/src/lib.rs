@@ -76,19 +76,6 @@ impl Outcome {
             }
         }
     }
-
-    fn from_ptr_result<T>(result: Result<*const T, Error>) -> Outcome {
-        match result {
-            Ok(ok) => {
-                let boxed_result = Box::new(Result::<*mut (), Error>::Ok(ok as *mut ()));
-                Outcome(Box::leak(boxed_result) as *mut Result<*mut (), Error> as *mut ())
-            }
-            Err(error) => {
-                let boxed_result = Box::new(Result::<*mut (), Error>::Err(error));
-                Outcome(Box::leak(boxed_result) as *mut Result<*mut (), Error> as *mut ())
-            }
-        }
-    }
 }
 
 #[no_mangle]
@@ -152,13 +139,6 @@ where
         ))),
     }
 }
-
-// fn from_ptr<T>(ok: *const T) -> Outcome {
-//     Outcome {
-//         ok: ok as *const () as *mut (),
-//         err: std::ptr::null(),
-//     }
-// }
 
 #[no_mangle]
 pub extern "C" fn parse_datetime(s: *const c_char, fmt: *const c_char) -> Outcome {

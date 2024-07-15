@@ -2,12 +2,18 @@
  * One simple example of the use of cjyafn in C directly, to debug the interface between
  * C and Go. To run, do:
  * ```
- * gcc jyafn.c ../target/release/libcjyafn.a -lm && ./a.out
+ * gcc cjyafn/jyafn.c && ./a.out
  * ```
  */
 
 #include <stdio.h>
-#include "cjyafn.h"
+#include <stdlib.h>
+#include <stdbool.h>
+#include <dlfcn.h>
+
+#define FUNC_PATH "jyafn-go/pkg/jyafn/testdata/simple-ttl.jyafn"
+#define JSON "{\"virtual_provider_code\":\"BKX\",\"is_available\":false,\"day_distance\":1234}"
+// #define JSON "{\"virtual_provider_code\":\"BKS\",\"is_available\":false,\"day_distance\":1234}"
 
 typedef struct {
     char* buffer;
@@ -18,7 +24,7 @@ READ read_file() {
     char* buffer = 0;
     long length;
     READ contents;
-    FILE * f = fopen("testdata/silly-map.jyafn", "rb");
+    FILE * f = fopen(FUNC_PATH, "rb");
 
     if (f) {
         fseek (f, 0, SEEK_END);
@@ -37,28 +43,77 @@ READ read_file() {
     return contents;
 }
 
-void main() {
+int main(int argc, char** argv) {
+    // Load shared object:
+    void* handle;
+    void* (*function_eval_json)(void*, char*);
+    void* (*function_load)(char*, size_t);
+    bool (*outcome_is_ok)(void*);
+    void* (*outcome_consume_ok)(void*);
+    char* (*outcome_consume_err)(void*);
+
+    handle = dlopen("/usr/local/lib/libcjyafn.so", RTLD_LAZY);
+    if (!handle) {
+        printf("so not found");
+        return 1;
+    }
+
+    *(void**)(&function_eval_json) = dlsym(handle, "function_eval_json");
+    if (!function_eval_json) {
+        printf("function_eval_json not found");
+        return 1;
+    }
+
+    *(void**)(&function_load) = dlsym(handle, "function_load");
+    if (!function_load) {
+        printf("function_load not found");
+        return 1;
+    }
+
+    *(void**)(&outcome_is_ok) = dlsym(handle, "outcome_is_ok");
+    if (!outcome_is_ok) {
+        printf("outcome_is_ok not found");
+        return 1;
+    }
+
+    *(void**)(&outcome_consume_ok) = dlsym(handle, "outcome_consume_ok");
+    if (!outcome_consume_ok) {
+        printf("outcome_is_ok not found");
+        return 1;
+    }
+
+    *(void**)(&outcome_consume_err) = dlsym(handle, "outcome_consume_err");
+    if (!outcome_consume_err) {
+        printf("outcome_consume_err not found");
+        return 1;
+    }
+
+    // Load file:
+
     READ contents = read_file();
     if (contents.buffer == 0) {
         printf("failed to read file\n");
-        exit(1);
+        return 1;
     }
 
-    Outcome out = function_load(contents.buffer, contents.length);
-    if (out.err != 0) {
-        printf(error_to_string(out.err));
-        // free(out.err);
-        exit(1);
+    void* outcome = function_load(contents.buffer, contents.length);
+    if (!outcome_is_ok(outcome)) {
+        char* err =(char*)(outcome_consume_err(outcome));
+        printf("error loading function: %s", err);
+        return 1;
     }
 
-    void* func = out.ok;
-
-    out = function_eval_json(func, "{\"a\": 4.0, \"x\": \"a\"}");
-    if (out.err != 0) {
-        printf(error_to_string(out.err));
-        // free(out.err);
-        exit(1);
+    void* func = outcome_consume_ok(outcome);
+    
+    outcome = function_eval_json(func, JSON);
+    if (!outcome_is_ok(outcome)) {
+        char* err =(char*)(outcome_consume_err(outcome));
+        printf("error calling function: %s", err);
+        return 1;
     }
 
-    printf("outcome = %s\n", out.ok);
+    char** result = (char**)(outcome_consume_ok(outcome));
+    printf("%s", *result);
+
+    return 0;
 }

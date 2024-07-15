@@ -33,7 +33,7 @@ pub enum Error {
     Type(Box<dyn Op>, Vec<Type>),
     #[error("reference for {0:?} has already been defined")]
     AlreadyDefined(String),
-    #[error("{0}")]
+    #[error("io error: {0}")]
     Io(std::io::Error),
     #[error("found illegal instruction: {0}")]
     IllegalInstruction(String),

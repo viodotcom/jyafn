@@ -235,7 +235,7 @@ fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
     let output = NamedTempFile::new()?;
     std::fs::write(&input, unlinked)?;
 
-    let linker = Command::new("gcc")
+    let linker = Command::new("ld")
         .arg("-shared")
         .arg(input)
         .arg("-o")
