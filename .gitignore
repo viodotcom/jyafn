@@ -6,3 +6,4 @@
 **/*.pyc
 **/*.jyafn
 **/*.whl
+**/a.out

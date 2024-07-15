@@ -4,6 +4,9 @@
 qbe:
 	cd vendored/qbe && make clean && make qbe && ./qbe -h
 
+# qbe:
+# 	cd vendored/qbe && make qbe && ./qbe -h
+
 cjyafn: qbe
 	cargo build --release
 
