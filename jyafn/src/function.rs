@@ -1,5 +1,5 @@
 use get_size::GetSize;
-use object::Object;
+use libloading::Library;
 use std::ffi::{c_char, CStr};
 use std::{
     cell::RefCell,
@@ -7,6 +7,7 @@ use std::{
     io::{Read, Seek},
     sync::Arc,
 };
+use tempfile::NamedTempFile;
 use thread_local::ThreadLocal;
 
 use super::{layout, Error, Graph, Type};
@@ -16,7 +17,8 @@ pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> *const c_char;
 #[derive(Debug)]
 pub struct FunctionData {
     graph: Graph,
-    code: memmap::Mmap,
+    _library: Library,
+    library_len: u64,
     input_layout: layout::Layout,
     output_layout: layout::Layout,
     input_size: usize,
@@ -29,7 +31,7 @@ pub struct FunctionData {
 impl GetSize for FunctionData {
     fn get_heap_size(&self) -> usize {
         self.graph.get_heap_size()
-            + self.code.len()
+            + self.library_len as usize
             + self.input_layout.get_heap_size()
             + self.output_layout.get_heap_size()
             + self
@@ -96,25 +98,19 @@ impl Function {
         graph.compile()
     }
 
-    pub(crate) fn init(graph: Graph, shared_object: Vec<u8>) -> Result<Function, Error> {
-        let mut mmap = memmap::MmapMut::map_anon(shared_object.len())?;
-        mmap.clone_from_slice(&shared_object);
-        let code = mmap.make_exec()?;
-
-        let obj = object::read::File::parse(code.as_ref())?;
-
-        #[cfg(target_os = "macos")]
-        const ENTRYPOINT: &[u8] = b"_run";
-        #[cfg(target_os = "linux")]
-        const ENTRYPOINT: &[u8] = b"run";
-
-        let exports = obj.exports()?;
-        let entry = exports
-            .into_iter()
-            .find(|export| export.name() == ENTRYPOINT)
-            .expect("entrypoint not found");
-        let start_ptr = code.as_ptr().wrapping_add(entry.address() as usize);
-        let fn_ptr: RawFn = unsafe { std::mem::transmute(start_ptr) };
+    pub(crate) fn init(graph: Graph, shared_object: NamedTempFile) -> Result<Function, Error> {
+        let library = unsafe {
+            // Safety: shared object was complied straignt from the linker into the
+            // temporary file, unless some spooky process was able to change the file
+            // contents in the mean time (highy unlikely).
+            Library::new(shared_object.path())?
+        };
+        let symbol: libloading::Symbol<RawFn> = unsafe {
+            // Safety: all jyafn shared objects have this function with this given signature.
+            // Also, `library` will be held by the current function until it is dropped.
+            library.get(b"run\0")?
+        };
+        let fn_ptr: RawFn = *symbol;
 
         let input_layout = graph.input_layout.clone();
         let output_layout = graph.output_layout.clone();
@@ -122,7 +118,8 @@ impl Function {
         let output_size_in_floats = output_layout.size();
 
         let mut data = FunctionData {
-            code,
+            _library: library,
+            library_len: std::fs::metadata(shared_object.path())?.len(),
             input_size: input_size_in_floats * Type::Float.size(),
             input_layout: input_layout.into(),
             output_size: output_size_in_floats * Type::Float.size(),

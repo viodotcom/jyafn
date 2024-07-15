@@ -44,7 +44,7 @@ pub enum Error {
     #[error("linker failed with status {status}: {err}")]
     Linker { status: ExitStatus, err: String },
     #[error("loader error: {0}")]
-    Loader(object::Error),
+    Loader(libloading::Error),
     #[error("function raised status: {0}")]
     StatusRaised(String),
     #[error("encode error: {0}")]
@@ -77,8 +77,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<object::Error> for Error {
-    fn from(err: object::Error) -> Error {
+impl From<libloading::Error> for Error {
+    fn from(err: libloading::Error) -> Error {
         Error::Loader(err)
     }
 }
@@ -264,9 +264,25 @@ mod test {
 
         let num = -4.0;
         let abs: f64 = func
-            .eval(&serde_json::to_value(format!("{{ \"a\": {num} }}")).unwrap())
+            .eval(
+                &serde_json::from_str::<serde_json::Value>(&format!("{{ \"a\": {num} }}")).unwrap(),
+            )
             .unwrap();
 
         println!("abs({num}) = {abs}");
+    }
+
+    #[test]
+    fn integration() {
+        let func = Function::load(
+            std::fs::File::open("../jyafn-go/pkg/jyafn/testdata/simple-ttl.jyafn").unwrap(),
+        )
+        .unwrap();
+
+        let result: serde_json::Value = func.eval(&serde_json::from_str::<serde_json::Value>(
+            "{\"virtual_provider_code\":\"BKX\",\"is_available\":false,\"day_distance\":1234}"
+        ).unwrap()).unwrap();
+
+        println!("{result:?}");
     }
 }

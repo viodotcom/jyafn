@@ -5,6 +5,7 @@ use std::{
     io::Write,
     process::{Command, Stdio},
 };
+use tempfile::NamedTempFile;
 
 use crate::Function;
 
@@ -228,17 +229,17 @@ fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     Ok(std::fs::read(output)?)
 }
 
-fn link(unlinked: &[u8]) -> Result<Vec<u8>, Error> {
+fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
     let tempdir = tempfile::tempdir()?;
     let input = tempdir.path().join("main.o");
-    let output = tempdir.path().join("main.so");
+    let output = NamedTempFile::new()?;
     std::fs::write(&input, unlinked)?;
 
     let linker = Command::new("gcc")
         .arg("-shared")
         .arg(input)
         .arg("-o")
-        .arg(&output)
+        .arg(output.path())
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
         .output()?;
@@ -249,5 +250,5 @@ fn link(unlinked: &[u8]) -> Result<Vec<u8>, Error> {
         });
     }
 
-    Ok(std::fs::read(output)?)
+    Ok(output)
 }
