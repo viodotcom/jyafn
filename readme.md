@@ -67,24 +67,16 @@ fmt.Println(result, "==", 8.0)
 
 ## How to use it
 
-For all cases, unfortuately you will need `gcc` or `clang` installed (they are _not_ build dependencies!), since we need an assembler and a linker to finish QBE's job. Also, `jyafn` is guaranteed not to work in Windows. For your specific programming language, see below:
+For all cases, unfortuately you will need GNU's `binutils` (or equivalent) installed (it is _not_ a build dependency!), since we need an assembler and a linker to finish QBE's job. In most computers, it's most likely already installed (as part of `gcc` or Python). However, this is a detail that you need to be aware when, e.g., building a Docker image. Also, `jyafn` is guaranteed not to work in Windows. For your specific programming environment, see below:
 
 ### Python
 
-#### Download from GitHub
+#### Get the package from PyPI
 
-You can use the following snippet of code to install `jyafn` from GitHub releases, using the `gh` GitHub CLI:
+This is the most convenient way of getting `jyafn`:
 ```sh
-PY=cp311 && \
-V="0.1.0" && \
-LATEST=$(gh release list -R FindHotel/jyafn | head -n1 | awk '{print $1}') && \
-FILE=jyafn_python-$V-$PY-$PY-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
-rm -f $FILE && \
-gh release download -R FindHotel/jyafn -p $FILE && \
-pip -m pip install --force-reinstall $FILE
+pip install jyafn
 ```
-Remeber to substitute foryour python version. In the above example, we are using `cp311` (Python 3.11).
-
 
 #### Build from source
 Clone the repo, then
@@ -108,7 +100,6 @@ You can use this as a Go module:
 ```go
 import "github.com/viodotcom/jyafn/jyafn-go/pkg/jyafn"
 ```
-Please note that this package depends on CGO under the hood.
 
 ## FAQ
 
@@ -135,7 +126,7 @@ You bet! There is a benchmark in `./jyafn-python/tests/simple_graph.py` at which
 
 ### Which programming languages are supported?
 
-By now, Go, Rust, Python and C. You can use the `cjyafn` library to port `jyafn` to your language.
+By now, Go, Rust, Python and C. You can use the `cjyafn` library to port `jyafn` to your language. Compiled shared objects are available as GitHub releases for this repo.
 
 ### What is the current status of the project?
 
