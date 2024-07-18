@@ -34,10 +34,10 @@ impl Op for Assert {
             false_side.clone(),
         ));
         func.add_block(false_side);
-        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Global(format!(
-            "{namespace}.error.{}",
-            self.0
-        )))));
+        super::render_return_error(
+            func,
+            qbe::Value::Global(format!("{namespace}.error.{}", self.0)),
+        );
         func.add_block(true_side);
     }
 

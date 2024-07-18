@@ -41,13 +41,14 @@ pub fn insert_in_current<O: rust::Op>(op: O, args: Vec<rust::Ref>) -> PyResult<R
     try_with_current(|g| Ok(Ref(g.insert(op, args).map_err(ToPyErr)?)))
 }
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 #[derive(Clone)]
 pub struct Graph(pub(crate) Arc<Mutex<rust::Graph>>);
 
 #[pymethods]
 impl Graph {
     #[new]
+    #[pyo3(signature = (name=None))]
     pub fn new(name: Option<String>) -> Graph {
         if let Some(name) = name {
             Graph(Arc::new(Mutex::new(rust::Graph::new_with_name(name))))
@@ -121,6 +122,10 @@ impl Graph {
         get_size::GetSize::get_size(&*self.0.lock().expect("poisoned"))
     }
 
+    pub fn __getstate__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        self.dump(py)
+    }
+
     pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let mut bytes = Vec::<u8>::new();
         self.0
@@ -146,6 +151,12 @@ impl Graph {
         Ok(Graph(Arc::new(Mutex::new(
             rust::Graph::load(std::io::Cursor::new(bytes.as_bytes())).map_err(ToPyErr)?,
         ))))
+    }
+
+    pub fn __setstate__(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<()> {
+        *self.0.lock().expect("poisoned") =
+            rust::Graph::load(std::io::Cursor::new(bytes.as_bytes())).map_err(ToPyErr)?;
+        Ok(())
     }
 
     pub fn to_json(&self) -> String {
@@ -203,12 +214,13 @@ impl Graph {
 
     fn compile(&self) -> PyResult<Function> {
         Ok(Function {
-            inner: self
-                .0
-                .lock()
-                .expect("poisoned")
-                .compile()
-                .map_err(ToPyErr)?,
+            inner: Some(
+                self.0
+                    .lock()
+                    .expect("poisoned")
+                    .compile()
+                    .map_err(ToPyErr)?,
+            ),
             original: None,
         })
     }

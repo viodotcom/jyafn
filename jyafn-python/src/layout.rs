@@ -218,6 +218,7 @@ impl Layout {
     }
 
     #[staticmethod]
+    #[pyo3(signature = (format=None))]
     fn datetime(format: Option<String>) -> Layout {
         Layout(rust::layout::Layout::DateTime(
             format.unwrap_or_else(|| rust::layout::ISOFORMAT.to_string()),

@@ -12,7 +12,26 @@ use thread_local::ThreadLocal;
 
 use super::{layout, Error, Graph, Type};
 
-pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> *const c_char;
+pub struct FnError(Option<String>);
+
+impl FnError {
+    fn take(&mut self) -> String {
+        self.0.take().expect("can only call take once")
+    }
+
+    pub(crate) unsafe extern "C" fn make_static(s: *const c_char) -> *mut FnError {
+        let boxed = Box::new(Self(Some(CStr::from_ptr(s).to_string_lossy().to_string())));
+        Box::leak(boxed)
+    }
+}
+
+impl From<String> for FnError {
+    fn from(s: String) -> FnError {
+        FnError(Some(s))
+    }
+}
+
+pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> *mut FnError;
 
 #[derive(Debug)]
 pub struct FunctionData {
@@ -140,7 +159,7 @@ impl Function {
         })
     }
 
-    pub fn call_raw<I, O>(&self, input: I, mut output: O) -> *const c_char
+    pub fn call_raw<I, O>(&self, input: I, mut output: O) -> *mut FnError
     where
         I: AsRef<[u8]>,
         O: AsMut<[u8]>,
@@ -162,13 +181,13 @@ impl Function {
     {
         let mut output = vec![0; self.data.output_size].into_boxed_slice();
         let status = self.call_raw(input, &mut output);
-        if status == std::ptr::null() {
+        if status == std::ptr::null_mut() {
             Ok(output)
         } else {
             // Safety: null was checked and the function pinky-promisses to return a valid
             // C string in case of error.
-            let error = unsafe { CStr::from_ptr(status) };
-            Err(Error::StatusRaised(error.to_string_lossy().to_string()))
+            let mut error = unsafe { Box::from_raw(status) };
+            Err(Error::StatusRaised(error.take()))
         }
     }
 
@@ -206,11 +225,11 @@ impl Function {
 
         // Call:
         let status = self.call_raw(&encode_visitor.0, &mut decode_visitor.0);
-        if status != std::ptr::null() {
+        if status != std::ptr::null_mut() {
             // Safety: null was checked and the function pinky-promisses to return a valid
             // C string in case of error.
-            let error = unsafe { CStr::from_ptr(status) };
-            return Err(Error::StatusRaised(error.to_string_lossy().to_string()));
+            let mut error = unsafe { Box::from_raw(status) };
+            return Err(Error::StatusRaised(error.take()));
         }
 
         // Deserialization dance:

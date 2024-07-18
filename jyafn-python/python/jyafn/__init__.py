@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from .np_dropin import *
 
 
+__version__ = fn.__get_version()
+
+
 class BaseAnnotation(ABC):
     """
     The base class of all annotations used to annotate parameters and return types of
@@ -262,13 +265,14 @@ class GraphFactory:
         if self.cache and self._cached is not None:
             return self._cached
 
-        signature = inspect.signature(self.original)
+        type_hints = typing.get_type_hints(self.original)
         with fn.Graph(name=f"{self.original.__qualname__}") as g:
             inputs = {
-                arg: _input_from_annotation(arg, param.annotation)
-                for arg, param in signature.parameters.items()
+                arg: _input_from_annotation(arg, param)
+                for arg, param in type_hints.items()
+                if arg != "return"
             }
-            _ret_from_annotation(self.original(**inputs), signature.return_annotation)
+            _ret_from_annotation(self.original(**inputs), type_hints["return"])
 
         for key, value in self.metadata.items():
             g.set_metadata(str(key), str(value))

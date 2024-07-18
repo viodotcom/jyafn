@@ -124,6 +124,22 @@ impl Ref {
         insert_in_current(rust::op::Abs, vec![self.0])
     }
 
+    fn __floor__(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("floor".to_string()), vec![self.0])
+    }
+
+    fn __ceil__(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("ceil".to_string()), vec![self.0])
+    }
+
+    fn __trunc__(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("trunc".to_string()), vec![self.0])
+    }
+
+    fn __rouns__(&self) -> PyResult<Ref> {
+        insert_in_current(rust::op::Call("round".to_string()), vec![self.0])
+    }
+
     fn __eq__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
         let other = Ref::make(other)?;
         insert_in_current(rust::op::Eq(None), vec![self.0, other.0])

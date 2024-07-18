@@ -6,21 +6,35 @@ use std::sync::{Arc, Mutex};
 
 use super::{Graph, Layout, ToPyErr};
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 pub struct Function {
-    pub(crate) inner: rust::Function,
+    pub(crate) inner: Option<rust::Function>,
     /// The original python function that created this function
     pub(crate) original: Option<PyObject>,
 }
 
+impl Function {
+    fn inner(&self) -> &rust::Function {
+        self.inner.as_ref().expect("inner not set")
+    }
+}
+
 #[pymethods]
 impl Function {
+    #[new]
+    fn new() -> Function {
+        Function {
+            inner: None,
+            original: None,
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "<jyafn {} {} -> {} at {:#x}>",
-            self.inner.graph().name(),
-            self.inner.input_layout(),
-            self.inner.output_layout(),
+            self.inner().graph().name(),
+            self.inner().input_layout(),
+            self.inner().output_layout(),
             self.fn_ptr(),
         )
     }
@@ -28,16 +42,16 @@ impl Function {
     fn __str__(&self) -> String {
         format!(
             "<jyafn {} {} -> {} at {:#x}>",
-            self.inner.graph().name(),
-            self.inner.input_layout(),
-            self.inner.output_layout(),
+            self.inner().graph().name(),
+            self.inner().input_layout(),
+            self.inner().output_layout(),
             self.fn_ptr(),
         )
     }
 
     #[getter]
     fn __doc__(&self) -> Option<&str> {
-        self.inner
+        self.inner()
             .graph()
             .metadata()
             .get("jyafn.doc")
@@ -46,32 +60,32 @@ impl Function {
 
     #[getter]
     fn name(&self) -> String {
-        self.inner.graph().name().to_string()
+        self.inner().graph().name().to_string()
     }
 
     #[getter]
     fn input_size(&self) -> usize {
-        self.inner.input_size()
+        self.inner().input_size()
     }
 
     #[getter]
     fn output_size(&self) -> usize {
-        self.inner.output_size()
+        self.inner().output_size()
     }
 
     #[getter]
     fn input_layout(&self) -> Layout {
-        Layout(self.inner.input_layout().clone())
+        Layout(self.inner().input_layout().clone())
     }
 
     #[getter]
     fn output_layout(&self) -> Layout {
-        Layout(self.inner.output_layout().clone())
+        Layout(self.inner().output_layout().clone())
     }
 
     #[getter]
     fn fn_ptr(&self) -> usize {
-        self.inner.fn_ptr() as *const () as usize
+        self.inner().fn_ptr() as *const () as usize
     }
 
     #[getter]
@@ -85,20 +99,20 @@ impl Function {
     }
 
     fn get_size(&self) -> usize {
-        get_size::GetSize::get_size(&self.inner)
+        get_size::GetSize::get_size(&self.inner())
     }
 
     #[staticmethod]
     pub fn load(bytes: &[u8]) -> PyResult<Function> {
         Ok(Function {
-            inner: rust::Function::load(std::io::Cursor::new(bytes)).map_err(ToPyErr)?,
+            inner: Some(rust::Function::load(std::io::Cursor::new(bytes)).map_err(ToPyErr)?),
             original: None,
         })
     }
 
     pub fn dump<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let mut bytes = Vec::<u8>::new();
-        self.inner
+        self.inner()
             .graph()
             .dump(std::io::Cursor::new(&mut bytes))
             .map_err(ToPyErr)?;
@@ -108,35 +122,45 @@ impl Function {
         unsafe { Ok(PyBytes::bound_from_ptr(py, leaked.as_ptr(), leaked.len())) }
     }
 
+    pub fn __getstate__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        self.dump(py)
+    }
+
     pub fn write(&self, path: &str) -> PyResult<()> {
         let file = std::fs::File::create(path)?;
-        self.inner.graph().dump(file).map_err(ToPyErr)?;
+        self.inner().graph().dump(file).map_err(ToPyErr)?;
+        Ok(())
+    }
+
+    pub fn __setstate__(&mut self, bytes: &[u8]) -> PyResult<()> {
+        self.inner = Some(rust::Function::load(std::io::Cursor::new(bytes)).map_err(ToPyErr)?);
+        self.original = None;
         Ok(())
     }
 
     pub fn to_json(&self) -> String {
-        self.inner.graph().to_json()
+        self.inner().graph().to_json()
     }
 
     fn get_graph(&self) -> Graph {
-        Graph(Arc::new(Mutex::new(self.inner.graph().clone())))
+        Graph(Arc::new(Mutex::new(self.inner().graph().clone())))
     }
 
     #[getter]
     fn metadata(&self) -> HashMap<String, String> {
-        self.inner.graph().metadata().clone()
+        self.inner().graph().metadata().clone()
     }
 
     fn eval_raw(&self, args: &[u8]) -> PyResult<Vec<u8>> {
         Ok(self
-            .inner
+            .inner()
             .eval_raw(args)
             .map_err(ToPyErr)
             .map(|o| o.into_vec())?)
     }
 
     fn eval(&self, val: &Bound<'_, PyAny>) -> PyResult<PyObject> {
-        let outcome = self.inner.eval_with_decoder(
+        let outcome = self.inner().eval_with_decoder(
             &crate::layout::Obj(val.clone()),
             crate::layout::PyDecoder(val.py()),
         );
@@ -159,7 +183,7 @@ impl Function {
         let kwargs = kwargs
             .cloned()
             .unwrap_or_else(|| PyDict::new_bound(args.py()));
-        let rust::layout::Layout::Struct(s) = self.inner.input_layout() else {
+        let rust::layout::Layout::Struct(s) = self.inner().input_layout() else {
             panic!("Input should be a struct")
         };
 
@@ -180,10 +204,11 @@ impl Function {
         self.eval(&kwargs)
     }
 
+    #[pyo3(signature = (json, pretty=None))]
     fn eval_json(&self, json: &str, pretty: Option<bool>) -> PyResult<String> {
         let value: serde_json::Value =
             serde_json::from_str(json).map_err(|e| ToPyErr(e.to_string().into()))?;
-        let output: serde_json::Value = self.inner.eval(&value).map_err(ToPyErr)?;
+        let output: serde_json::Value = self.inner().eval(&value).map_err(ToPyErr)?;
 
         Ok(if pretty.unwrap_or(false) {
             serde_json::to_string_pretty(&output)

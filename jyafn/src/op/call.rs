@@ -149,7 +149,7 @@ impl Op for CallGraph {
             end_side.clone(),
         ));
         func.add_block(raise_side);
-        func.add_instr(qbe::Instr::Ret(Some(status)));
+        super::render_return_error(func, status);
         func.add_block(end_side);
         func.assign_instr(output, qbe::Type::Long, qbe::Instr::Copy(output_ptr));
     }

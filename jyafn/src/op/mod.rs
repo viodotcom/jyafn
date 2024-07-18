@@ -7,6 +7,7 @@ mod convert;
 mod list;
 mod logic;
 mod mapping;
+mod resource;
 
 pub use arithmetic::*;
 pub use call::*;
@@ -16,13 +17,14 @@ pub use logic::*;
 
 pub(crate) use list::*;
 pub(crate) use mapping::*;
+pub(crate) use resource::*;
 
 use downcast_rs::{impl_downcast, Downcast};
 use dyn_clone::DynClone;
 use std::fmt::Debug;
 use std::panic::RefUnwindSafe;
 
-use super::{Graph, Ref, Type};
+use super::{FnError, Graph, Ref, Type};
 
 #[typetag::serde(tag = "type")]
 pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcast {
@@ -93,4 +95,17 @@ fn unique_for(v: qbe::Value, prefix: &str) -> String {
     };
 
     format!("{prefix}_{name}")
+}
+
+pub(crate) fn render_return_error(func: &mut qbe::Function, error: qbe::Value) {
+    let error_ptr = qbe::Value::Temporary("__error_ptr".to_string());
+    func.assign_instr(
+        error_ptr.clone(),
+        qbe::Type::Long,
+        qbe::Instr::Call(
+            qbe::Value::Const(FnError::make_static as u64),
+            vec![(qbe::Type::Long, error)],
+        ),
+    );
+    func.add_instr(qbe::Instr::Ret(Some(error_ptr)));
 }

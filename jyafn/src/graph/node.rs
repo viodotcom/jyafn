@@ -44,6 +44,9 @@ impl Display for Type {
     }
 }
 
+/// All slots in jyafn are 64 bits long.
+pub const SIZE: usize = 8;
+
 impl Type {
     pub(crate) fn render(self) -> qbe::Type<'static> {
         match self {
@@ -55,14 +58,8 @@ impl Type {
         }
     }
 
-    pub(crate) fn size(self) -> usize {
-        match self {
-            Type::Float => 8,
-            Type::Bool => 8,
-            Type::Symbol => 8,
-            Type::Ptr { .. } => 8,
-            Type::DateTime => 8,
-        }
+    pub fn size(&self) -> usize {
+        SIZE
     }
 
     fn print(self, val: u64) -> String {

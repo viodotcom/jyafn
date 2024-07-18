@@ -214,7 +214,7 @@ impl Mapping {
         self.storage.as_ref().and_then(|s| s.get(hash(&key)))
     }
 
-    unsafe fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {
+    unsafe extern "C" fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {
         let mapping = &*mapping;
         if let Some(line) = mapping.storage.as_ref().and_then(|s| s.get(hash)) {
             line.as_ptr()

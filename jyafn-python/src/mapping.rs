@@ -84,6 +84,7 @@ impl LazyMapping {
     //     todo()
     // }
 
+    #[pyo3(signature = (key, default=None))]
     fn get(&mut self, key: &Bound<PyAny>, default: Option<&Bound<PyAny>>) -> PyResult<PyObject> {
         if let Some(default) = default {
             graph::try_with_current(|g| {

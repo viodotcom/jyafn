@@ -127,7 +127,7 @@ lazy_static! {
 /// # Safety
 ///
 /// This function is unsafe because _anything_ can be passed as a function pointer,
-/// including stuff that are note function. Its the caller responsibility to check that
+/// including stuff that are not a function. Its the caller responsibility to check that
 /// `fn_ptr` is in fact a function pointer and that the arguments match the signature
 /// given.
 ///

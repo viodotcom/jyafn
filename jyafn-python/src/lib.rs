@@ -5,6 +5,7 @@ mod graph;
 mod layout;
 mod mapping;
 mod pfunc;
+mod resource;
 
 use pyo3::exceptions;
 use pyo3::prelude::*;
@@ -23,6 +24,7 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Type>()?;
     m.add_class::<Function>()?;
     m.add_class::<IndexedList>()?;
+    m.add_function(wrap_pyfunction!(__get_version, m)?)?;
     m.add_function(wrap_pyfunction!(read_metadata, m)?)?;
     m.add_function(wrap_pyfunction!(read_graph, m)?)?;
     m.add_function(wrap_pyfunction!(read_fn, m)?)?;
@@ -40,6 +42,11 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pfunc::init(m)?;
 
     Ok(())
+}
+
+#[pyfunction]
+fn __get_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 pub struct ToPyErr(pub rust::Error);
@@ -190,6 +197,7 @@ fn read_metadata(file: &str) -> PyResult<HashMap<String, String>> {
 }
 
 #[pyfunction]
+#[pyo3(signature = (file, initialize=None))]
 fn read_graph(file: &str, initialize: Option<bool>) -> PyResult<Graph> {
     let initialize = initialize.unwrap_or(true);
     let file = std::fs::File::open(file)?;
@@ -206,7 +214,7 @@ fn read_fn(file: &str) -> PyResult<Function> {
     let file = std::fs::File::open(file)?;
     let inner = rust::Function::load(file).map_err(ToPyErr)?;
     Ok(Function {
-        inner,
+        inner: Some(inner),
         original: None,
     })
 }
@@ -217,6 +225,7 @@ fn putative_layout(obj: &Bound<PyAny>) -> PyResult<Layout> {
 }
 
 #[pyfunction]
+#[pyo3(signature = (name, layout=None))]
 fn input(py: Python, name: String, layout: Option<Layout>) -> PyResult<PyObject> {
     if let Some(layout) = layout {
         graph::try_with_current(|g| pythonize_ref_value(py, g.input(name, layout.0)))
