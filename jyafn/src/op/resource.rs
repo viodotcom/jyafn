@@ -1,7 +1,6 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::resource::ResourceContainer;
 use crate::{impl_is_eq, impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
@@ -50,14 +49,8 @@ impl Op for CallResource {
         let raise_side = unique_for(output.clone(), "callresource.raise");
         let end_side = unique_for(output.clone(), "callresource.end");
 
-        let input_size = method
-            .input_layout
-            .slots()
-            .len() as u64;
-        let output_size = method
-            .output_layout
-            .slots()
-            .len() as u64;
+        let input_size = method.input_layout.slots().len() as u64;
+        let output_size = method.output_layout.slots().len() as u64;
 
         func.assign_instr(
             input_ptr.clone(),
@@ -92,14 +85,16 @@ impl Op for CallResource {
             );
         }
 
-        let resource_ptr = resource.as_ref() as *const ResourceContainer;
         func.assign_instr(
             status.clone(),
             qbe::Type::Long,
             qbe::Instr::Call(
                 qbe::Value::Const(method.fn_ptr as *const () as u64),
                 vec![
-                    (qbe::Type::Long, qbe::Value::Const(resource_ptr as u64)),
+                    (
+                        qbe::Type::Long,
+                        qbe::Value::Const(resource.get_raw_ptr() as u64),
+                    ),
                     (qbe::Type::Long, input_ptr),
                     (qbe::Type::Long, qbe::Value::Const(input_size)),
                     (qbe::Type::Long, output_ptr.clone()),

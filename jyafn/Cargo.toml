@@ -29,6 +29,7 @@ memmap = "0.7.0"
 no-panic = "0.1.29"
 qbe = { path = "../vendored/qbe-rs" }
 rand = "0.8.5"
+scopeguard = "1.2.0"
 serde = { version = "1.0.197", features = ["rc"] }
 serde_derive = "1.0.197"
 serde_json = "1.0.115"

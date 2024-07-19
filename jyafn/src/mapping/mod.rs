@@ -77,7 +77,7 @@ pub trait Storage: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     fn get(&self, hash: u64) -> Option<&Buffer>;
     /// The ammount of heap used by this storage.
     fn size(&self) -> usize;
-    fn dump(&self) -> Result<Vec<u8>, Error>;
+    fn dump(&self) -> Vec<u8>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -117,8 +117,8 @@ impl Storage for HashTable {
                 .sum::<usize>()
     }
 
-    fn dump(&self) -> Result<Vec<u8>, Error> {
-        Ok(bincode::serialize(&self.0).expect("serialization never fails"))
+    fn dump(&self) -> Vec<u8> {
+        bincode::serialize(&self.0).expect("serialization never fails")
     }
 }
 
@@ -185,7 +185,7 @@ impl Mapping {
         })
     }
 
-    pub(crate) fn dump(&self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn dump(&self) -> Vec<u8> {
         self.storage
             .as_ref()
             .expect("storage not initialized")

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::layout::{Layout, Struct};
 use crate::Error;
 
-use super::{Input, OutputBuilder, Resource, ResourceContainer, ResourceMethod, ResourceType};
+use super::{Input, OutputBuilder, Resource, ResourceMethod, ResourceType};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Dummy;
@@ -50,8 +50,7 @@ impl Resource for DummyResource {
     }
 
     fn dump(&self) -> Result<Vec<u8>, Error> {
-        let string = self.number_to_divide.to_string();
-        Ok(string.into())
+        Ok(self.number_to_divide.to_string().into())
     }
 
     fn size(&self) -> usize {
@@ -60,24 +59,22 @@ impl Resource for DummyResource {
 }
 
 fn dummy_get(
-    container: &ResourceContainer,
+    resource: &DummyResource,
     input: Input,
     mut output_builder: OutputBuilder,
 ) -> Result<(), String> {
-    container.with_resource(|_resource_type: &Dummy, resource: &DummyResource| {
-        let result = input.get_f64(0) / resource.number_to_divide;
-        if !result.is_finite() {
-            return Err("result was not finite".to_string());
-        }
-        output_builder.push_f64(result);
-        Ok(())
-    })
+    let result = input.get_f64(0) / resource.number_to_divide;
+    if !result.is_finite() {
+        return Err("result was not finite".to_string());
+    }
+    output_builder.push_f64(result);
+    Ok(())
 }
 
 fn dummy_panic(
-    container: &ResourceContainer,
+    _resource: &DummyResource,
     _input: Input,
     _output_builder: OutputBuilder,
 ) -> Result<(), String> {
-    container.with_resource(|_resource_type: &Dummy, _resource: &DummyResource| panic!("panic!"))
+    panic!("panic!")
 }

@@ -12,9 +12,9 @@ use std::{
     collections::HashMap,
     error::Error as StdError,
     fmt::Debug,
+    pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
     sync::Arc,
-    pin::Pin,
 };
 
 use super::{

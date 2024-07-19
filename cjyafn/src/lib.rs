@@ -594,7 +594,7 @@ pub extern "C" fn function_call_raw(
                 func.call_raw(input, output)
             }) {
                 Ok(status) => status,
-                Err(_le_oops) => b"operation panicked (see stderr)\0".as_ptr() as *const c_char,
+                Err(_le_oops) => b"function raw call panicked (see stderr)\0".as_ptr() as *const c_char,
             }
         })
     }

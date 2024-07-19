@@ -4,6 +4,7 @@
 compile_error!("Currently `jyafn` only works in 64-bit atchitectures");
 
 pub mod r#const;
+pub mod extension;
 pub mod layout;
 pub mod mapping;
 pub mod op;

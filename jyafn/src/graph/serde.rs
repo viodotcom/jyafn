@@ -22,7 +22,7 @@ impl Graph {
 
         for (name, mapping) in &self.mappings {
             writer.start_file(format!("{name}.mapping"), SimpleFileOptions::default())?;
-            writer.write_all(&mapping.dump()?)?;
+            writer.write_all(&mapping.dump())?;
         }
 
         for (name, resources) in &self.resources {

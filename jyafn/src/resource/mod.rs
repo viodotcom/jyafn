@@ -1,7 +1,7 @@
-pub mod lightgbm;
 pub mod dummy;
+pub mod external;
+pub mod lightgbm;
 
-use downcast_rs::{impl_downcast, Downcast};
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 use std::io::Read;
@@ -16,7 +16,7 @@ use crate::{Error, FnError};
 
 /// The signature of the function that will be invoked from inside the function code.
 pub type RawResourceMethod =
-    unsafe extern "C" fn(*const ResourceContainer, *const u8, u64, *mut u8, u64) -> *mut FnError;
+    unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut FnError;
 
 /// A safe convenience macro for method call. This macro does three things for you:
 /// 1. Converts the raw pointer to a reference.
@@ -40,27 +40,26 @@ pub type RawResourceMethod =
 macro_rules! safe_method {
     ($safe_interface:ident) => {{
         pub unsafe extern "C" fn safe_interface(
-            container_ptr: *const ResourceContainer,
+            resource_ptr: *const (),
             input_ptr: *const u8,
             input_slots: u64,
             output_ptr: *mut u8,
             output_slots: u64,
         ) -> *mut $crate::FnError {
             match std::panic::catch_unwind(|| {
-                let container: &$crate::resource::ResourceContainer = unsafe {
-                    // Safety: this pointer came from jyafn code.
-                    &*container_ptr
-                };
-                let input = unsafe {
-                    // Safety: this pointer and length came from jyafn code.
-                    $crate::resource::Input::new(input_ptr, input_slots as usize)
-                };
-                let output = unsafe {
-                    // Safety: this pointer and length came from jyafn code.
-                    $crate::resource::OutputBuilder::new(output_ptr, output_slots as usize)
-                };
+                unsafe {
+                    // Safety: all this stuff came from jyafn code. The jyafn code should
+                    // provide valid parameters. Plus, it's the responsibility of the
+                    // implmementer guarantee that the types match.
 
-                $safe_interface(container, input, output)
+                    let resource = &*(resource_ptr as *const _);
+
+                    $safe_interface(
+                        resource,
+                        $crate::resource::Input::new(input_ptr, input_slots as usize),
+                        $crate::resource::OutputBuilder::new(output_ptr, output_slots as usize),
+                    )
+                }
             }) {
                 Ok(Ok(())) => std::ptr::null_mut(),
                 Ok(Err(err)) => {
@@ -79,6 +78,7 @@ macro_rules! safe_method {
     }};
 }
 
+#[derive(Debug)]
 pub struct ResourceMethod {
     pub(crate) fn_ptr: RawResourceMethod,
     pub(crate) input_layout: Struct,
@@ -88,9 +88,7 @@ pub struct ResourceMethod {
 /// A `ResourceType` creates resources of a givnen type. Think of this as the "class
 /// object" of resources.
 #[typetag::serde(tag = "type")]
-pub trait ResourceType:
-    std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe + Downcast
-{
+pub trait ResourceType: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     /// Creates a resource out of binary data.
     fn from_bytes(&self, bytes: &[u8]) -> Result<Pin<Box<dyn Resource>>, Error>;
     /// Gets information on a method name for this resource, if it exists.
@@ -98,7 +96,7 @@ pub trait ResourceType:
 
     /// Reads a resource from a zip file entry.
     ///
-    /// Override this method if you know a more efficient of loading the resouce other
+    /// Override this method if you know a more efficient of loading the resource other
     /// than reading the file to a buffer and then parsing the resulting buffer.
     fn read(&self, mut f: ZipFile<'_>) -> Result<Pin<Box<dyn Resource>>, Error> {
         let mut buffer = Vec::new();
@@ -107,14 +105,10 @@ pub trait ResourceType:
     }
 }
 
-impl_downcast!(ResourceType);
-
 /// A `Resource` is an amount of data associated with "methods", much like an object in
 /// OO languages, but simpler. Specifically, resources shoud _not_ (ever!) support
 /// mutation. Resources are immutable pices of data.
-pub trait Resource:
-    'static + std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe + Downcast
-{
+pub trait Resource: 'static + std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     /// Returns the type of this resource. This has to be the same value that, if applied
     /// to the output of `Resource:dump`, will again yield this exact resource.
     fn r#type(&self) -> Arc<dyn ResourceType>;
@@ -122,9 +116,18 @@ pub trait Resource:
     fn dump(&self) -> Result<Vec<u8>, Error>;
     /// The ammount of heap used by this storage.
     fn size(&self) -> usize;
-}
 
-impl_downcast!(Resource);
+    /// Optional extra integrity checks, to be done _only_ during deserialization.
+    fn integrity_check(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    /// The raw pointer to be used in jyafn code. Just override this method if you know
+    /// _very well_ what you are doing.
+    fn get_raw_ptr(&self) -> *const () {
+        self as *const Self as *const ()
+    }
+}
 
 /// A holder of a resource.
 #[derive(Debug, Serialize, Deserialize)]
@@ -192,39 +195,25 @@ impl ResourceContainer {
         self.resource.is_some()
     }
 
-    /// Gets a information on a method for the containted resource, if it exists.
-    pub fn get_method(&self, method: &str) -> Option<ResourceMethod> {
-        self.resource_type.get_method(method)
-    }
-
-    /// Gets the resource as the supplied type. This method panics if the container is
-    /// not initialized or if the contained resource is not of type `R`.
-    pub fn get_resource<R: Resource>(&self) -> &R {
+    pub fn get_raw_ptr(&self) -> *const () {
         self.resource
             .as_ref()
             .expect("resource not initialized")
-            .downcast_ref::<R>()
-            .expect("cannot downcast resource to the specified type")
+            .get_raw_ptr()
     }
 
-    /// Gets the resource type as the supplied type. This method panics if the container
-    /// is not initialized or if the contained resource type is not of type `T`.
-    pub fn get_resource_type<T: ResourceType>(&self) -> &T {
-        self.resource_type
-            .downcast_ref::<T>()
-            .expect("cannot downcast resource to the specified type")
+    /// Gets the underlying resource as a dynamic pointer. This function panics if the
+    /// resource is not initialized.
+    pub fn resource(&self) -> Pin<&dyn Resource> {
+        self.resource
+            .as_ref()
+            .expect("resource not initialized")
+            .as_ref()
     }
 
-    /// Executes a function over the resource.  This method panics if the container is
-    /// not initialized or if either the contained resource type is not of type `T` or
-    /// the resource is not of type `R`.
-    pub fn with_resource<F, T, R, U>(&self, f: F) -> U
-    where
-        T: ResourceType,
-        R: Resource,
-        F: FnOnce(&T, &R) -> U,
-    {
-        f(self.get_resource_type(), self.get_resource())
+    /// Gets a information on a method for the containted resource, if it exists.
+    pub fn get_method(&self, method: &str) -> Option<ResourceMethod> {
+        self.resource_type.get_method(method)
     }
 }
 

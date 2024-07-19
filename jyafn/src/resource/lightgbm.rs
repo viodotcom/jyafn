@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::layout::{Layout, Struct};
 use crate::Error;
 
-use super::{Input, OutputBuilder, Resource, ResourceContainer, ResourceMethod, ResourceType};
+use super::{Input, OutputBuilder, Resource, ResourceMethod, ResourceType};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Lightgbm {
@@ -20,10 +20,28 @@ struct Lightgbm {
 #[typetag::serde]
 impl ResourceType for Lightgbm {
     fn from_bytes(&self, bytes: &[u8]) -> Result<Pin<Box<dyn Resource>>, Error> {
-        Ok(Box::pin(LightgbmResource {
-            booster: Booster::from_string(&String::from_utf8_lossy(bytes))
-                .map_err(|err| err.to_string())?,
-        }))
+        let booster =
+            Booster::from_string(&String::from_utf8_lossy(bytes)).map_err(|err| err.to_string())?;
+
+        if booster.num_features() != self.n_features {
+            return Err(format!(
+                "Expected {} features, got {}",
+                self.n_features,
+                booster.num_features(),
+            )
+            .into());
+        }
+
+        if booster.num_classes() != self.n_classes {
+            return Err(format!(
+                "Expected {} classes, got {}",
+                self.n_classes,
+                booster.num_classes(),
+            )
+            .into());
+        }
+
+        Ok(Box::pin(LightgbmResource { booster }))
     }
 
     fn get_method(&self, method: &str) -> Option<ResourceMethod> {
@@ -64,8 +82,11 @@ impl Resource for LightgbmResource {
     }
 
     fn dump(&self) -> Result<Vec<u8>, Error> {
-        let string = self.booster.save_string().map_err(|err| err.to_string())?;
-        Ok(string.into())
+        Ok(self
+            .booster
+            .save_string()
+            .map_err(|err| err.to_string())?
+            .into())
     }
 
     /// We cannot know the size of this model.
@@ -75,21 +96,18 @@ impl Resource for LightgbmResource {
 }
 
 fn predict_method(
-    container: &ResourceContainer,
+    resource: &LightgbmResource,
     input: Input,
     mut output_builder: OutputBuilder,
 ) -> Result<(), String> {
-    container.with_resource(
-        |resource_type: &Lightgbm, resource: &LightgbmResource| match resource.booster.predict(
-            input.as_f64_slice(),
-            resource_type.n_features,
-            true,
-        ) {
-            Ok(classes) => {
-                output_builder.copy_from_f64(&classes);
-                Ok(())
-            }
-            Err(err) => Err(err.to_string()),
-        },
-    )
+    match resource
+        .booster
+        .predict(input.as_f64_slice(), resource.booster.num_features(), true)
+    {
+        Ok(classes) => {
+            output_builder.copy_from_f64(&classes);
+            Ok(())
+        }
+        Err(err) => Err(err.to_string()),
+    }
 }
