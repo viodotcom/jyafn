@@ -173,6 +173,7 @@ impl Mapping {
         })
     }
 
+    #[must_use]
     pub(crate) fn read(&self, f: ZipFile<'_>) -> Result<Self, Error> {
         let storage = self.storage_type.read(f)?;
         Ok(Mapping {

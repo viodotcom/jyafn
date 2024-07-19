@@ -1,4 +1,5 @@
 pub mod lightgbm;
+pub mod dummy;
 
 use downcast_rs::{impl_downcast, Downcast};
 use get_size::GetSize;
@@ -13,6 +14,7 @@ use zip::read::ZipFile;
 use crate::layout::{Layout, Struct};
 use crate::{Error, FnError};
 
+/// The signature of the function that will be invoked from inside the function code.
 pub type RawResourceMethod =
     unsafe extern "C" fn(*const ResourceContainer, *const u8, u64, *mut u8, u64) -> *mut FnError;
 
@@ -67,7 +69,7 @@ macro_rules! safe_method {
                 }
                 // DON'T forget the nul character when working with bytes directly!
                 Err(_) => {
-                    let boxed = Box::new("method panicked. See stdout".to_string().into());
+                    let boxed = Box::new("method panicked. See stderr".to_string().into());
                     Box::leak(boxed)
                 }
             }
@@ -159,6 +161,7 @@ impl ResourceContainer {
         }
     }
 
+    /// Creates a new initialized container for the given boxed resource.
     pub fn new_boxed(resource: Pin<Box<dyn Resource>>) -> ResourceContainer {
         ResourceContainer {
             resource_type: resource.r#type(),
@@ -167,6 +170,7 @@ impl ResourceContainer {
     }
 
     /// Reads the resource from a zip file entry.
+    #[must_use]
     pub(crate) fn read(&self, f: ZipFile<'_>) -> Result<Self, Error> {
         let resource = self.resource_type.read(f)?;
         Ok(ResourceContainer {
@@ -267,6 +271,15 @@ impl<'a> Input<'a> {
 pub struct OutputBuilder<'a> {
     position: usize,
     slice: &'a mut [MaybeUninit<u64>],
+}
+
+impl<'a> Drop for OutputBuilder<'a> {
+    fn drop(&mut self) {
+        // This prevents any uninitialized memory from ever being read.
+        while self.position < self.slice.len() {
+            self.push_u64(0)
+        }
+    }
 }
 
 impl<'a> OutputBuilder<'a> {

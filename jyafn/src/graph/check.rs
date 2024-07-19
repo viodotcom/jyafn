@@ -66,9 +66,15 @@ fn topsort(graph: &Graph) -> Result<(), Error> {
 
 /// Checks that no pointers are present in the output.
 fn pointers(graph: &Graph) -> Result<(), Error> {
+    for &input in &graph.inputs {
+        if matches!(input, Type::Ptr { .. }) {
+            return Err(format!("found pointer type in input").into());
+        }
+    }
+
     for &output in &graph.outputs {
         if matches!(graph.type_of(output), Type::Ptr { .. }) {
-            return Err(format!("Found pointer type in output").into());
+            return Err(format!("found pointer type in output").into());
         }
     }
 

@@ -53,25 +53,21 @@ impl Op for CallResource {
         let input_size = method
             .input_layout
             .slots()
-            .into_iter()
-            .map(|ty| ty.size())
-            .sum::<usize>() as u64;
+            .len() as u64;
         let output_size = method
             .output_layout
             .slots()
-            .into_iter()
-            .map(|ty| ty.size())
-            .sum::<usize>() as u64;
+            .len() as u64;
 
         func.assign_instr(
             input_ptr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Alloc8(input_size),
+            qbe::Instr::Alloc8(input_size * 8),
         );
         func.assign_instr(
             output_ptr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Alloc8(output_size),
+            qbe::Instr::Alloc8(output_size * 8),
         );
 
         func.assign_instr(

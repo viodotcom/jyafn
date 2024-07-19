@@ -82,7 +82,7 @@ impl Graph {
                 continue;
             };
 
-            mapping.read(file)?;
+            *mapping = mapping.read(file)?.into();
         }
 
         for id in 0..archive.len() {
@@ -94,7 +94,7 @@ impl Graph {
                 continue;
             };
 
-            resource.read(file)?;
+            *resource = resource.read(file)?.into();
         }
 
         check::run_checks(&mut graph)?;

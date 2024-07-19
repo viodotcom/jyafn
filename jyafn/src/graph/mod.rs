@@ -40,9 +40,6 @@ pub struct Graph {
     pub(crate) symbols: Symbols,
     pub(crate) errors: Vec<String>,
     pub(crate) mappings: HashMap<String, Arc<mapping::Mapping>>,
-    #[serde(skip_serializing)]
-    #[serde(skip_deserializing)]
-    #[serde(default)]
     pub(crate) resources: HashMap<String, Arc<ResourceContainer>>,
     pub(crate) subgraphs: Vec<Graph>,
 }

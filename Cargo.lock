@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "jyafn-python"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "byte-slice-cast",
  "chrono",

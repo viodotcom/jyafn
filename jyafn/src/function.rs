@@ -12,9 +12,13 @@ use thread_local::ThreadLocal;
 
 use super::{layout, Error, Graph, Type};
 
+/// The error type returned from the compiled function. If you need to create a new error
+/// from your code, use `String::into`.
 pub struct FnError(Option<String>);
 
 impl FnError {
+    /// Takes the underlying error message from this error. Calling this method more than
+    /// once will result in a panic.
     fn take(&mut self) -> String {
         self.0.take().expect("can only call take once")
     }
@@ -31,6 +35,7 @@ impl From<String> for FnError {
     }
 }
 
+/// The function signature exposed from jyafn.
 pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> *mut FnError;
 
 #[derive(Debug)]
