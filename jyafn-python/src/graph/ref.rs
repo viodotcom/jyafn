@@ -7,7 +7,7 @@ use super::{
     depythonize_ref_value, insert_in_current, pythonize_ref_value, try_with_current, ToPyErr,
 };
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 #[derive(Clone)]
 pub struct Ref(pub(crate) rust::Ref);
 

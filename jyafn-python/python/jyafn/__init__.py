@@ -219,16 +219,16 @@ def _ret_from_annotation(ret: Any, a: Any) -> None:
     match a:
         case inspect._empty:
             layout = fn.putative_layout(ret)
+        case type() if a is type(None):
+            ret = None
+            layout = unit.make_layout(())
         case type():
             ret = a.transform_output(ret)
             layout = a.make_layout(())
-        case types.GenericAlias():
+        case types.GenericAlias() if True:
             origin = typing.get_origin(a)
             ret = origin.transform_output(ret)
             layout = origin.make_layout(typing.get_args(a))
-        case None:
-            ret = unit.transform_output(a)
-            layout = unit.make_layout(())
         case _:
             raise Exception(f"Invalid return annotation for jyafn: {a}")
 

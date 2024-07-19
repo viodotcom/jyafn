@@ -5,7 +5,7 @@ use pyo3::types::PyDict;
 use super::layout::Obj;
 use super::{depythonize_ref_value, graph, pythonize_ref_value, Layout, ToPyErr};
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 pub struct LazyMapping {
     is_consumed: bool,
     name: String,

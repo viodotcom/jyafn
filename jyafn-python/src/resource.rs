@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 
 use super::{depythonize_ref_value, graph, pythonize_ref_value, ToPyErr};
 
-#[pyclass]
-struct ResourceType(Box<dyn rust::resource::ResourceType>);
+#[pyclass(module = "jyafn")]
+pub struct ResourceType(Box<dyn rust::resource::ResourceType>);
 
 #[pymethods]
 impl ResourceType {
@@ -31,8 +31,8 @@ impl ResourceType {
     }
 }
 
-#[pyclass]
-struct LazyResource {
+#[pyclass(module = "jyafn")]
+pub struct LazyResource {
     resource: Arc<Mutex<Option<Pin<Box<dyn rust::resource::Resource>>>>>,
     name: String,
 }
@@ -48,8 +48,8 @@ impl LazyResource {
     }
 }
 
-#[pyclass]
-struct LazyResourceCall {
+#[pyclass(module = "jyafn")]
+pub struct LazyResourceCall {
     resource: Arc<Mutex<Option<Pin<Box<dyn rust::resource::Resource>>>>>,
     name: String,
     method_name: String,

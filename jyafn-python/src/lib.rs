@@ -39,6 +39,10 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<mapping::LazyMapping>()?;
 
+    m.add_class::<resource::ResourceType>()?;
+    m.add_class::<resource::LazyResource>()?;
+    m.add_class::<resource::LazyResourceCall>()?;
+
     pfunc::init(m)?;
 
     Ok(())
@@ -57,7 +61,7 @@ impl From<ToPyErr> for PyErr {
     }
 }
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 #[derive(Clone)]
 struct Type(rust::Type);
 

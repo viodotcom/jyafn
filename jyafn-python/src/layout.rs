@@ -140,7 +140,7 @@ impl<'py> Decoder for PyDecoder<'py> {
     }
 }
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 #[derive(Clone)]
 pub struct Layout(pub(crate) rust::layout::Layout);
 
