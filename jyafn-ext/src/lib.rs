@@ -96,7 +96,7 @@ macro_rules! extension {
 
         #[no_mangle]
         pub extern "C" fn extension_init() -> *const c_char {
-            fn extension_init() -> String {
+            fn safe_extension_init() -> String {
                 let manifest = $crate::serde_json::json!({
                     "outcome": {
                         "fn_get_err": "outcome_get_err",
@@ -125,7 +125,7 @@ macro_rules! extension {
 
             std::panic::catch_unwind(|| {
                 // This leak will never be un-leaked.
-                let boxed = CString::new(extension_init())
+                let boxed = CString::new(safe_extension_init())
                     .expect("json output shouldn't contain nul characters")
                     .into_boxed_c_str();
                 let c_str = Box::leak(boxed);
