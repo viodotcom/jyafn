@@ -105,7 +105,7 @@ macro_rules! extension {
                     },
                     "dumped": {
                         "fn_get_ptr": "dump_get_ptr",
-                        "fn_get_len": "dump_get_ptr",
+                        "fn_get_len": "dump_get_len",
                         "fn_drop": "dump_drop"
                     },
                     "resources": {$(

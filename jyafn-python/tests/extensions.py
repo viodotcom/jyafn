@@ -57,3 +57,19 @@ except Exception:
     traceback.print_exc()
 else:
     raise Exception("should raise")
+
+
+@fn.func
+def with_resources(x: fn.scalar) -> fn.scalar:
+    resource_type = fn.ResourceType.from_json(
+        '{"type":"External","extension":"dummy","resource":"Dummy"}'
+    )
+    resource = resource_type.load("my_resource", b"2.5")
+    the_result = resource.get(x=x)
+
+    return the_result
+
+
+serialized = with_resources.write("with_resources.jyafn")
+deserialized = fn.read_fn("with_resources.jyafn")
+assert deserialized(2.5) == 1.0
