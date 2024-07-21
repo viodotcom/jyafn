@@ -2,7 +2,6 @@
 //! be corrupted in ways that mere deserialization cannot detect, be they malicious or
 //! unintentional.
 
-use crate::Context;
 use crate::Error;
 
 use super::{Graph, Ref, Type};
@@ -103,11 +102,6 @@ fn resources_initialized(graph: &Graph) -> Result<(), Error> {
                 format!("while reading zip archive, resource {name} was not initialized").into(),
             );
         }
-
-        resource
-            .resource()
-            .integrity_check()
-            .with_context(|| format!("while checking integrity of resource {name}"))?;
     }
 
     Ok(())

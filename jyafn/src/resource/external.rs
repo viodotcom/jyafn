@@ -1,24 +1,39 @@
 use serde_derive::{Deserialize, Serialize};
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::extension::{Extension, ExternalMethod, RawResource, ResourceSymbols};
+use crate::extension::{Dumped, Extension, ExternalMethod, RawResource, ResourceSymbols};
 use crate::Error;
 
 use super::{Resource, ResourceMethod, ResourceType};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct External {
+struct External {
     extension: String,
     resource: String,
-    config: String,
 }
 
 impl External {
+    fn load_extension(&self) -> Result<(), Error> {
+        crate::extension::load(&self.extension)?;
+        let extension = crate::extension::get(&self.extension);
+
+        if extension.get_resource(&self.resource).is_none() {
+            return Err(format!(
+                "extension {} has no resource type named {}",
+                self.extension, self.resource
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+
     fn extension(&self) -> Arc<Extension> {
         crate::extension::get(&self.extension)
     }
+
     fn resource(&self) -> ResourceSymbols {
         self.extension()
             .get_resource(&self.resource)
@@ -29,6 +44,10 @@ impl External {
 #[typetag::serde]
 impl ResourceType for External {
     fn from_bytes(&self, bytes: &[u8]) -> Result<Pin<Box<dyn Resource>>, Error> {
+        // The _only_ way to create an `ExternalResource` is through this function. This
+        // guarantees that the extension was initalized and that the resource exists.
+        self.load_extension()?;
+
         let extension = self.extension();
         let resource = self.resource();
         let outcome = unsafe {
@@ -48,37 +67,6 @@ impl ResourceType for External {
             r#type: self.clone(),
             ptr: RawResource(raw_ptr),
         }))
-    }
-
-    fn get_method(&self, method: &str) -> Option<ResourceMethod> {
-        let c_method =
-            CStr::from_bytes_until_nul(method.as_bytes()).expect("method cannot contain nul bytes");
-        let c_config = CStr::from_bytes_until_nul(self.config.as_bytes())
-            .expect("config cannot contain nul bytes");
-        let resource = self.resource();
-
-        let external_method = unsafe {
-            // Safety: extension is correctly implemented.
-            let maybe_method = (resource.fn_get_method_def)(c_method.as_ptr(), c_config.as_ptr());
-            if maybe_method == std::ptr::null_mut() {
-                return None;
-            }
-            scopeguard::defer! {
-                (resource.fn_drop_method_def)(maybe_method)
-            }
-
-            serde_json::from_slice::<ExternalMethod>(CStr::from_ptr(maybe_method).to_bytes())
-                .expect("badly formed json from fn_get_method call")
-        };
-
-        Some(ResourceMethod {
-            fn_ptr: unsafe {
-                // Safety: this should have been a valid address in the extension side.
-                std::mem::transmute(external_method.fn_ptr)
-            },
-            input_layout: external_method.input_layout,
-            output_layout: external_method.output_layout,
-        })
     }
 }
 
@@ -115,23 +103,14 @@ impl Resource for ExternalResource {
 
     fn dump(&self) -> Result<Vec<u8>, Error> {
         let resource = self.r#type.resource();
+        let extension = self.r#type.extension();
         unsafe {
             // Safety: extension is correctly implemented.
-            let maybe_dump = (resource.fn_dump)(self.ptr);
-            if maybe_dump.0 == std::ptr::null_mut() {
+            let maybe_outcome = (resource.fn_dump)(self.ptr);
+            if maybe_outcome.0 == std::ptr::null_mut() {
                 return Err(format!("dumped resource for {:?} was null", self.r#type).into());
             }
-            scopeguard::defer! {
-                (resource.fn_drop_dump)(maybe_dump)
-            }
-
-            let dump_ptr = (resource.fn_dump_ptr)(maybe_dump);
-            if dump_ptr == std::ptr::null_mut() {
-                return Err(format!("dump location for {:?} was null", self.r#type).into());
-            }
-            let dump_len = (resource.fn_dump_len)(maybe_dump);
-
-            Ok(std::slice::from_raw_parts(dump_ptr, dump_len).to_vec())
+            extension.dumped_to_vec(Dumped(extension.outcome_to_result(maybe_outcome)?))
         }
     }
 
@@ -144,5 +123,33 @@ impl Resource for ExternalResource {
 
     fn get_raw_ptr(&self) -> *const () {
         self.ptr.0 as *const ()
+    }
+
+    fn get_method(&self, method: &str) -> Option<ResourceMethod> {
+        let c_method = CString::new(method.as_bytes()).expect("method cannot contain nul bytes");
+        let resource = self.r#type.resource();
+
+        let external_method = unsafe {
+            // Safety: extension is correctly implemented.
+            let maybe_method = (resource.fn_get_method_def)(self.ptr, c_method.as_ptr());
+            if maybe_method == std::ptr::null_mut() {
+                return None;
+            }
+            scopeguard::defer! {
+                (resource.fn_drop_method_def)(maybe_method)
+            }
+
+            serde_json::from_slice::<ExternalMethod>(CStr::from_ptr(maybe_method).to_bytes())
+                .expect("badly formed json from fn_get_method call")
+        };
+
+        Some(ResourceMethod {
+            fn_ptr: unsafe {
+                // Safety: this should have been a valid address in the extension side.
+                std::mem::transmute(external_method.fn_ptr)
+            },
+            input_layout: external_method.input_layout,
+            output_layout: external_method.output_layout,
+        })
     }
 }

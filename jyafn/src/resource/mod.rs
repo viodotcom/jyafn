@@ -1,7 +1,7 @@
 pub mod dummy;
 pub mod external;
-pub mod lightgbm;
 
+use byte_slice_cast::*;
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 use std::io::Read;
@@ -18,66 +18,6 @@ use crate::{Error, FnError};
 pub type RawResourceMethod =
     unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut FnError;
 
-/// A safe convenience macro for method call. This macro does three things for you:
-/// 1. Converts the raw pointer to a reference.
-/// 2. Converts the pointers into slices correctly.
-/// 3. Treats possible panics, converting them to errors. Panics are always unwanted, but
-/// panicking through an FFI boundary is UB. Therefore, this treatment is always necessary.
-///
-/// # Usage
-///
-/// ```
-/// fn safe(
-///     container: &ResourceContainer, input: Input, output: OutputBuilder,
-/// ) -> Result<(), &'static CStr> {
-///     // ...
-///     todo!()
-/// }
-///
-/// safe_method!(safe)
-/// ```
-#[macro_export]
-macro_rules! safe_method {
-    ($safe_interface:ident) => {{
-        pub unsafe extern "C" fn safe_interface(
-            resource_ptr: *const (),
-            input_ptr: *const u8,
-            input_slots: u64,
-            output_ptr: *mut u8,
-            output_slots: u64,
-        ) -> *mut $crate::FnError {
-            match std::panic::catch_unwind(|| {
-                unsafe {
-                    // Safety: all this stuff came from jyafn code. The jyafn code should
-                    // provide valid parameters. Plus, it's the responsibility of the
-                    // implmementer guarantee that the types match.
-
-                    let resource = &*(resource_ptr as *const _);
-
-                    $safe_interface(
-                        resource,
-                        $crate::resource::Input::new(input_ptr, input_slots as usize),
-                        $crate::resource::OutputBuilder::new(output_ptr, output_slots as usize),
-                    )
-                }
-            }) {
-                Ok(Ok(())) => std::ptr::null_mut(),
-                Ok(Err(err)) => {
-                    let boxed = Box::new(err.to_string().into());
-                    Box::leak(boxed)
-                }
-                // DON'T forget the nul character when working with bytes directly!
-                Err(_) => {
-                    let boxed = Box::new("method panicked. See stderr".to_string().into());
-                    Box::leak(boxed)
-                }
-            }
-        }
-
-        safe_interface
-    }};
-}
-
 #[derive(Debug)]
 pub struct ResourceMethod {
     pub(crate) fn_ptr: RawResourceMethod,
@@ -91,8 +31,6 @@ pub struct ResourceMethod {
 pub trait ResourceType: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     /// Creates a resource out of binary data.
     fn from_bytes(&self, bytes: &[u8]) -> Result<Pin<Box<dyn Resource>>, Error>;
-    /// Gets information on a method name for this resource, if it exists.
-    fn get_method(&self, method: &str) -> Option<ResourceMethod>;
 
     /// Reads a resource from a zip file entry.
     ///
@@ -116,11 +54,8 @@ pub trait Resource: 'static + std::fmt::Debug + Send + Sync + UnwindSafe + RefUn
     fn dump(&self) -> Result<Vec<u8>, Error>;
     /// The ammount of heap used by this storage.
     fn size(&self) -> usize;
-
-    /// Optional extra integrity checks, to be done _only_ during deserialization.
-    fn integrity_check(&self) -> Result<(), Error> {
-        Ok(())
-    }
+    /// Gets information on a method name for this resource, if it exists.
+    fn get_method(&self, method: &str) -> Option<ResourceMethod>;
 
     /// The raw pointer to be used in jyafn code. Just override this method if you know
     /// _very well_ what you are doing.
@@ -213,7 +148,10 @@ impl ResourceContainer {
 
     /// Gets a information on a method for the containted resource, if it exists.
     pub fn get_method(&self, method: &str) -> Option<ResourceMethod> {
-        self.resource_type.get_method(method)
+        self.resource
+            .as_ref()
+            .expect("resource not initialized")
+            .get_method(method)
     }
 }
 
@@ -245,10 +183,10 @@ impl<'a> Input<'a> {
     }
 
     pub fn as_f64_slice(&self) -> &[f64] {
-        unsafe {
-            // Safety: f64 and u64 have the same size and offset.
-            std::mem::transmute(self.0)
-        }
+        self.0
+            .as_byte_slice()
+            .as_slice_of()
+            .expect("f64 and u64 have the same size")
     }
 
     pub fn as_u64_slice(&self) -> &[u64] {

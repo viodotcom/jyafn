@@ -4,7 +4,8 @@ use lazy_static::lazy_static;
 use libloading::{Library, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, CStr, CString};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use crate::layout::{Layout, Struct};
@@ -39,6 +40,8 @@ pub struct Dumped(pub(crate) *mut ());
 pub struct ExtensionManifest {
     /// Describes the symbols to be used when accessing outcomes of fallible operations.
     outcome: OutcomeManifest,
+    /// Describes the symbols to be used when accessing buffers of binary memory.
+    dumped: DumpedManifest,
     /// Describes the symbols to be used when interfacing with each resource type provided
     /// by this extension.
     resources: HashMap<String, ResourceManifest>,
@@ -54,6 +57,16 @@ pub struct OutcomeManifest {
     fn_drop: String,
 }
 
+/// Lists the names of the symbols needed to create the interface between a dump of
+/// binary data and jyafn. See [`DumpedSymbols`] for detailed information on the
+/// contract for each symbol.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DumpedManifest {
+    fn_get_ptr: String,
+    fn_get_len: String,
+    fn_drop: String,
+}
+
 /// Lists the names of the symbols needed to create the interface between a resource and
 /// jyafn. See [`ResourceSymbols`] for detailed information on the contract for each
 /// symbol.
@@ -61,9 +74,6 @@ pub struct OutcomeManifest {
 pub struct ResourceManifest {
     fn_from_bytes: String,
     fn_dump: String,
-    fn_dump_ptr: String,
-    fn_dump_len: String,
-    fn_drop_dump: String,
     fn_size: String,
     fn_get_method_def: String,
     fn_drop_method_def: String,
@@ -78,17 +88,17 @@ pub struct ExternalMethod {
 }
 
 /// Checks for nul chars in the provided string and returns a nul-termindated slice.
-fn str_to_symbol_name(s: &str) -> Result<&[u8], Error> {
-    Ok(CStr::from_bytes_until_nul(s.as_bytes())
+fn str_to_symbol_name(s: &str) -> Result<Vec<u8>, Error> {
+    Ok(CString::new(s)
         .map_err(|err| err.to_string())?
-        .to_bytes_with_nul())
+        .into_bytes_with_nul())
 }
 
 /// Gets a symbol from a library. This returns a copy of the symbol, to skip the lifetime
 /// checking mechanism of `libloading`. We will manually guarantee that the library is
 /// always present in memory (up to and including using `std::mem::forget` if necessary).
 unsafe fn get_symbol<T: Copy>(library: &Library, name: &str) -> Result<T, Error> {
-    Ok(*library.get::<T>(str_to_symbol_name(name)?)?)
+    Ok(*library.get::<T>(&str_to_symbol_name(name)?)?)
 }
 
 /// Lists the names of the symbols needed to create the interface between an outcome and
@@ -124,6 +134,36 @@ impl OutcomeSymbols {
     }
 }
 
+/// Lists the names of the symbols needed to create the interface between a buffer of
+/// binary data jyafn.
+#[derive(Debug)]
+pub struct DumpedSymbols {
+    /// Gets the starting pointer of the binary representation.
+    pub(crate) fn_get_len: unsafe extern "C" fn(Dumped) -> usize,
+    /// Gets the length of the binary representation.
+    pub(crate) fn_get_ptr: unsafe extern "C" fn(Dumped) -> *const u8,
+    /// Drops any allocated memory created for this given dump. Will be called only once
+    /// per dump.
+    pub(crate) fn_drop: unsafe extern "C" fn(Dumped),
+}
+
+impl DumpedSymbols {
+    /// Loads the outcome symbols from the supplied library, given a manifest.
+    unsafe fn load(library: &Library, manifest: &DumpedManifest) -> Result<DumpedSymbols, Error> {
+        /// For building structs that are symbol tables.
+        macro_rules! symbol {
+            ($($sym:ident),*) => { Self {$(
+                $sym: get_symbol(library, &manifest.$sym).context(
+                        concat!("getting symbol for ", stringify!($sym)
+                    )
+                )?,
+            )*}}
+        }
+
+        Ok(symbol!(fn_get_len, fn_get_ptr, fn_drop))
+    }
+}
+
 /// Lists the names of the symbols needed to create the interface between a resource and
 /// jyafn.
 #[derive(Debug, Clone)]
@@ -132,20 +172,13 @@ pub(crate) struct ResourceSymbols {
     /// data that is returned by the `fn_dump` function.
     pub(crate) fn_from_bytes: unsafe extern "C" fn(*const u8, usize) -> Outcome,
     /// Creates a dump, which points to the binary representation of the supplied resource.
-    pub(crate) fn_dump: unsafe extern "C" fn(RawResource) -> Dumped,
-    /// Gets the starting pointer of the binary representation.
-    pub(crate) fn_dump_len: unsafe extern "C" fn(Dumped) -> usize,
-    /// Gets the length of the binary representation.
-    pub(crate) fn_dump_ptr: unsafe extern "C" fn(Dumped) -> *const u8,
-    /// Drops any allocated memory created for this given dump. Will be called only once
-    /// per dump.
-    pub(crate) fn_drop_dump: unsafe extern "C" fn(Dumped),
+    pub(crate) fn_dump: unsafe extern "C" fn(RawResource) -> Outcome,
     /// Gets the amount of heap memory (ie RAM) allocated by this resource.
     pub(crate) fn_size: unsafe extern "C" fn(RawResource) -> usize,
     /// Given the `name` of a method and its `config` (i.e., aditional parameters) as
     /// C-style strings, returns the JSON representation of an [`ExternalMethod`] as a
     /// C-style string.
-    pub(crate) fn_get_method_def: unsafe extern "C" fn(*const c_char, *const c_char) -> *mut c_char,
+    pub(crate) fn_get_method_def: unsafe extern "C" fn(RawResource, *const c_char) -> *mut c_char,
     /// Drops any allocated memory created for this given method definition. Will be
     /// called only once per method definiton created by `fn_get_method_def`.
     pub(crate) fn_drop_method_def: unsafe extern "C" fn(*mut c_char),
@@ -174,9 +207,6 @@ impl ResourceSymbols {
         Ok(symbol!(
             fn_from_bytes,
             fn_dump,
-            fn_dump_ptr,
-            fn_dump_len,
-            fn_drop_dump,
             fn_size,
             fn_get_method_def,
             fn_drop_method_def,
@@ -199,6 +229,8 @@ pub struct Extension {
     _library: Library,
     /// Describes the symbols to be used when accessing outcomes of fallible operations.
     outcome: OutcomeSymbols,
+    /// Describes the symbols to be used when accessing buffers of binary memory.
+    dumped: DumpedSymbols,
     /// Describes the symbols to be used when interfacing with each resource type provided
     /// by this extension.
     resources: HashMap<String, ResourceSymbols>,
@@ -207,22 +239,25 @@ pub struct Extension {
 impl Extension {
     /// Loads an extension, given a path. This path is OS-specific and will be resolved
     /// by the OS acording to its own quirky rules.
-    pub(crate) fn load(path: &str) -> Result<Extension, Error> {
+    pub(crate) fn load(path: PathBuf) -> Result<Extension, Error> {
         unsafe {
             // Safety: we can only pray nobody loads anything funny here. However, it's
             // not my responsibilty what kind of crap you install in your computer.
-            let library = Library::new(path)?;
+            let library = Library::new(&path)?;
             let extension_init: Symbol<ExtensionInit> = library.get(EXTENSION_INIT_SYMBOL)?;
             let outcome = extension_init();
             if outcome == std::ptr::null_mut() {
-                return Err(format!("library at {path} failed to load").into());
+                return Err(format!("library {path:?} failed to load").into());
             }
             let manifest: ExtensionManifest =
                 serde_json::from_slice(CStr::from_ptr(outcome).to_bytes())
                     .map_err(|err| err.to_string())?;
 
             let outcome = OutcomeSymbols::load(&library, &manifest.outcome)
-                .with_context(|| format!("loading outcome symbols from {path}"))?;
+                .with_context(|| format!("loading `outcome` symbols from {path:?}"))?;
+
+            let dumped = DumpedSymbols::load(&library, &manifest.dumped)
+                .with_context(|| format!("loading `dumped` symbols from {path:?}"))?;
 
             let resources = manifest
                 .resources
@@ -231,7 +266,7 @@ impl Extension {
                     Ok((
                         name.clone(),
                         ResourceSymbols::load(&library, resource)
-                            .with_context(|| format!("loading resource {name} from {path}"))?,
+                            .with_context(|| format!("loading resource {name:?} from {path:?}"))?,
                     ))
                 })
                 .collect::<Result<_, Error>>()?;
@@ -239,12 +274,13 @@ impl Extension {
             Ok(Extension {
                 _library: library,
                 outcome,
+                dumped,
                 resources,
             })
         }
     }
 
-    /// Gets a raw `Outcome` pointer and makes it into a result. This method is considered safe because
+    /// Gets a raw `Outcome` pointer and makes it into a result.
     pub(crate) unsafe fn outcome_to_result(&self, outcome: Outcome) -> Result<*mut (), Error> {
         unsafe {
             // Safety: supposing that the extension is correctly implmented and observing
@@ -267,16 +303,70 @@ impl Extension {
         }
     }
 
+    pub(crate) unsafe fn dumped_to_vec(&self, dumped: Dumped) -> Result<Vec<u8>, Error> {
+        unsafe {
+            // Safety: supposing that the extension is correctly implmented and observing
+            // the contract.
+            scopeguard::defer! {
+                (self.dumped.fn_drop)(dumped)
+            }
+
+            let dump_ptr = (self.dumped.fn_get_ptr)(dumped);
+            if dump_ptr == std::ptr::null_mut() {
+                return Err("dump location was null".to_string().into());
+            }
+            let dump_len = (self.dumped.fn_get_len)(dumped);
+
+            Ok(std::slice::from_raw_parts(dump_ptr, dump_len).to_vec())
+        }
+    }
+
     pub(crate) fn get_resource(&self, name: &str) -> Option<ResourceSymbols> {
         self.resources.get(name).cloned()
     }
 }
 
+#[cfg(target_os = "linux")]
+const SO_EXTENSION: &str = "so";
+#[cfg(target_os = "macos")]
+const SO_EXTENSION: &str = "dylib";
+#[cfg(target_os = "windows")]
+const SO_EXTENSION: &str = "dll";
+
 /// Resolves the nice little name of the library into an ugly path that dlopen can
 /// understand.
-fn resolve_name(name: &str) -> Result<String, Error> {
-    // TODO: something fancier than this...
-    Ok(name.to_owned())
+fn resolve_name(name: &str) -> Result<PathBuf, Error> {
+    if name.contains(['/', '.']) {
+        return Err(format!("extension name {name:?} is invalid").into());
+    }
+
+    let full_path = std::env::var("JYAFN_PATH").unwrap_or_else(|_| {
+        home::home_dir()
+            .map(|home| home.join(".jyafn/extensions").to_string_lossy().to_string())
+            .unwrap_or_default()
+    });
+
+    let mut tried = vec![];
+    for alternative in full_path.split(',') {
+        let alternative = alternative.trim();
+        let path = std::path::absolute(
+            PathBuf::from(alternative)
+                .join(name)
+                .with_extension(SO_EXTENSION),
+        )?;
+
+        if path.exists() {
+            return Ok(path);
+        }
+
+        tried.push(format!("{path:?}"));
+    }
+
+    Err(format!(
+        "failed to resolve extension {name:?} (tried {})",
+        tried.join(", ")
+    )
+    .into())
 }
 
 /// Loads an extension, if it was not loaded before.
@@ -289,7 +379,7 @@ pub fn load(name: &str) -> Result<(), Error> {
     }
 
     let path = resolve_name(name)?;
-    let extension = Extension::load(&path).with_context(|| format!("loading extension {name}"))?;
+    let extension = Extension::load(path).with_context(|| format!("loading extension {name:?}"))?;
 
     lock.insert(name.to_owned(), Arc::new(extension));
 

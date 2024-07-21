@@ -19,10 +19,12 @@ pub struct FnError(Option<String>);
 impl FnError {
     /// Takes the underlying error message from this error. Calling this method more than
     /// once will result in a panic.
-    fn take(&mut self) -> String {
+    pub fn take(&mut self) -> String {
         self.0.take().expect("can only call take once")
     }
 
+    /// This is used from inside jyafn to create an error from static C-style error
+    /// messages.
     pub(crate) unsafe extern "C" fn make_static(s: *const c_char) -> *mut FnError {
         let boxed = Box::new(Self(Some(CStr::from_ptr(s).to_string_lossy().to_string())));
         Box::leak(boxed)
