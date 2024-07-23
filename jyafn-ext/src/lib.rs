@@ -258,7 +258,7 @@ macro_rules! resource {
 ///     }
 ///
 ///     method!(something_safe)  // can only call from inside an impl block!
-///                                   // This is for type safety reasons
+///                              // This is for type safety reasons
 /// }
 ///
 /// ```
@@ -295,7 +295,10 @@ macro_rules! method {
                     }
                     // DON'T forget the nul character when working with bytes directly!
                     Err(_) => {
-                        let boxed = Box::new("method panicked. See stderr".to_string().into());
+                        let boxed = Box::new(format!(
+                            "method {:?} panicked. See stderr",
+                            stringify!($safe_interface),
+                        ).into());
                         Box::leak(boxed)
                     }
                 }
@@ -321,25 +324,34 @@ macro_rules! get_method_ptr {
 /// impl Resource for MyResource {
 ///     // ...
 ///
-///     declare_methods! {
-///         foo_method(x: scalar, y: [datetime; self.size]) -> [datetime; self.size]
+///     fn get_method(&self, method: &str) -> Option<Method> {
+///         declare_methods! {
+///             // This the the variable containing the method name.
+///             match method:
+///                 // Use the layout notation to declare the method (an yes, you can use
+///                 // `self` anywhere in the declaration)
+///                 foo_method(x: scalar, y: [datetime; self.size]) -> [datetime; self.size];
+///         }
 ///     }
 /// }
 /// ```
 #[macro_export]
 macro_rules! declare_methods {
-    ($($safe_interface:ident ($($key:tt : $ty:tt),*) -> $output:tt )*) => {
-        fn get_method(&self, method: &str) -> Option<$crate::Method> {
-            Some(match method {
-                $(
-                    stringify!($safe_interface) => $crate::Method {
-                        fn_ptr: $crate::get_method_ptr!($safe_interface),
-                        input_layout: $crate::r#struct!($($key : $ty),*),
-                        output_layout: $crate::layout!($output),
-                    },
-                )*
-                _ => return None,
-            })
+    ($( $safe_interface:ident ($($key:tt : $ty:tt),*) -> $output:tt; )*) => {
+        $crate::declare_methods! {
+            match method:  $( $safe_interface ($($key : $ty),*) -> $output; )*
         }
-    }
+    };
+    ( match $method:ident : $( $safe_interface:ident ($($key:tt : $ty:tt),*) -> $output:tt; )*) => {
+        Some(match $method {
+            $(
+                stringify!($safe_interface) => $crate::Method {
+                    fn_ptr: $crate::get_method_ptr!($safe_interface),
+                    input_layout: $crate::r#struct!($($key : $ty),*),
+                    output_layout: $crate::layout!($output),
+                },
+            )*
+            _ => return None,
+        })
+    };
 }

@@ -40,13 +40,15 @@ macro_rules! layout {
     (datetime $format:expr) => {
         $crate::Layout::DateTime($format.to_string())
     };
+    (datetime) => {
+        $crate::Layout::DateTime($crate::ISOFORMAT.to_string())
+    };
     (symbol) => {
         $crate::Layout::Symbol
     };
     ([$element:tt; $size:expr]) => {
         $crate::Layout::List(Box::new($crate::layout!($element)), $size)
     }
-
 }
 
 #[macro_export]

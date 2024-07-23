@@ -1,4 +1,4 @@
-use jyafn_ext::Resource;
+use jyafn_ext::{Resource, Method};
 
 jyafn_ext::extension! {
     Dummy
@@ -61,9 +61,12 @@ impl Resource for Dummy {
         Ok::<_, String>(self.number.to_string().into())
     }
 
-    jyafn_ext::declare_methods! {
-        get(x: scalar) -> scalar
-        err(x: scalar) -> scalar
-        panic(x: scalar) -> scalar
+    fn get_method(&self, method: &str) -> Option<Method> {
+        jyafn_ext::declare_methods! {
+            match method:
+                get(x: scalar) -> scalar;
+                err(x: scalar) -> scalar;
+                panic(x: scalar) -> scalar;
+        }
     }
 }
