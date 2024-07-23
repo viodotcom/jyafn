@@ -256,3 +256,69 @@ impl<'a> OutputBuilder<'a> {
         }
     }
 }
+
+/// A safe convenience macro for method call. This macro does three things for you:
+/// 1. Converts the raw pointer to a reference.
+/// 2. Converts the pointers into slices correctly.
+/// 3. Treats possible panics, converting them to errors. Panics are always unwanted, but
+/// panicking through an FFI boundary is UB. Therefore, this treatment is always necessary.
+///
+/// # Usage
+///
+/// ```
+/// impl MyResource {
+///     fn something_safe(
+///         &self,
+///         input: Input,
+///         output: OutputBuilder,
+///     ) -> Result<(), String> {   // or anything else implementing `ToString`...
+///         // ...
+///         todo!()
+///     }
+///
+///     safe_method!(something_safe)  // can only call from inside an impl block!
+///                                   // This is for type safety reasons
+/// }
+///
+/// ```
+#[macro_export]
+macro_rules! safe_method {
+    ($safe_interface:ident) => {{
+        pub unsafe extern "C" fn safe_interface(
+            resource_ptr: *const (),
+            input_ptr: *const u8,
+            input_slots: u64,
+            output_ptr: *mut u8,
+            output_slots: u64,
+        ) -> *mut $crate::FnError {
+            match std::panic::catch_unwind(|| {
+                unsafe {
+                    // Safety: all this stuff came from jyafn code. The jyafn code should
+                    // provide valid parameters. Plus, it's the responsibility of the
+                    // implmementer guarantee that the types match.
+
+                    let resource = &*(resource_ptr as *const _);
+
+                    $safe_interface(
+                        resource,
+                        $crate::resource::Input::new(input_ptr, input_slots as usize),
+                        $crate::resource::OutputBuilder::new(output_ptr, output_slots as usize),
+                    )
+                }
+            }) {
+                Ok(Ok(())) => std::ptr::null_mut(),
+                Ok(Err(err)) => {
+                    let boxed = Box::new(err.to_string().into());
+                    Box::leak(boxed)
+                }
+                // DON'T forget the nul character when working with bytes directly!
+                Err(_) => {
+                    let boxed = Box::new("method panicked. See stderr".to_string().into());
+                    Box::leak(boxed)
+                }
+            }
+        }
+
+        safe_interface
+    }};
+}

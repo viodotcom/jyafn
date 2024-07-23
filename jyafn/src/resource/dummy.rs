@@ -1,5 +1,3 @@
-#![cfg(feature = "lightgbm")]
-
 use serde_derive::{Deserialize, Serialize};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,22 +19,6 @@ impl ResourceType for Dummy {
                 .map_err(|err| err.to_string())?,
         }))
     }
-
-    fn get_method(&self, method: &str) -> Option<ResourceMethod> {
-        match method {
-            "get" => Some(ResourceMethod {
-                fn_ptr: crate::safe_method!(dummy_get),
-                input_layout: Struct(vec![("x".to_string(), Layout::Scalar)]),
-                output_layout: Layout::Scalar,
-            }),
-            "panic" => Some(ResourceMethod {
-                fn_ptr: crate::safe_method!(dummy_panic),
-                input_layout: Struct(vec![]),
-                output_layout: Layout::Scalar,
-            }),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -56,6 +38,27 @@ impl Resource for DummyResource {
     fn size(&self) -> usize {
         0
     }
+
+    fn get_method(&self, method: &str) -> Option<ResourceMethod> {
+        match method {
+            "get" => Some(ResourceMethod {
+                fn_ptr: crate::safe_method!(dummy_get),
+                input_layout: Struct(vec![("x".to_string(), Layout::Scalar)]),
+                output_layout: Layout::Scalar,
+            }),
+            "error" => Some(ResourceMethod {
+                fn_ptr: crate::safe_method!(dummy_error),
+                input_layout: Struct(vec![]),
+                output_layout: Layout::Scalar,
+            }),
+            "panic" => Some(ResourceMethod {
+                fn_ptr: crate::safe_method!(dummy_panic),
+                input_layout: Struct(vec![]),
+                output_layout: Layout::Scalar,
+            }),
+            _ => None,
+        }
+    }
 }
 
 fn dummy_get(
@@ -69,6 +72,14 @@ fn dummy_get(
     }
     output_builder.push_f64(result);
     Ok(())
+}
+
+fn dummy_error(
+    _resource: &DummyResource,
+    _input: Input,
+    _output_builder: OutputBuilder,
+) -> Result<(), String> {
+    Err("oops! wrooong!!".to_string())
 }
 
 fn dummy_panic(

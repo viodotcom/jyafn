@@ -215,8 +215,10 @@ impl ResourceSymbols {
     }
 }
 
+type LoadedExtensionVersions = HashMap<semver::Version, Arc<Extension>>;
+
 lazy_static! {
-    static ref EXTENSIONS: RwLock<HashMap<String, Arc<Extension>>> = RwLock::default();
+    static ref EXTENSIONS: RwLock<HashMap<String, LoadedExtensionVersions>> = RwLock::default();
 }
 
 /// An extension is a wrapper over a shared object comforming to a given interface. This
@@ -224,6 +226,7 @@ lazy_static! {
 /// when interacting with systems that would otherwise be very difficult to interact
 /// with in jyafn, but for which (normally) a C wrapper (or something of that sort) is
 /// readlily available.
+#[derive(Debug)]
 pub struct Extension {
     /// The shared object handle.
     _library: Library,
@@ -333,13 +336,27 @@ const SO_EXTENSION: &str = "dylib";
 #[cfg(target_os = "windows")]
 const SO_EXTENSION: &str = "dll";
 
-/// Resolves the nice little name of the library into an ugly path that dlopen can
-/// understand.
-fn resolve_name(name: &str) -> Result<PathBuf, Error> {
-    if name.contains(['/', '.']) {
+/// Tests whether an extension name is valid or not. Currently allowed are lowercase
+/// ascii, digit ascii or underline, with the first letter being a lowercase.
+fn test_valid_name(name: &str) -> Result<(), Error> {
+    let is_valid = name.starts_with(|ch: char| ch.is_ascii_lowercase())
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_');
+
+    if !is_valid {
         return Err(format!("extension name {name:?} is invalid").into());
     }
 
+    Ok(())
+}
+
+/// Resolves the nice little name of the library into an ugly path that dlopen can
+/// understand.
+fn resolve_name(
+    name: &str,
+    version_req: &semver::VersionReq,
+) -> Result<(semver::Version, PathBuf), Error> {
     let full_path = std::env::var("JYAFN_PATH").unwrap_or_else(|_| {
         home::home_dir()
             .map(|home| home.join(".jyafn/extensions").to_string_lossy().to_string())
@@ -349,17 +366,45 @@ fn resolve_name(name: &str) -> Result<PathBuf, Error> {
     let mut tried = vec![];
     for alternative in full_path.split(',') {
         let alternative = alternative.trim();
-        let path = std::path::absolute(
-            PathBuf::from(alternative)
-                .join(name)
-                .with_extension(SO_EXTENSION),
-        )?;
+        let mut candidates = vec![];
+        let glob = format!("{alternative}/{name}-*.{SO_EXTENSION}");
 
-        if path.exists() {
-            return Ok(path);
+        for path in glob::glob(&glob).map_err(|err| err.to_string())? {
+            let path = path.map_err(glob::GlobError::into_error)?;
+            if path.extension() != Some(SO_EXTENSION.as_ref()) {
+                // not a shared object
+                continue;
+            }
+            let Some(filename_os) = path.file_stem() else {
+                // no file stem
+                continue;
+            };
+            let filename = filename_os.to_string_lossy();
+            let Some(version) = filename.split('-').last() else {
+                // no version part
+                tried.push(format!("{path:?}"));
+                continue;
+            };
+            let Ok(semver) = version.parse::<semver::Version>() else {
+                // not a valid semver
+                tried.push(format!("{path:?}"));
+                continue;
+            };
+
+            if version_req.matches(&semver) {
+                candidates.push((semver, path));
+            } else {
+                // version doesn't match requirements
+                tried.push(format!("{path:?}"));
+            }
         }
 
-        tried.push(format!("{path:?}"));
+        if let Some(best_candidate) = candidates
+            .into_iter()
+            .max_by_key(|(semver, _)| semver.clone())
+        {
+            return Ok(best_candidate);
+        }
     }
 
     Err(format!(
@@ -370,28 +415,38 @@ fn resolve_name(name: &str) -> Result<PathBuf, Error> {
 }
 
 /// Loads an extension, if it was not loaded before.
-pub fn load(name: &str) -> Result<(), Error> {
-    let mut lock = EXTENSIONS.write().expect("poisoned");
+pub fn try_get(name: &str, version_req: &semver::VersionReq) -> Result<Arc<Extension>, Error> {
+    test_valid_name(name)?;
+    let (version, path) = resolve_name(name, version_req)?;
 
-    if lock.contains_key(name) {
-        // already loaded
-        return Ok(());
+    let mut lock = EXTENSIONS.write().expect("poisoned");
+    let loaded_extensions = lock.entry(name.to_owned()).or_default();
+    if let Some(extension) = loaded_extensions.get(&version) {
+        return Ok(extension.clone());
     }
 
-    let path = resolve_name(name)?;
-    let extension = Extension::load(path).with_context(|| format!("loading extension {name:?}"))?;
+    let extension =
+        Arc::new(Extension::load(path).with_context(|| format!("loading extension {name:?}"))?);
+    loaded_extensions.insert(version, extension.clone());
 
-    lock.insert(name.to_owned(), Arc::new(extension));
-
-    Ok(())
+    Ok(extension)
 }
 
-/// Gets an extension by its name, returning `None` if it was not loaded.
-pub fn get_opt(name: &str) -> Option<Arc<Extension>> {
-    EXTENSIONS.read().expect("poisoned").get(name).cloned()
-}
+// /// Gets an extension by its name, returning `None` if it was not loaded.
+// pub fn get_opt(name: &str, version_req: &semver::VersionReq) -> Option<Arc<Extension>> {
+//     let lock = EXTENSIONS.read().expect("poisoned");
+//     let loaded_extensions = lock.get(name)?;
+
+//     for (version, extension) in loaded_extensions {
+//         if version_req.matches(version) {
+//             return Some(extension.clone());
+//         }
+//     }
+
+//     None
+// }
 
 /// Gets an extension by its name, panicking if it was not loaded.
-pub fn get(name: &str) -> Arc<Extension> {
-    get_opt(name).expect("extension not loaded")
+pub fn get(name: &str, version_req: &semver::VersionReq) -> Arc<Extension> {
+    try_get(name, version_req).expect("extension not loaded")
 }

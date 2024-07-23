@@ -1,23 +1,31 @@
 use serde_derive::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::ffi::{CStr, CString};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::extension::{Dumped, Extension, ExternalMethod, RawResource, ResourceSymbols};
 use crate::Error;
 
 use super::{Resource, ResourceMethod, ResourceType};
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct External {
     extension: String,
     resource: String,
+    #[serde_as(as = "DisplayFromStr")]
+    #[serde(default)]
+    version_req: semver::VersionReq,
+    #[serde(default)]
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    ext: Arc<Mutex<Option<Arc<Extension>>>>,
 }
 
 impl External {
     fn load_extension(&self) -> Result<(), Error> {
-        crate::extension::load(&self.extension)?;
-        let extension = crate::extension::get(&self.extension);
+        let extension = crate::extension::try_get(&self.extension, &self.version_req)?;
 
         if extension.get_resource(&self.resource).is_none() {
             return Err(format!(
@@ -27,11 +35,19 @@ impl External {
             .into());
         }
 
+        let mut lock = self.ext.lock().expect("poisoned");
+        *lock = Some(extension.clone());
+
         Ok(())
     }
 
     fn extension(&self) -> Arc<Extension> {
-        crate::extension::get(&self.extension)
+        self.ext
+            .lock()
+            .expect("poisoned")
+            .as_ref()
+            .expect("extension was aready loaded")
+            .clone()
     }
 
     fn resource(&self) -> ResourceSymbols {
@@ -84,14 +100,25 @@ unsafe impl Sync for ExternalResource {}
 impl Drop for ExternalResource {
     fn drop(&mut self) {
         // This cannot panic, ever! Therefore, we prefer to leak, if necessary.
-        // Probably, the `else` is never reachable, but... better safe than sorry.
-        if let Some(extension) = crate::extension::get_opt(&self.r#type.extension) {
-            if let Some(resource) = extension.get_resource(&self.r#type.resource) {
-                unsafe {
-                    // Safety: extension is correctly implemented.
-                    (resource.fn_drop)(self.ptr);
-                }
-            }
+        // Some `else`s below are never reachable, but... better safe than sorry.
+
+        let Ok(lock) = self.r#type.ext.lock() else {
+            // Lock was poisoned. Leak resource!
+            return;
+        };
+        let Some(extension) = &*lock else {
+            // No extension was ever loaded. No resource to leak.
+            return;
+        };
+        let Some(resource) = extension.get_resource(&self.r#type.resource) else {
+            // No such resource in extension. Unreachable, but if it ever happens, leak!
+            return;
+        };
+
+        // ... now, for the scary part!
+        unsafe {
+            // Safety: extension is correctly implemented.
+            (resource.fn_drop)(self.ptr);
         }
     }
 }

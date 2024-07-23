@@ -8,6 +8,7 @@ members = [
     "cjyafn",
     "jyafn-ext",
     "jyafn-ext/extensions/dummy",
+    "jyafn-ext/extensions/lightgbm",
 ]
 default-members = ["cjyafn"]
 
