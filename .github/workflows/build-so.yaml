@@ -47,7 +47,7 @@ jobs:
 
 
   release:
-    needs: [build-so]
+    needs: [build-so, build-extensions]
     runs-on: ubuntu-latest
     steps:
     - name: Download so
