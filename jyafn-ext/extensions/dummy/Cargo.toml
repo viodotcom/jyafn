@@ -1,0 +1,12 @@
+[package]
+name = "dummy"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "jyafn_dummy"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+jyafn-ext = { path = "../.." }

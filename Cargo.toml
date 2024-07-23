@@ -1,7 +1,15 @@
 [workspace]
 
 resolver = "2"
-members = ["vendored/qbe-rs", "jyafn", "jyafn-python", "cjyafn"]
+members = [
+    "vendored/qbe-rs",
+    "jyafn",
+    "jyafn-python",
+    "cjyafn",
+    "jyafn-ext",
+    "jyafn-ext/extensions/dummy",
+    "jyafn-ext/extensions/lightgbm",
+]
 default-members = ["cjyafn"]
 
 [profile.release]

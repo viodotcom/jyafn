@@ -123,10 +123,10 @@ impl Op for Index {
         ));
 
         func.add_block(out_of_bounds);
-        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Global(format!(
-            "{namespace}.error.{}",
-            self.error
-        )))));
+        super::render_return_error(
+            func,
+            qbe::Value::Global(format!("{namespace}.error.{}", self.error)),
+        );
 
         func.add_block(in_bounds);
         func.assign_instr(

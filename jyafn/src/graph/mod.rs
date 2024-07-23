@@ -12,6 +12,7 @@ use std::{
     collections::HashMap,
     error::Error as StdError,
     fmt::Debug,
+    pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
     sync::Arc,
 };
@@ -21,6 +22,7 @@ use super::{
     mapping,
     op::{self, Op},
     r#const::Const,
+    resource::{Resource, ResourceContainer},
     Context, Error,
 };
 
@@ -38,6 +40,7 @@ pub struct Graph {
     pub(crate) symbols: Symbols,
     pub(crate) errors: Vec<String>,
     pub(crate) mappings: HashMap<String, Arc<mapping::Mapping>>,
+    pub(crate) resources: HashMap<String, Arc<ResourceContainer>>,
     pub(crate) subgraphs: Vec<Graph>,
 }
 
@@ -373,6 +376,67 @@ impl Graph {
             .value_layout()
             .build_ref_value(values)
             .ok_or_else(|| format!("building ref-value for call with default on mapping {name}"))?)
+    }
+
+    pub fn insert_resource<R: Resource>(&mut self, name: String, resource: R) {
+        self.resources
+            .insert(name, Arc::new(ResourceContainer::new(resource)));
+    }
+
+    pub fn insert_resource_boxed(&mut self, name: String, resource: Pin<Box<dyn Resource>>) {
+        self.resources
+            .insert(name, Arc::new(ResourceContainer::new_boxed(resource)));
+    }
+
+    pub fn call_resource(
+        &mut self,
+        name: &str,
+        method_name: &str,
+        args: RefValue,
+    ) -> Result<RefValue, Error> {
+        let resource = self
+            .resources
+            .get(name)
+            .ok_or_else(|| format!("no such resource {name}"))?
+            .clone();
+        let method = resource
+            .get_method(method_name)
+            .ok_or_else(|| format!("resource {name} has not method {method_name}"))?;
+        let Some(args) = args.output_vec(&Layout::Struct(method.input_layout.clone())) else {
+            return Err(Error::BadValue {
+                expected: Layout::Struct(method.input_layout.clone()),
+                got: args,
+            })
+            .with_context(|| format!("calling {method_name} on {name}"));
+        };
+        let output_pointer = self.insert(
+            op::CallResource {
+                name: name.to_string(),
+                method: method_name.to_string(),
+            },
+            args,
+        )?;
+
+        let values = method
+            .output_layout
+            .slots()
+            .iter()
+            .enumerate()
+            .map(|(id, return_type)| {
+                self.insert(
+                    op::LoadMethodOutput {
+                        return_type: *return_type,
+                        slot: id,
+                    },
+                    vec![output_pointer],
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(method
+            .output_layout
+            .build_ref_value(values)
+            .ok_or_else(|| "building ref-value for call {method_name} on {name}".to_string())?)
     }
 
     pub fn insert_subgraph(&mut self, subgraph: Graph) -> usize {

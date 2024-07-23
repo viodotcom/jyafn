@@ -1,0 +1,13 @@
+[package]
+name = "lightgbm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "jyafn_lightgbm"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+lightgbm3 = "1.0.2"
+jyafn-ext = { path = "../../" }

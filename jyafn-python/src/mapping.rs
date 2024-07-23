@@ -5,7 +5,7 @@ use pyo3::types::PyDict;
 use super::layout::Obj;
 use super::{depythonize_ref_value, graph, pythonize_ref_value, Layout, ToPyErr};
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 pub struct LazyMapping {
     is_consumed: bool,
     name: String,
@@ -84,6 +84,7 @@ impl LazyMapping {
     //     todo()
     // }
 
+    #[pyo3(signature = (key, default=None))]
     fn get(&mut self, key: &Bound<PyAny>, default: Option<&Bound<PyAny>>) -> PyResult<PyObject> {
         if let Some(default) = default {
             graph::try_with_current(|g| {

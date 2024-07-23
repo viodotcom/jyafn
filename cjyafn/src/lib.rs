@@ -56,7 +56,7 @@ unsafe fn from_c_str<'a>(s: *const c_char) -> Cow<'a, str> {
     cstr.to_string_lossy()
 }
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct Outcome(*mut ());
 
@@ -563,7 +563,7 @@ pub extern "C" fn function_symbols_json(func: *const ()) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn function_fn_ptr(
     func: *const (),
-) -> unsafe extern "C" fn(*const u8, *mut u8) -> *const c_char {
+) -> unsafe extern "C" fn(*const u8, *mut u8) -> *mut rust::FnError {
     unsafe { with_unchecked(func, |func: &Function| func.fn_ptr()) }
 }
 
@@ -580,21 +580,25 @@ pub extern "C" fn function_load(bytes: *const u8, len: usize) -> Outcome {
 }
 
 #[no_mangle]
-pub extern "C" fn function_call_raw(
-    func: *const (),
-    input: *const u8,
-    output: *mut u8,
-) -> *const c_char {
+pub extern "C" fn function_call_raw(func: *const (), input: *const u8, output: *mut u8) -> Outcome {
     unsafe {
         with_unchecked(func, |func: &Function| {
             match std::panic::catch_unwind(|| {
                 let input = std::slice::from_raw_parts(input, func.input_size());
                 let output = std::slice::from_raw_parts_mut(output, func.output_size());
 
-                func.call_raw(input, output)
+                let fn_err = func.call_raw(input, output);
+                if fn_err != std::ptr::null_mut() {
+                    let fn_err = Box::from_raw(fn_err).take();
+                    return Outcome::from_result(Result::<(), Error>::Err(fn_err.into()));
+                }
+
+                Outcome::from_result(Result::<(), Error>::Ok(()))
             }) {
                 Ok(status) => status,
-                Err(_le_oops) => b"operation panicked (see stderr)\0".as_ptr() as *const c_char,
+                Err(_le_oops) => Outcome::from_result(Result::<(), Error>::Err(
+                    "function raw call panicked (see stderr)".to_string().into(),
+                )),
             }
         })
     }

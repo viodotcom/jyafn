@@ -1,0 +1,25 @@
+name: Build Extensions
+
+on:
+  workflow_dispatch:
+
+
+jobs:
+  build-extensions:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        ref: main
+    - name: Build extensions
+      run: |
+        cd jyafn-ext
+        make install
+    - name: Artifact update
+      uses: actions/upload-artifact@v4
+      with:
+        name: extensions-linux-x64
+        if-no-files-found: error
+        path: ~/.jyafn/extensions/*.so
+        retention-days: 1

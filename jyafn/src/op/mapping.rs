@@ -100,11 +100,10 @@ impl Op for LoadMappingValue {
             false_side.clone(),
         ));
         func.add_block(false_side);
-        // +1 because returning 0 is success.
-        func.add_instr(qbe::Instr::Ret(Some(qbe::Value::Global(format!(
-            "{namespace}.error.{}",
-            self.error_code
-        )))));
+        super::render_return_error(
+            func,
+            qbe::Value::Global(format!("{namespace}.error.{}", self.error_code)),
+        );
         func.add_block(true_side);
 
         func.assign_instr(

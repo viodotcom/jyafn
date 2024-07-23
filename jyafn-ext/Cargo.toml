@@ -1,0 +1,11 @@
+[package]
+name = "jyafn-ext"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+byte-slice-cast = "1.2.2"
+paste = "1.0.15"
+serde = "1.0.204"
+serde_derive = "1.0.204"
+serde_json = "1.0.120"

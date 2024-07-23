@@ -229,6 +229,37 @@ fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     Ok(std::fs::read(output)?)
 }
 
+#[cfg(target_os = "macos")]
+fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
+    let tempdir = tempfile::tempdir()?;
+    let input = tempdir.path().join("main.o");
+    let output = NamedTempFile::new()?;
+    std::fs::write(&input, unlinked)?;
+
+    let linker = Command::new("ld")
+        .arg("-demangle")
+        .arg("-dylib")
+        .arg("-L")
+        .arg("/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib")
+        .arg("-lSystem")
+        .arg("-o")
+        .arg(output.path())
+        .arg(input)
+        .arg("-lSystem")
+        .stdin(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()?;
+    if !linker.status.success() {
+        return Err(Error::Linker {
+            status: linker.status,
+            err: String::from_utf8_lossy(&linker.stderr).to_string(),
+        });
+    }
+
+    Ok(output)
+}
+
+#[cfg(target_os = "linux")]
 fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
     let tempdir = tempfile::tempdir()?;
     let input = tempdir.path().join("main.o");

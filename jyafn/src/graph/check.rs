@@ -11,11 +11,13 @@ pub fn run_checks(graph: &mut Graph) -> Result<(), Error> {
     topsort(graph)?;
     types(graph)?;
     pointers(graph)?;
+    mappings_initialized(graph)?;
+    resources_initialized(graph)?;
 
     Ok(())
 }
 
-/// This function mutates the graph because some operations are mutated by the interence
+/// This function mutates the graph because some operations are mutated by the inference
 /// of the input parameters.
 fn types(graph: &mut Graph) -> Result<(), Error> {
     let checked_nodes = graph
@@ -64,9 +66,41 @@ fn topsort(graph: &Graph) -> Result<(), Error> {
 
 /// Checks that no pointers are present in the output.
 fn pointers(graph: &Graph) -> Result<(), Error> {
+    for &input in &graph.inputs {
+        if matches!(input, Type::Ptr { .. }) {
+            return Err(format!("found pointer type in input").into());
+        }
+    }
+
     for &output in &graph.outputs {
         if matches!(graph.type_of(output), Type::Ptr { .. }) {
-            return Err(format!("Found pointer type in output").into());
+            return Err(format!("found pointer type in output").into());
+        }
+    }
+
+    Ok(())
+}
+
+/// Checks whether all mappings were all initialized.
+fn mappings_initialized(graph: &Graph) -> Result<(), Error> {
+    for (name, mapping) in &graph.mappings {
+        if !mapping.is_initialized() {
+            return Err(
+                format!("while reading zip archive, mapping {name} was not initialized").into(),
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Checks whether all resources were all initialized.
+fn resources_initialized(graph: &Graph) -> Result<(), Error> {
+    for (name, resource) in &graph.resources {
+        if !resource.is_initialized() {
+            return Err(
+                format!("while reading zip archive, resource {name} was not initialized").into(),
+            );
         }
     }
 

@@ -4,10 +4,12 @@
 compile_error!("Currently `jyafn` only works in 64-bit atchitectures");
 
 pub mod r#const;
+pub mod extension;
 pub mod layout;
 pub mod mapping;
 pub mod op;
 pub mod pfunc;
+pub mod resource;
 pub mod utils;
 
 mod function;
@@ -15,7 +17,7 @@ mod graph;
 
 #[cfg(feature = "map-reduce")]
 pub use dataset::Dataset;
-pub use function::{Function, FunctionData, RawFn};
+pub use function::{FnError, Function, FunctionData, RawFn};
 pub use graph::{Graph, IndexedList, Node, Ref, Type};
 pub use op::Op;
 pub use r#const::Const;

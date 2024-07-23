@@ -4,7 +4,7 @@ use pyo3::types::PyList;
 
 use super::{depythonize_ref_value, pythonize_ref_value, try_with_current, Ref, ToPyErr};
 
-#[pyclass]
+#[pyclass(module = "jyafn")]
 #[derive(Clone)]
 pub struct IndexedList {
     layout: rust::layout::Layout,

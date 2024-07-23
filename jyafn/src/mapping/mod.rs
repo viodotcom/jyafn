@@ -77,7 +77,7 @@ pub trait Storage: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     fn get(&self, hash: u64) -> Option<&Buffer>;
     /// The ammount of heap used by this storage.
     fn size(&self) -> usize;
-    fn dump(&self) -> Result<Vec<u8>, Error>;
+    fn dump(&self) -> Vec<u8>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -117,8 +117,8 @@ impl Storage for HashTable {
                 .sum::<usize>()
     }
 
-    fn dump(&self) -> Result<Vec<u8>, Error> {
-        Ok(bincode::serialize(&self.0).expect("serialization never fails"))
+    fn dump(&self) -> Vec<u8> {
+        bincode::serialize(&self.0).expect("serialization never fails")
     }
 }
 
@@ -173,6 +173,7 @@ impl Mapping {
         })
     }
 
+    #[must_use]
     pub(crate) fn read(&self, f: ZipFile<'_>) -> Result<Self, Error> {
         let storage = self.storage_type.read(f)?;
         Ok(Mapping {
@@ -184,7 +185,7 @@ impl Mapping {
         })
     }
 
-    pub(crate) fn dump(&self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn dump(&self) -> Vec<u8> {
         self.storage
             .as_ref()
             .expect("storage not initialized")
@@ -214,7 +215,7 @@ impl Mapping {
         self.storage.as_ref().and_then(|s| s.get(hash(&key)))
     }
 
-    unsafe fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {
+    unsafe extern "C" fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {
         let mapping = &*mapping;
         if let Some(line) = mapping.storage.as_ref().and_then(|s| s.get(hash)) {
             line.as_ptr()
