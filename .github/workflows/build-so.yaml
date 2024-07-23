@@ -1,4 +1,4 @@
-name: Build CJyafn Shared Object
+name: Build CJyafn Shared Object and Extensions
 
 on:
   push:
@@ -44,6 +44,7 @@ jobs:
         if-no-files-found: error
         path: ~/.jyafn/extensions/*.so
         retention-days: 1
+
 
   release:
     needs: [build-so]
