@@ -1,9 +1,19 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
 import click
-from click_default_group import DefaultGroup  # type:ignore
 import timeit as pytimeit
 import jyafn as fn
+import platform
+import re
+import os
+import semver
+import tempfile
+import shutil
+import ctypes
+import json
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
+from click_default_group import DefaultGroup  # type:ignore
 
 from .describe import describe, describe_graph  # type:ignore
 
@@ -106,3 +116,75 @@ def serve(port, address, file):
     finally:
         httpd.server_close()
         click.echo("Stopping httpd...")
+
+
+@main.command(help="Dowloads an extension from an URL")
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="forces the substition of the extension if it exists",
+)
+@click.argument(
+    "origin",
+    help="the place to fetch the extension from. Can be a URL or the name of an extension "
+    "in the registry",
+)
+def get(force, origin):
+    match platform.system():
+        case "Linux":
+            extension = "so"
+        case "Darwin":
+            extension = "dylib"
+        case "Windows":
+            extension = "dll"
+        case p:
+            click.echo(f"platform {p!r} not supported")
+            exit(1)
+
+    install_to = os.getenv(
+        "JYAFN_PATH", os.path.expanduser("~/.jyafn/extensions")
+    ).split(",")[0]
+
+    click.echo(f"Downloading {origin} to {install_to}...")
+    with tempfile.NamedTemporaryFile() as temp:
+        urlretrieve(origin, temp.name)
+
+        # This runs arbitrary code downloaded from the internet. I hope you know what you
+        # are doing.
+        so = ctypes.cdll.LoadLibrary(temp.name)
+
+        if not hasattr(so, "extension_init"):
+            click.echo("extension is missing symbol `extension_init`")
+            exit(1)
+        so.extension_init.restype = ctypes.c_char_p
+
+        manifest = json.loads(so.extension_init())
+        name = manifest["metadata"]["name"]
+        version = manifest["metadata"]["version"]
+
+        if not re.match(r"[a-z][a-z0-9_]*", name):
+            click.echo(f"invalid extension name {name!r}.")
+            click.echo(
+                "hint: extension names should contain only lowercase letters and digits and "
+                "should start with a letter"
+            )
+            exit(1)
+
+        try:
+            semver.parse_version_info(version)
+        except ValueError:
+            click.echo(f"version {version!r} not a valid semantic version")
+            exit(1)
+
+        click.echo(f"Collected {name}-{version}.{extension}")
+
+        target_path = f"{install_to}/{name}-{version}.{extension}"
+        if os.path.exists(target_path) and not force:
+            click.echo(f"extension {name}-{version} is already installed")
+            click.echo("hint: pass -f to force reinstall")
+            exit(1)
+
+        shutil.copy(temp.name, target_path)
+
+    click.echo(f"You now have {name}-{version} installed")

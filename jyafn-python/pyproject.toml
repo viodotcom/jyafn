@@ -18,6 +18,7 @@ dependencies = [
     "numpy>=1.13",
     "click>=8.1",
     "click_default_group>=1.2",
+    "semver>=3",
 ]
 
 [project.scripts]

@@ -24,4 +24,5 @@ build:
 
 install: build
 	mkdir -p ~/.jyafn/extensions/
-	mv $(ROOT)/target/release/lib$(LIBNAME).$(SO_EXT) ~/.jyafn/extensions/$(NAME)-$(VERSION).$(SO_EXT)
+	cp $(ROOT)/target/release/lib$(LIBNAME).$(SO_EXT) ~/.jyafn/extensions/$(NAME)-$(VERSION).$(SO_EXT)
+	cp $(ROOT)/target/release/lib$(LIBNAME).$(SO_EXT) ~/.jyafn/extensions/$(NAME)-latest.$(SO_EXT)

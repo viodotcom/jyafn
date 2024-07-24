@@ -42,7 +42,7 @@ jobs:
       with:
         name: extensions-linux-x64
         if-no-files-found: error
-        path: ~/.jyafn/extensions/*.so
+        path: ~/.jyafn/extensions/*-latest.so
         retention-days: 1
 
   build-dylib:
@@ -79,7 +79,7 @@ jobs:
       with:
         name: extensions-macos-arm64
         if-no-files-found: error
-        path: ~/.jyafn/extensions/*.dylib
+        path: ~/.jyafn/extensions/*-latest.dylib
         retention-days: 1
 
 

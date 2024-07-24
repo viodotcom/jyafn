@@ -3,9 +3,10 @@
 use lazy_static::lazy_static;
 use libloading::{Library, Symbol};
 use serde_derive::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use crate::layout::{Layout, Struct};
@@ -38,6 +39,8 @@ pub struct Dumped(pub(crate) *mut ());
 /// this extension.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtensionManifest {
+    /// Tells us what this extension is.
+    metadata: ExtensionMetadata,
     /// Describes the symbols to be used when accessing outcomes of fallible operations.
     outcome: OutcomeManifest,
     /// Describes the symbols to be used when accessing buffers of binary memory.
@@ -45,6 +48,17 @@ pub struct ExtensionManifest {
     /// Describes the symbols to be used when interfacing with each resource type provided
     /// by this extension.
     resources: HashMap<String, ResourceManifest>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtensionMetadata {
+    /// This is the name of the extension and must match the file name in the filesystem.
+    name: String,
+    /// This is the version of the extension and must be a valid semantic version and
+    /// must match the file name in the filesystem.
+    #[serde_as(as = "DisplayFromStr")]
+    version: semver::Version,
 }
 
 /// Lists the names of the symbols needed to create the interface between an outcome and
@@ -230,6 +244,8 @@ lazy_static! {
 pub struct Extension {
     /// The shared object handle.
     _library: Library,
+    /// The metedata of this extension.
+    metadata: ExtensionMetadata,
     /// Describes the symbols to be used when accessing outcomes of fallible operations.
     outcome: OutcomeSymbols,
     /// Describes the symbols to be used when accessing buffers of binary memory.
@@ -242,7 +258,7 @@ pub struct Extension {
 impl Extension {
     /// Loads an extension, given a path. This path is OS-specific and will be resolved
     /// by the OS acording to its own quirky rules.
-    pub(crate) fn load(path: PathBuf) -> Result<Extension, Error> {
+    pub(crate) fn load(path: &Path) -> Result<Extension, Error> {
         unsafe {
             // Safety: we can only pray nobody loads anything funny here. However, it's
             // not my responsibilty what kind of crap you install in your computer.
@@ -276,6 +292,7 @@ impl Extension {
 
             Ok(Extension {
                 _library: library,
+                metadata: manifest.metadata,
                 outcome,
                 dumped,
                 resources,
@@ -426,7 +443,24 @@ pub fn try_get(name: &str, version_req: &semver::VersionReq) -> Result<Arc<Exten
     }
 
     let extension =
-        Arc::new(Extension::load(path).with_context(|| format!("loading extension {name:?}"))?);
+        Arc::new(Extension::load(&path).with_context(|| format!("loading extension {name:?}"))?);
+
+    // Check if what you got is what was actually advertised:
+    if extension.metadata.name != name {
+        return Err(format!(
+            "file {path:?} should provide {name:?} but provides {:?}",
+            extension.metadata.name
+        )
+        .into());
+    }
+    if extension.metadata.version != version {
+        return Err(format!(
+            "file {path:?} should provide version {version} but provides {}",
+            extension.metadata.version
+        )
+        .into());
+    }
+
     loaded_extensions.insert(version, extension.clone());
 
     Ok(extension)

@@ -98,6 +98,10 @@ macro_rules! extension {
         pub extern "C" fn extension_init() -> *const c_char {
             fn safe_extension_init() -> String {
                 let manifest = $crate::serde_json::json!({
+                    "metatada": {
+                        "name": env!("CARGO_PKG_NAME"),
+                        "version": env!("CARGO_PKG_VERSION"),
+                    },
                     "outcome": {
                         "fn_get_err": "outcome_get_err",
                         "fn_get_ok": "outcome_get_ok",
