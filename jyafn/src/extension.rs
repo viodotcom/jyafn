@@ -344,6 +344,18 @@ impl Extension {
     pub(crate) fn get_resource(&self, name: &str) -> Option<ResourceSymbols> {
         self.resources.get(name).cloned()
     }
+
+    pub fn name(&self) -> &str {
+        &self.metadata.name
+    }
+
+    pub fn version(&self) -> &semver::Version {
+        &self.metadata.version
+    }
+
+    pub fn resources(&self) -> impl Iterator<Item=&str> {
+        self.resources.iter().map(|(key, _)| key.as_str())
+    }
 }
 
 #[cfg(target_os = "linux")]

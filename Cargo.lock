@@ -750,6 +750,7 @@ dependencies = [
  "get-size",
  "jyafn",
  "pyo3",
+ "semver",
  "serde_json",
 ]
 

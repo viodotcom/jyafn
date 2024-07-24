@@ -25,7 +25,7 @@ pub struct ResourceMethod {
     pub(crate) output_layout: Layout,
 }
 
-/// A `ResourceType` creates resources of a givnen type. Think of this as the "class
+/// A `ResourceType` creates resources of a given type. Think of this as the "class
 /// object" of resources.
 #[typetag::serde(tag = "type")]
 pub trait ResourceType: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
