@@ -6,6 +6,7 @@ import jyafn as fn
 import inspect
 import types
 import typing
+import json
 import numpy as np
 import datetime as pydatetime
 
@@ -459,3 +460,54 @@ def index(indexable: list | np.ndarray | Iterable) -> IndexedList:
         case _:
             # `list` has been redefined at this point, so cannot use the `list` constructor.
             return IndexedList([item for item in indexable])
+
+
+def resource_type(
+    *,
+    type: str = "External",
+    extension: str | None = None,
+    resource: str | None = None,
+    **kwargs,
+) -> fn.ResourceType:
+    """
+    Creates a resource type. Call `load` on the object returned from this function to
+    create a new resource of the current type.
+
+    For more information, see `fn.resource`.
+    """
+    if type == "External" and extension is None:
+        raise ValueError(f"resource type is External, but extension is not set")
+    if type == "External" and resource is None:
+        raise ValueError(f"resource type is External, but resource is not set")
+
+    kwargs["type"] = type
+    if extension is not None:
+        kwargs["extension"] = extension
+    if resource is not None:
+        kwargs["resource"] = resource
+
+    return fn.ResourceType.from_json(json.dumps(kwargs))
+
+
+def resource(
+    name: str,
+    *,
+    data: bytes,
+    type: str = "External",
+    extension: str | None = None,
+    resource: str | None = None,
+    **kwargs,
+) -> fn.LazyResource:
+    """
+    Creates a resource of a given name to be used in a graph. Resources in JYAFN work
+    very much like ordinary Python objects, except that they are immutable and strongly
+    typed. Aside from that, you can call predefined methods on them.
+
+    Resources were made to work together with extensions to extend JYAFN with niche
+    functionality not offered by JYAFN. For your graph to work with extensions, you need
+    to make sure that they are installed in your environment (you can use the `jyafn get`
+    CLI utility for managing extensions).
+    """
+    return resource_type(
+        type=type, extension=extension, resource=resource, **kwargs
+    ).load(name, data)

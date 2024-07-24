@@ -1,5 +1,6 @@
 extern crate jyafn as rust;
 
+mod extension;
 mod function;
 mod graph;
 mod layout;
@@ -38,6 +39,8 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(putative_layout, m)?)?;
 
     m.add_class::<mapping::LazyMapping>()?;
+
+    m.add_class::<extension::Extension>()?;
 
     m.add_class::<resource::ResourceType>()?;
     m.add_class::<resource::LazyResource>()?;

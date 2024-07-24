@@ -109,5 +109,3 @@ def get_size(thing: str | fn.Graph | fn.Function) -> int:
         return thing.get_size()
     else:
         raise TypeError(f"jyafn cannot descrbe object of type {type(thing)}")
-
-    

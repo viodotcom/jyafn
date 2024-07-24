@@ -276,7 +276,7 @@ class Manifest:
     input layout and a _minimum_ output layout, so that callers can have some guarantees
     on the data they expect to get from calls.
     """
-    
+
     path: str
     """The path this manifest applies to."""
     input_layout: fn.Layout

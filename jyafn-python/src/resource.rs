@@ -12,7 +12,7 @@ pub struct ResourceType(Box<dyn rust::resource::ResourceType>);
 #[pymethods]
 impl ResourceType {
     #[staticmethod]
-    fn from_json(json: &str) -> PyResult<Self> {
+    pub(crate) fn from_json(json: &str) -> PyResult<Self> {
         let value: Box<dyn rust::resource::ResourceType> =
             serde_json::from_str(json).map_err(|e| ToPyErr(e.to_string().into()))?;
         Ok(Self(value))

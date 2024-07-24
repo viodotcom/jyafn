@@ -73,6 +73,7 @@ def with_resources(x: fn.scalar) -> fn.scalar:
 
     return the_result
 
+
 serialized = with_resources.write("with_resources.jyafn")
 deserialized = fn.read_fn("with_resources.jyafn")
 assert deserialized(2.5) == 1.0

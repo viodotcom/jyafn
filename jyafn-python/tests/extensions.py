@@ -8,10 +8,12 @@ import traceback
 
 @fn.func
 def with_resources(x: fn.scalar) -> fn.scalar:
-    resource_type = fn.ResourceType.from_json(
-        '{"type":"External","extension":"dummy","resource":"Dummy"}'
+    resource = fn.resource(
+        name="my_resource",
+        extension="dummy",
+        resource="Dummy",
+        data=b"2.5",
     )
-    resource = resource_type.load("my_resource", b"2.5")
     the_result = resource.get(x=x)
 
     return the_result
@@ -25,10 +27,12 @@ try:
 
     @fn.func
     def with_resources(x: fn.scalar) -> fn.scalar:
-        resource_type = fn.ResourceType.from_json(
-            '{"type":"External","extension":"dummy","resource":"Dummy"}'
+        resource = fn.resource(
+            name="my_resource",
+            extension="dummy",
+            resource="Dummy",
+            data=b"2.5",
         )
-        resource = resource_type.load("my_resource", b"2.5")
         the_result = resource.err(x=x)
 
         return the_result
@@ -44,10 +48,12 @@ try:
 
     @fn.func
     def with_resources(x: fn.scalar) -> fn.scalar:
-        resource_type = fn.ResourceType.from_json(
-            '{"type":"External","extension":"dummy","resource":"Dummy"}'
+        resource = fn.resource(
+            name="my_resource",
+            extension="dummy",
+            resource="Dummy",
+            data=b"2.5",
         )
-        resource = resource_type.load("my_resource", b"2.5")
         the_result = resource.panic(x=x)
 
         return the_result
@@ -61,10 +67,12 @@ else:
 
 @fn.func
 def with_resources(x: fn.scalar) -> fn.scalar:
-    resource_type = fn.ResourceType.from_json(
-        '{"type":"External","extension":"dummy","resource":"Dummy"}'
+    resource = fn.resource(
+        name="my_resource",
+        extension="dummy",
+        resource="Dummy",
+        data=b"2.5",
     )
-    resource = resource_type.load("my_resource", b"2.5")
     the_result = resource.get(x=x)
 
     return the_result
