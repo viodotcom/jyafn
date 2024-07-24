@@ -127,8 +127,8 @@ def serve(port, address, file):
 )
 @click.argument(
     "origin",
-    help="the place to fetch the extension from. Can be a URL or the name of an extension "
-    "in the registry",
+    # help="the place to fetch the extension from. Can be a URL or the name of an extension "
+    # "in the registry",
 )
 def get(force, origin):
     match platform.system():
@@ -160,6 +160,7 @@ def get(force, origin):
         so.extension_init.restype = ctypes.c_char_p
 
         manifest = json.loads(so.extension_init())
+        print(manifest)
         name = manifest["metadata"]["name"]
         version = manifest["metadata"]["version"]
 
