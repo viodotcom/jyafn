@@ -45,19 +45,62 @@ jobs:
         path: ~/.jyafn/extensions/*.so
         retention-days: 1
 
+  build-dylib:
+    runs-on: macos-latest
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        ref: stable
+    - name: Build shared object
+      run: |
+        make cjyafn
+    - name: Artifact update
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-arm64
+        if-no-files-found: error
+        path: target/release/libcjyafn.dylib
+        retention-days: 1
 
-  release:
-    needs: [build-so, build-extensions]
+  build-extensions-macos:
     runs-on: ubuntu-latest
     steps:
-    - name: Download so
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        ref: stable
+    - name: Build extensions
+      run: |
+        cd jyafn-ext
+        make install
+    - name: Artifact update
+      uses: actions/upload-artifact@v4
+      with:
+        name: extensions-macos-arm64
+        if-no-files-found: error
+        path: ~/.jyafn/extensions/*.dylib
+        retention-days: 1
+
+
+  release:
+    needs:
+    - build-so
+    - build-extensions
+    - build-dylib
+    - build-extensions-macos
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download files
       uses: actions/download-artifact@v4
       with:
         merge-multiple: true
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
-        files: "*.so"
+        files: |
+          *.so
+          *.dylib
         tag_name: commit-id=${{ github.sha }}
         prerelease: false
         make_latest: true
