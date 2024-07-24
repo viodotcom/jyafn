@@ -101,6 +101,9 @@ macro_rules! extension {
                     "metadata": {
                         "name": env!("CARGO_PKG_NAME"),
                         "version": env!("CARGO_PKG_VERSION"),
+                        "about": env!("CARGO_PKG_DESCRIPTION"),
+                        "authors": env!("CARGO_PKG_AUTHORS"),
+                        "license": env!("CARGO_PKG_LICENSE"),
                     },
                     "outcome": {
                         "fn_get_err": "outcome_get_err",

@@ -7,7 +7,7 @@ python-source = "python"
 
 [project]
 name = "jyafn"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 readme = "../readme.md"
 classifiers = [
     "Programming Language :: Rust",
@@ -19,6 +19,9 @@ dependencies = [
     "click>=8.1",
     "click_default_group>=1.2",
     "semver>=3",
+    "pyyaml>=6",
+    "requests>=2",
+    "pygments>=2",
 ]
 
 [project.scripts]
