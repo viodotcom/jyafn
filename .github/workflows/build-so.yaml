@@ -41,7 +41,7 @@ jobs:
     - name: Build extensions
       run: |
         cd jyafn-ext
-        make export
+        make install
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
@@ -78,7 +78,7 @@ jobs:
     - name: Build extensions
       run: |
         cd jyafn-ext
-        make export
+        make install
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
