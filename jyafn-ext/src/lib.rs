@@ -275,6 +275,7 @@ macro_rules! resource {
 macro_rules! method {
     ($safe_interface:ident) => {
         $crate::paste! {
+            #[allow(non_snake_case)]
             pub unsafe extern "C" fn [<raw_method__ $safe_interface>](
                 resource_ptr: *const (),
                 input_ptr: *const u8,
