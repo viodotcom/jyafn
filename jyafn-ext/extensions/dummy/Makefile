@@ -29,7 +29,4 @@ build:
 install: build
 	mkdir -p ~/.jyafn/extensions/
 	cp $(LIBPATH) ~/.jyafn/extensions/$(NAME)-$(VERSION).$(EXT)
-
-export:
-	mkdir -p ~/.jyafn/export/
-	cp $(LIBPATH) ~/.jyafn/export/$(NAME)-latest.$(EXT)
+	cp $(LIBPATH) ~/.jyafn/export/$(NAME).$(EXT)

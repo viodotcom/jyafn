@@ -1,2 +1,2 @@
-buils:
-	./build-all.sh
+install:
+	./install-all.sh
