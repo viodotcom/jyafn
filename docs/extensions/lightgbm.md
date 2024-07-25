@@ -12,7 +12,7 @@ The input data of this resource is the string representation (in bytes) of a tra
 
 ### Methods
 
-The `Lighgbm` resource has these three methods:
+The `Lightgbm` resource has these three methods:
 
 ```rust
 // Predicts the probability of each class, given a list of feature values.
