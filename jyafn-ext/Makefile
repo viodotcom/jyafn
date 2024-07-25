@@ -1,2 +1,2 @@
-install:
-	./install-all.sh
+export:
+	./export-all.sh
