@@ -17,6 +17,6 @@ done
 for extension in $extensions; do
     echo Building $extension...
     cd $extension
-    make export
+    make export # that is the command to export to ~/.jyafn/export
     cd $BASEDIR
 done

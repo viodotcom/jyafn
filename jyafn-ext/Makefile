@@ -1,2 +1,2 @@
-export:
-	./export-all.sh
+buils:
+	./build-all.sh
