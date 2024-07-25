@@ -44,6 +44,25 @@ jobs:
         if-no-files-found: error
         path: ./target/extensions/*.so
         retention-days: 1
+  
+  build-wheels:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        ref: stable
+    - name: Build wheels
+      run: |
+        bash .utils/build-wheels.sh
+    - name: Artifact update
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-linux-x64
+        if-no-files-found: error
+        path: ./target/wheels/*.whl
+        retention-days: 1
+  
 
   build-dylib:
     runs-on: macos-latest
@@ -62,7 +81,28 @@ jobs:
         if-no-files-found: error
         path: target/release/libcjyafn.dylib
         retention-days: 1
-
+  
+  build-wheels-macos:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+      with:
+        ref: stable
+    - name: Prepare the machine
+      run: |
+        pip install maturin
+    - name: Build wheels
+      run: |
+        bash .utils/build-macos-wheels.sh
+    - name: Artifact update
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-macos-arm64
+        if-no-files-found: error
+        path: ./target/wheels/*.whl
+        retention-days: 1
+  
   build-extensions-macos:
     runs-on: macos-latest
     steps:
@@ -85,8 +125,10 @@ jobs:
   release:
     needs:
     - build-so
+    - build-wheels
     - build-extensions
     - build-dylib
+    - build-wheels-macos
     - build-extensions-macos
     runs-on: ubuntu-latest
     steps:
@@ -100,6 +142,7 @@ jobs:
         files: |
           *.so
           *.dylib
+          *.whl
         tag_name: commit-id=${{ github.sha }}
         prerelease: false
         make_latest: true

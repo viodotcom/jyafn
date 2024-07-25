@@ -11,9 +11,9 @@ docker run -i                                   \
     make qbe
     ./qbe --help
     cd ../../jyafn-python
-    maturin build --release -i=3.10
-    maturin build --release -i=3.11
     maturin build --release -i=3.12
+    maturin build --release -i=3.11
+    maturin build --release -i=3.10
 EOF
 
 docker run -i                                   \
