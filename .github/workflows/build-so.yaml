@@ -33,21 +33,16 @@ jobs:
       uses: actions/checkout@v4
       with:
         ref: stable
-    - name: Install MUSL toolchain
-      run: |
-        sudo apt-get install -y musl-dev musl-tools
-        sudo ln -s "/usr/bin/g++" "/usr/bin/musl-g++"
-        rustup target add x86_64-unknown-linux-musl
     - name: Build extensions
       run: |
         cd jyafn-ext
-        make install
+        make build
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
         name: extensions-linux-x64
         if-no-files-found: error
-        path: ~/.jyafn/extensions/*.so
+        path: ./target/extensions/*.so
         retention-days: 1
 
   build-dylib:
@@ -78,13 +73,13 @@ jobs:
     - name: Build extensions
       run: |
         cd jyafn-ext
-        make install
+        make build
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
         name: extensions-macos-arm64
         if-no-files-found: error
-        path: ~/.jyafn/extensions/*.dylib
+        path: ./target/extensions/*.dylib
         retention-days: 1
 
   release:

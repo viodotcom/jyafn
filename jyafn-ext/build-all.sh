@@ -17,6 +17,6 @@ done
 for extension in $extensions; do
     echo Building $extension...
     cd $extension
-    make install
+    make build
     cd $BASEDIR
 done
