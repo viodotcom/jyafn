@@ -35,7 +35,7 @@ jobs:
         ref: stable
     - name: Install MUSL toolchain
       run: |
-        apt install -y musl-dev musl-tools
+        sudo apt-get install -y musl-dev musl-tools
         rustup target add x86_64-unknown-linux-musl
     - name: Build extensions
       run: |
