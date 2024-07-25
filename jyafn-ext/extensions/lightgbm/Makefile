@@ -13,16 +13,23 @@ ROOT := $(shell cargo metadata --format-version=1 | jq -r '.workspace_root')
 UNAME := $(shell uname)
 
 ifeq ($(UNAME), Linux)
-	SO_EXT := so
-endif
-ifeq ($(UNAME), Darwin)
-	SO_EXT := dylib
+	BUILD := RUSTFLAGS="-C target-feature=-crt-static" \
+		cargo build --release --target x86_64-unknown-linux-musl
+	EXT := so
+	LIBPATH := $(ROOT)/target/x86_64-unknown-linux-musl/release/lib$(LIBNAME).$(EXT)
+else ifeq ($(UNAME), Darwin)
+	BUILD := cargo build --release
+	EXT := dylib
+	LIBPATH := $(ROOT)/target/release/lib$(LIBNAME).$(EXT)
 endif
 
 build:
-	cargo build --release
+	$(BUILD)
 
 install: build
 	mkdir -p ~/.jyafn/extensions/
-	cp $(ROOT)/target/release/lib$(LIBNAME).$(SO_EXT) ~/.jyafn/extensions/$(NAME)-$(VERSION).$(SO_EXT)
-	cp $(ROOT)/target/release/lib$(LIBNAME).$(SO_EXT) ~/.jyafn/extensions/$(NAME)-latest.$(SO_EXT)
+	cp $(LIBPATH) ~/.jyafn/extensions/$(NAME)-$(VERSION).$(EXT)
+
+export:
+	mkdir -p ~/.jyafn/export/
+	cp $(LIBPATH) ~/.jyafn/export/$(NAME)-latest.$(EXT)

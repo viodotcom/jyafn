@@ -4,6 +4,7 @@ use crate::{impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
+/// Implements `a + b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Add;
 
@@ -46,6 +47,7 @@ impl Op for Add {
     }
 }
 
+/// Implements `a - b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sub;
 
@@ -84,6 +86,7 @@ impl Op for Sub {
     }
 }
 
+/// Implements `a * b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Mul;
 
@@ -126,6 +129,7 @@ impl Op for Mul {
     }
 }
 
+/// Implements `a / b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Div;
 
@@ -164,6 +168,7 @@ impl Op for Div {
     }
 }
 
+/// Implements `a % b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rem;
 
@@ -199,6 +204,7 @@ impl Op for Rem {
     }
 }
 
+/// Implements `-a`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Neg;
 
@@ -237,6 +243,7 @@ impl Op for Neg {
     }
 }
 
+/// Implements `|a|`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Abs;
 

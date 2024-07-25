@@ -1,6 +1,6 @@
-//! With thanks to BadBoy's https://github.com/badboy/murmurhash64-rs
+//! With thanks to BadBoy's <https://github.com/badboy/murmurhash64-rs>
 //!
-//! From https://github.com/badboy/murmurhash64-rs/blob/2b05c98d1289f2336a6dc045e54bd500dadcadda/src/lib.rs#L1
+//! From <https://github.com/badboy/murmurhash64-rs/blob/2b05c98d1289f2336a6dc045e54bd500dadcadda/src/lib.rs#L1>
 
 /// Hash the given key and the given seed.
 ///

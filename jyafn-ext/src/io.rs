@@ -18,18 +18,27 @@ impl<'a> Input<'a> {
         Self(std::slice::from_raw_parts(input as *const u64, n_slots))
     }
 
+    /// Gets the data at index `idx` as an `f64`.
     pub fn get_f64(&self, idx: usize) -> f64 {
         f64::from_ne_bytes(self.0[idx].to_ne_bytes())
     }
 
+    /// Gets the data at index `idx` as an `u64`.
     pub fn get_u64(&self, idx: usize) -> u64 {
         self.0[idx]
     }
 
+    /// Gets the data at index `idx` as an `i64`.
+    pub fn get_i64(&self, idx: usize) -> u64 {
+        self.0[idx]
+    }
+
+    /// Gets the data at index `idx` as a `bool`.
     pub fn get_bool(&self, idx: usize) -> bool {
         self.0[idx] == 1
     }
 
+    /// Represents itself as a slice of `f64`s.
     pub fn as_f64_slice(&self) -> &[f64] {
         self.0
             .as_byte_slice()
@@ -37,8 +46,17 @@ impl<'a> Input<'a> {
             .expect("f64 and u64 have the same size")
     }
 
+    /// Represents itself as a slice of `u64`s.
     pub fn as_u64_slice(&self) -> &[u64] {
         self.0
+    }
+
+    /// Represents itself as a slice of `i64`s.
+    pub fn as_i64_slice(&self) -> &[i64] {
+        self.0
+            .as_byte_slice()
+            .as_slice_of()
+            .expect("i64 and u64 have the same size")
     }
 }
 
@@ -81,6 +99,11 @@ impl<'a> OutputBuilder<'a> {
         self.position += 1;
     }
 
+    pub fn push_i64(&mut self, val: i64) {
+        self.slice[self.position].write(val as u64);
+        self.position += 1;
+    }
+
     pub fn push_bool(&mut self, val: bool) {
         self.slice[self.position].write(val as u64);
         self.position += 1;
@@ -95,6 +118,12 @@ impl<'a> OutputBuilder<'a> {
     pub fn copy_from_u64(&mut self, src: &[u64]) {
         for &val in src {
             self.push_u64(val);
+        }
+    }
+
+    pub fn copy_from_i64(&mut self, src: &[i64]) {
+        for &val in src {
+            self.push_i64(val);
         }
     }
 

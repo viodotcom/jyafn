@@ -5,6 +5,7 @@ use crate::{impl_is_eq, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
+/// Implements `mappgin[key]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, GetSize)]
 pub(crate) struct CallMapping {
     pub name: String,
@@ -49,6 +50,8 @@ impl Op for CallMapping {
     }
 }
 
+/// Loads the value of a mapping call for a given slot or yields an error if none was
+/// found.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, GetSize)]
 pub(crate) struct LoadMappingValue {
     pub mapping: String,
@@ -123,6 +126,8 @@ impl Op for LoadMappingValue {
     }
 }
 
+/// Loads the value of a mapping call for a given slot or yields an error if none was
+/// found.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, GetSize)]
 pub(crate) struct LoadOrDefaultMappingValue {
     pub mapping: String,

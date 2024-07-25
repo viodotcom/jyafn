@@ -1,3 +1,6 @@
+//! This module has the main structs that control how information is sent into functions
+//! and read from functions in a safe way.
+
 mod decode;
 mod encode;
 mod ref_value;
@@ -8,7 +11,7 @@ pub use decode::{Decode, Decoder, ZeroDecoder};
 pub use encode::Encode;
 pub use ref_value::RefValue;
 pub use symbols::{Sym, Symbols};
-pub use visitor::{Buffer, Visitor, BUFFER_SIZE};
+pub use visitor::Visitor;
 
 pub(crate) use symbols::SymbolsView;
 
@@ -19,8 +22,12 @@ use std::fmt::{self, Display};
 
 use super::{Ref, Type};
 
+/// The `strptime` format for ISO 8601, the standard used in the [`Layout::DateTime`]
+/// variant.
 pub const ISOFORMAT: &str = "%Y-%m-%dT%H:%M:%S%.f";
 
+/// A struct is a kind of layout of _ordered_ key-value pairs. Each value is layed out
+/// sequentially in memory.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, GetSize)]
 pub struct Struct(pub Vec<(String, Layout)>);
 
@@ -50,14 +57,17 @@ impl Display for Struct {
 }
 
 impl Struct {
+    /// The size in slots of this struct.
     pub fn size(&self) -> usize {
         self.0.iter().map(|(_, layout)| layout.size()).sum()
     }
 
+    /// Inserts a new key-value field in this struct.
     pub fn insert(&mut self, name: String, field: Layout) {
         self.0.push((name, field))
     }
 
+    /// Returns the slots of this struct.
     pub fn slots(&self) -> Vec<Type> {
         self.0
             .iter()
@@ -65,6 +75,7 @@ impl Struct {
             .collect::<Vec<_>>()
     }
 
+    /// Prints this struct in a pretty way (recursive part).
     fn pretty_recursive(&self, buf: &mut String, indent: &mut String) {
         *indent += "    ";
         *buf += "{";
@@ -84,12 +95,19 @@ impl Struct {
         *buf += "}";
     }
 
+    /// Prints this struct in a pretty way.
     pub fn pretty(&self) -> String {
         let mut buf = String::new();
         self.pretty_recursive(&mut buf, &mut String::new());
         buf
     }
 
+    /// Tests whether this struct contains all the same fields and values than another
+    /// structure. If one field diverges in type, it must at least be the superset of the
+    /// corresponding field in the other struct.
+    ///
+    /// The idea behind this function is that if `A` is superset of `B`, then a value of
+    /// `B` can represent a value of `A` without the need to "come up with" new values.
     pub fn is_superset(&self, other: &Struct) -> bool {
         let self_keys = self.0.iter().map(|(name, _)| name).collect::<BTreeSet<_>>();
         let other_keys = other
@@ -125,15 +143,27 @@ impl Struct {
     }
 }
 
+/// A layout is a how jyafn makes the correspondence of structured data (like, but not
+/// necessarily exactly JSON) and buffers of binary data. See also the [`crate::layout!`] macro
+/// for an easy way to declare layouts.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, GetSize)]
 pub enum Layout {
+    /// An empty value.
     #[default]
     Unit,
+    /// A floating point number. Jyafn does not support integers directly.
     Scalar,
+    /// A boolean. Can be either true or false. This is represented as u64 1 or 0
+    /// respectively. All other values are invalid.
     Bool,
+    /// A date-time with a given format string. Internally, this is represented as a
+    /// timestamp integer in microseconds.
     DateTime(String),
+    /// An imutable piece of text.
     Symbol,
+    /// An ordered sequence of values, layed out in memory sequentially.
     Struct(Struct),
+    /// A layout repeated a given number of times.
     List(Box<Layout>, usize),
 }
 
@@ -163,6 +193,7 @@ impl Display for Layout {
 }
 
 impl Layout {
+    /// The size in slots of this struct.
     pub fn size(&self) -> usize {
         match self {
             Layout::Unit => 0,
@@ -175,6 +206,7 @@ impl Layout {
         }
     }
 
+    /// Returns the slots of this struct.
     pub fn slots(&self) -> Vec<Type> {
         match self {
             Layout::Unit => vec![],
@@ -219,6 +251,9 @@ impl Layout {
         })
     }
 
+    /// Builds a structured [`RefValue`] out of unstructured data, represented as an
+    /// iterator of [`Ref`]s. Returns `None` if the representation is not possible (i.e.
+    /// a type error).
     pub fn build_ref_value<I>(&self, it: I) -> Option<RefValue>
     where
         I: IntoIterator<Item = Ref>,
@@ -226,6 +261,7 @@ impl Layout {
         self.build_ref_value_inner(&mut it.into_iter())
     }
 
+    /// Prints this layout in a pretty way (recursive part).
     fn pretty_recursive(&self, buf: &mut String, indent: &mut String) {
         if let Layout::Struct(strct) = self {
             strct.pretty_recursive(buf, indent)
@@ -234,12 +270,19 @@ impl Layout {
         }
     }
 
+    /// Prints this layout in a pretty way.
     pub fn pretty(&self) -> String {
         let mut buf = String::new();
         self.pretty_recursive(&mut buf, &mut String::new());
         buf
     }
 
+    /// Tests whether this layout contains all the same fields and values than another
+    /// layout. If one field diverges in type, it must at least be the superset of the
+    /// corresponding field in the other layout.
+    ///
+    /// The idea behind this function is that if `A` is superset of `B`, then a value of
+    /// `B` can represent a value of `A` without the need to "come up with" new values.
     pub fn is_superset(&self, other: &Layout) -> bool {
         match (self, other) {
             (Layout::Struct(self_struct), Layout::Struct(other_struct)) => {
@@ -255,6 +298,17 @@ impl Layout {
     }
 }
 
+/// Builds a [`Layout`] usng the jyafn layout display notation.
+///
+/// # Usage
+///
+/// This declares a struct layout with two fields: `x`, a scalar and `y` a date.
+/// ```
+/// layout!({
+///     x: scalar,
+///     y: datetime "%Y-%m-%d"
+/// })
+/// ```
 #[macro_export]
 macro_rules! layout {
     ({$($key:literal : $ty:tt),*}) => {
@@ -283,6 +337,7 @@ macro_rules! layout {
     }
 }
 
+/// Builds a [`Struct`] layout out of a collection of keys and values.
 #[macro_export]
 macro_rules! r#struct {
     ($($key:tt : $ty:tt),*) => {
@@ -292,6 +347,7 @@ macro_rules! r#struct {
     };
 }
 
+/// Builds a [`Struct`] field, given a key and a value layout.
 #[macro_export]
 macro_rules! struct_field {
     ($key:literal : $ty:tt) => {

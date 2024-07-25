@@ -1,8 +1,12 @@
+//! Utilities for this crate.
+
 use chrono::{
     format::{ParseError, ParseErrorKind},
     DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc,
 };
 
+/// Parses a datetime from string, given a format string and converts the result into the
+/// UTC timezone.
 pub fn parse_datetime(s: &str, fmt: &str) -> chrono::ParseResult<DateTime<Utc>> {
     fn enough<T>(o: &Result<T, ParseError>) -> bool {
         !matches!(
@@ -34,12 +38,14 @@ pub fn parse_datetime(s: &str, fmt: &str) -> chrono::ParseResult<DateTime<Utc>> 
         .map(|t| NaiveDateTime::UNIX_EPOCH.date().and_time(t).and_utc())
 }
 
+/// Formats a raw timestamp with the supplied format into a string.
 pub fn format_datetime(timestamp: i64, fmt: &str) -> String {
     DateTime::<Utc>::from(Timestamp(timestamp))
         .format(fmt)
         .to_string()
 }
 
+/// Holds a raw timestamp. This type is used for safe conversion from and to `i64` and [`DateTime`].
 pub struct Timestamp(i64);
 
 impl From<DateTime<Utc>> for Timestamp {
@@ -66,6 +72,7 @@ impl From<i64> for Timestamp {
     }
 }
 
+/// Tranforms an integer into a datetime in UTC.
 pub fn int_to_datetime(i: i64) -> DateTime<Utc> {
     DateTime::<Utc>::from(Timestamp::from(i))
 }

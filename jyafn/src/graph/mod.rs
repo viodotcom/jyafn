@@ -26,8 +26,14 @@ use super::{
     Context, Error,
 };
 
+/// A global variable used to create new unique names for graphs. This might change in the
+/// future in favor of using random ids.
 static GRAPH_ID: AtomicUsize = AtomicUsize::new(0);
 
+/// A computational graph.
+///
+/// This structure records all the necessary data to run the computation of a computational
+/// graph, including graph structure, input and output layout and associated resources.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, GetSize)]
 pub struct Graph {
     pub(crate) name: String,
@@ -63,11 +69,20 @@ impl PartialEq for Graph {
                         .map(|other_v| Arc::ptr_eq(v, other_v))
                         .unwrap_or(false)
                 }))
+            && (self.resources.len() == other.resources.len()
+                && self.resources.iter().all(|(k, v)| {
+                    other
+                        .resources
+                        .get(k)
+                        .map(|other_v| Arc::ptr_eq(v, other_v))
+                        .unwrap_or(false)
+                }))
             && self.subgraphs == other.subgraphs
     }
 }
 
 impl Graph {
+    /// Creates a new empty graph with a supplied name.
     pub fn new_with_name(name: String) -> Graph {
         Graph {
             name,
@@ -75,31 +90,41 @@ impl Graph {
         }
     }
 
+    /// Creates a new empty graph with a default but unique name.
     pub fn new() -> Graph {
         let graph_id = GRAPH_ID.fetch_add(1, Ordering::Relaxed);
         Graph::new_with_name(format!("g{graph_id}"))
     }
 
+    /// Gets the name of the graph.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Gets the metadata associated with the graph. These are user- and system- defined
+    /// pairs of keys and values.
     pub fn metadata(&self) -> &HashMap<String, String> {
         &self.metadata
     }
 
+    /// Gets the input layout of this graph. The input is always a [`Struct`].
     pub fn input_layout(&self) -> &Struct {
         &self.input_layout
     }
 
+    /// Gets the output layout of this graph.
     pub fn output_layout(&self) -> &Layout {
         &self.output_layout
     }
 
+    /// Gets the metadata associated with the graph. These are user- and system- defined
+    /// pairs of keys and values.
     pub fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
     }
 
+    /// Gets the type of a given reference in this graph. This function panics if the
+    /// reference is invalid.
     pub fn type_of(&self, reference: Ref) -> Type {
         match reference {
             Ref::Node(node_id) => self.nodes[node_id].ty,
@@ -108,10 +133,12 @@ impl Graph {
         }
     }
 
+    /// Inserts a new constant in the graph and returns the reference associated with it.
     pub fn r#const<C: Const>(&mut self, r#const: C) -> Ref {
         Ref::Const(r#const.annotate(), r#const.render())
     }
 
+    /// Inserts a new operation in the graph and returns the reference associated with it.
     pub fn insert<O: Op>(&mut self, op: O, args: Vec<Ref>) -> Result<Ref, Error> {
         let current_id = self.nodes.len();
         // Need to do this (quite inefficient way) because of borrowing.
@@ -150,12 +177,17 @@ impl Graph {
         }
     }
 
+    /// Adds a new key to the input struct of this graph.
     pub fn input(&mut self, name: String, layout: Layout) -> RefValue {
         let val = self.alloc_input(&layout);
         self.input_layout.insert(name, layout);
         val
     }
 
+    /// Sets the return value of this graph. The ref value `value` contains the output
+    /// references while the layout contains the interpretation of the ref value. If you
+    /// want the layout to be inferred from the value, you may use
+    /// [`RefValue::putative_layout`].
     pub fn output(&mut self, value: RefValue, layout: Layout) -> Result<(), Error> {
         self.outputs = value.output_vec(&layout).ok_or_else(|| Error::BadValue {
             expected: layout.clone(),
@@ -175,23 +207,40 @@ impl Graph {
         }
     }
 
+    /// Inserts a new assertion into the graph. If the supplied reference turns out to be
+    /// false in runtime, the supplied error message will be raised.
     pub fn assert(&mut self, test: Ref, error_msg: String) -> Result<Ref, Error> {
         let error_id = self.push_error(error_msg);
         self.insert(op::Assert(error_id as u64), vec![test])
     }
 
+    /// All the user-defined errors for this graph.
+    ///
+    /// # Note
+    ///
+    /// These are not all of the errors that the computational graph may raise. Don't treat
+    /// this list as exhaustive.
     pub fn errors(&self) -> &[String] {
         &self.errors
     }
 
+    /// Adds a new symbol to the graph, returning a reference associated with it.
     pub fn push_symbol(&mut self, name: String) -> Ref {
         Ref::Const(Type::Symbol, self.symbols.push(name) as u64)
     }
 
+    /// All the symbols defined in this graph.
+    ///
+    /// # Note
+    ///
+    /// These are not all of the possible symbols that this computation graph may use or
+    /// output. For example, inputs might define extra symbols during runtime. Don't
+    /// treat this list as exhaustive.
     pub fn symbols(&self) -> &[String] {
         self.symbols.as_ref()
     }
 
+    /// Adds a new mapping to the current graph.
     pub fn insert_mapping<S, I, K, V, E>(
         &mut self,
         name: String,
@@ -234,14 +283,18 @@ impl Graph {
         Ok(())
     }
 
+    /// Lists all mappings associated with this graph.
     pub fn mappings(&self) -> &HashMap<String, Arc<mapping::Mapping>> {
         &self.mappings
     }
 
+    /// Lists all mappings associated with this graph.
     pub fn mappings_mut(&mut self) -> &mut HashMap<String, Arc<mapping::Mapping>> {
         &mut self.mappings
     }
 
+    /// Inserts a new `a in mapping` operation in this graph, returning the ref value
+    /// associated with it.
     pub fn mapping_contains(&mut self, name: &str, key: RefValue) -> Result<RefValue, Error> {
         let mapping = self
             .mappings
@@ -273,6 +326,9 @@ impl Graph {
         Ok(RefValue::Scalar(self.insert(op::Not, vec![not_contains])?))
     }
 
+    /// Inserts a new `mapping[key]` operation in the graph, returning the ref value
+    /// associated with it. This operation will raise a runtime error if the key is not
+    /// found in the mapping.
     pub fn call_mapping(&mut self, name: &str, key: RefValue) -> Result<RefValue, Error> {
         let mapping = self
             .mappings
@@ -318,6 +374,9 @@ impl Graph {
             .ok_or_else(|| format!("building ref-value for call on mapping of {name}"))?)
     }
 
+    /// Inserts a new `mapping[key]` operation in the graph, returning the ref value
+    /// associated with it. This operation will return the default value if the key is not
+    /// found in the mapping.
     pub fn call_mapping_default(
         &mut self,
         name: &str,
@@ -378,16 +437,19 @@ impl Graph {
             .ok_or_else(|| format!("building ref-value for call with default on mapping {name}"))?)
     }
 
+    /// Inserts a new resource in the graph.
     pub fn insert_resource<R: Resource>(&mut self, name: String, resource: R) {
         self.resources
             .insert(name, Arc::new(ResourceContainer::new(resource)));
     }
 
+    /// Inserts a boxed dynamic pointer resource into this graph.
     pub fn insert_resource_boxed(&mut self, name: String, resource: Pin<Box<dyn Resource>>) {
         self.resources
             .insert(name, Arc::new(ResourceContainer::new_boxed(resource)));
     }
 
+    /// Inserts a new `resource.method(**params)` in the graph.
     pub fn call_resource(
         &mut self,
         name: &str,
@@ -439,6 +501,7 @@ impl Graph {
             .ok_or_else(|| "building ref-value for call {method_name} on {name}".to_string())?)
     }
 
+    /// Inserts a new subgraph in the graph, returning the id associated with it.
     pub fn insert_subgraph(&mut self, subgraph: Graph) -> usize {
         if let Some(exitsting) = self.subgraphs.iter().position(|g| g == &subgraph) {
             return exitsting;
@@ -449,6 +512,9 @@ impl Graph {
         graph_id
     }
 
+    /// Inserts a new graph call operation in the graph. This operation will call the
+    /// requested graph in runtime with with provided ref value as input parameters. This
+    /// function the ref value to the output of the call.
     pub fn call_graph(&mut self, graph_id: usize, args: RefValue) -> Result<RefValue, Error> {
         let subgraph = self
             .subgraphs
@@ -491,6 +557,7 @@ impl Graph {
             })?)
     }
 
+    /// Creates a new indexed list in the graph.
     pub fn indexed_list(&mut self, list: Vec<Ref>) -> Result<IndexedList, Error> {
         let element = list
             .first()

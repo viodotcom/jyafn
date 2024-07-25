@@ -23,7 +23,7 @@ build-linux-wheels:
 	bash ./utils/build-linux-wheels.sh
 
 build-macos-wheels: 
-	bash ./utils/build-macos-wheels.sh
+	cd jyafn-python && bash ../utils/build-macos-wheels.sh
 
 build-wheels: build-linux-wheels build-macos-wheels
 

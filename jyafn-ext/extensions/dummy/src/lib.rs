@@ -1,4 +1,19 @@
-use jyafn_ext::{Resource, Method};
+//! This crate implements the `dummy` extension for jyafn. This extension is intended for
+//! testing and debugging purposes.
+//! 
+//! The only resource declared by this extension is the `Dummy` resource, with three methods:
+//! ```
+//! // Gets the divison of `x` by the number supplied in the resource creation.
+//! get(x: scalar) -> scalar;
+//! // Always errors.
+//! err(x: scalar) -> scalar;
+//! // Always panics.
+//! // NOTE: the panic is caught by the macros in `jyafn-ext` and transformed into an
+//! // error. Panics can never propagate to jyafn code, ever!
+//! panic(x: scalar) -> scalar;
+//! ```
+
+use jyafn_ext::{Method, Resource};
 
 jyafn_ext::extension! {
     Dummy
@@ -25,21 +40,13 @@ impl Dummy {
 
     jyafn_ext::method!(get);
 
-    fn err(
-        &self,
-        _: jyafn_ext::Input,
-        _: jyafn_ext::OutputBuilder,
-    ) -> Result<(), String> {
+    fn err(&self, _: jyafn_ext::Input, _: jyafn_ext::OutputBuilder) -> Result<(), String> {
         Err("oops! wrooong!!".to_string())
     }
 
     jyafn_ext::method!(err);
 
-    fn panic(
-        &self,
-        _: jyafn_ext::Input,
-        _: jyafn_ext::OutputBuilder,
-    ) -> Result<(), String> {
+    fn panic(&self, _: jyafn_ext::Input, _: jyafn_ext::OutputBuilder) -> Result<(), String> {
         panic!("g-g-g-g-ghost!")
     }
 

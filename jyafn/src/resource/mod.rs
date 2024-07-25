@@ -1,3 +1,6 @@
+//! A `Resource` is an amount of data associated with "methods", much like an object in
+//! OO languages, but simpler.
+
 pub mod dummy;
 pub mod external;
 
@@ -18,10 +21,14 @@ use crate::{Error, FnError};
 pub type RawResourceMethod =
     unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut FnError;
 
+/// A method from a resource.
 #[derive(Debug)]
 pub struct ResourceMethod {
+    /// The bare function that will be invoked from inside the function code.
     pub(crate) fn_ptr: RawResourceMethod,
+    /// The input layout for the method.
     pub(crate) input_layout: Struct,
+    /// The output layout for the method.
     pub(crate) output_layout: Layout,
 }
 

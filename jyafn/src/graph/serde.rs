@@ -7,8 +7,7 @@ use crate::Error;
 use super::{check, Graph};
 
 impl Graph {
-    // NOTE: need to use a concrete type because the `Storage` object that backs mappings
-    // needs to be object-safe. A better workaround may be thought in the future.
+    /// Writes a binary representation of the graph to the supplied writer.
     pub fn dump<W: Write + Seek>(&self, writer: W) -> Result<(), Error> {
         let mut writer = zip::ZipWriter::new(writer);
 
@@ -35,8 +34,8 @@ impl Graph {
         Ok(())
     }
 
-    /// Loads a graph in an unintialized state. This is quicker, since extra resources are
-    /// not loader. However, you will not be able to compile the resultin graph.
+    /// Loads only the metadata of a graph. This is quicker and takes less memory than
+    /// loading the whole graph and reading its metadata.
     pub fn load_metadata<R: Read + Seek>(reader: R) -> Result<HashMap<String, String>, Error> {
         let mut archive = zip::ZipArchive::new(reader)?;
         let file = archive.by_name("metadata.json")?;
@@ -62,6 +61,7 @@ impl Graph {
         Ok(graph)
     }
 
+    /// Loads a graph from the supplied reader.
     pub fn load<R: Read + Seek>(reader: R) -> Result<Self, Error> {
         let mut archive = zip::ZipArchive::new(reader)?;
 
@@ -102,6 +102,13 @@ impl Graph {
         Ok(graph)
     }
 
+    /// Creates a JSON representation of this graph.
+    ///
+    /// # Note
+    ///
+    /// This JSON representation _cannot_ be used for serialization purposes, since it
+    /// does not fully serialize all the data necessary to recreate the graph. This is
+    /// for inspection purposes only.
     pub fn to_json(&self) -> String {
         serde_json::to_string(&self).expect("can always serialize")
     }

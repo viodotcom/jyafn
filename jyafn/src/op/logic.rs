@@ -4,6 +4,8 @@ use crate::{impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
+/// Implements an assertion. If the input is `false`, this operation will raise a runtime
+/// error.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Assert(pub u64);
 
@@ -58,9 +60,7 @@ impl Op for Assert {
     }
 }
 
-/// The ternary operator. Unfortunately, this a naive version where both sides of the
-/// ternary are calculated. Further design optimization is needed to elliminate this grave
-/// shortcomming.
+/// The ternary operator. This implements `if a then b else c`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Choose;
 
@@ -128,6 +128,7 @@ impl Op for Choose {
     }
 }
 
+/// Implements `!a`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Not;
 
@@ -170,6 +171,7 @@ impl Op for Not {
     }
 }
 
+/// Implements `a && b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct And;
 
@@ -208,6 +210,7 @@ impl Op for And {
     }
 }
 
+/// Implements `a || b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Or;
 

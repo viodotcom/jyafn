@@ -28,6 +28,7 @@ use std::{
     process::ExitStatus,
 };
 
+/// The error type for this crate.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -70,7 +71,10 @@ pub enum Error {
     #[error("{0}")]
     Other(String),
     #[error("{error}\n\n{context}")]
-    WithContext { error: Box<Error>, context: Ctx },
+    WithContext {
+        error: Box<Error>,
+        context: ContextStack,
+    },
 }
 
 impl From<std::io::Error> for Error {
@@ -97,20 +101,24 @@ impl From<String> for Error {
     }
 }
 
+/// An extension for `Result<T, Error>` providing a way to give context to errors.
 pub trait Context: Sized {
+    /// Attaches a context returned by a closure to the error.
     fn with_context<F>(self, ctx: F) -> Self
     where
         F: FnOnce() -> String;
 
+    /// Attaches a constant context to the error.
     fn context(self, ctx: &str) -> Self {
         self.with_context(|| ctx.to_string())
     }
 }
 
+/// A stack of contexts for a given error.
 #[derive(Debug, Default)]
-pub struct Ctx(Vec<String>);
+pub struct ContextStack(Vec<String>);
 
-impl Display for Ctx {
+impl Display for ContextStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Context (most recent last):")?;
         for cause in &self.0 {
@@ -133,7 +141,7 @@ impl<T> Context for Result<T, Error> {
             } else {
                 Error::WithContext {
                     error: Box::new(err),
-                    context: Ctx(vec![ctx()]),
+                    context: ContextStack(vec![ctx()]),
                 }
             }
         })
@@ -272,19 +280,5 @@ mod test {
             .unwrap();
 
         println!("abs({num}) = {abs}");
-    }
-
-    #[test]
-    fn integration() {
-        let func = Function::load(
-            std::fs::File::open("../jyafn-go/pkg/jyafn/testdata/simple-ttl.jyafn").unwrap(),
-        )
-        .unwrap();
-
-        let result: serde_json::Value = func.eval(&serde_json::from_str::<serde_json::Value>(
-            "{\"virtual_provider_code\":\"BKX\",\"is_available\":false,\"day_distance\":1234}"
-        ).unwrap()).unwrap();
-
-        println!("{result:?}");
     }
 }

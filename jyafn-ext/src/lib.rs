@@ -150,6 +150,8 @@ macro_rules! extension {
     };
 }
 
+/// Declares a single resource for this extension, given a type. This writes all the
+/// boilerplate code thar corresponds to the extension side of the API.
 #[macro_export]
 macro_rules! resource {
     ($ty:ty) => {
@@ -314,7 +316,7 @@ macro_rules! method {
     };
 }
 
-/// A convenience macro to get references to methods created with [`make_method`].
+/// A convenience macro to get references to methods created with [`method`].
 #[macro_export]
 macro_rules! get_method_ptr {
     ($safe_interface:ident) => {

@@ -1,12 +1,18 @@
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error as StdError;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{utils, Error};
 
 use super::symbols::Sym;
 use super::{Layout, Visitor};
 
+/// A type that can be encoded into a jyafn context.
 pub trait Encode {
+    /// The errors that might arise from the encoding procedure.
     type Err: 'static + StdError + Send;
+    /// Encodes this values into the provided context, given the provided layout.
     fn visit(
         &self,
         layout: &Layout,
@@ -15,12 +21,237 @@ pub trait Encode {
     ) -> Result<(), Self::Err>;
 }
 
-impl Encode for f64 {
+impl Encode for () {
+    type Err = Error;
+    fn visit(&self, layout: &Layout, _: &mut dyn Sym, _: &mut Visitor) -> Result<(), Error> {
+        match layout {
+            Layout::Unit => {}
+            _ => return Err("expected unit".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl<T: Encode> Encode for &T {
+    type Err = T::Err;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), T::Err> {
+        (*self).visit(layout, symbols, visitor)
+    }
+}
+
+macro_rules! impl_encode_container {
+    ($container:ty) => {
+        impl<T: Encode> Encode for $container {
+            type Err = T::Err;
+            fn visit(
+                &self,
+                layout: &Layout,
+                symbols: &mut dyn Sym,
+                visitor: &mut Visitor,
+            ) -> Result<(), T::Err> {
+                (&*self as &T).visit(layout, symbols, visitor)
+            }
+        }
+    };
+}
+
+impl_encode_container!(&mut T);
+impl_encode_container!(Box<T>);
+impl_encode_container!(Rc<T>);
+impl_encode_container!(Arc<T>);
+
+macro_rules! impl_encode_scalar {
+    ($scalar:ty) => {
+        impl Encode for $scalar {
+            type Err = Error;
+            fn visit(
+                &self,
+                layout: &Layout,
+                _: &mut dyn Sym,
+                visitor: &mut Visitor,
+            ) -> Result<(), Error> {
+                match layout {
+                    Layout::Scalar => visitor.push(*self as f64),
+                    _ => return Err("expected scalar".to_string().into()),
+                }
+
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_encode_scalar!(i8);
+impl_encode_scalar!(u8);
+impl_encode_scalar!(i16);
+impl_encode_scalar!(u16);
+impl_encode_scalar!(i32);
+impl_encode_scalar!(u32);
+impl_encode_scalar!(i64);
+impl_encode_scalar!(u64);
+impl_encode_scalar!(isize);
+impl_encode_scalar!(usize);
+impl_encode_scalar!(f64);
+impl_encode_scalar!(f32);
+
+impl Encode for bool {
     type Err = Error;
     fn visit(&self, layout: &Layout, _: &mut dyn Sym, visitor: &mut Visitor) -> Result<(), Error> {
         match layout {
-            Layout::Scalar => visitor.push(*self),
-            _ => return Err("expected scalar".to_string().into()),
+            Layout::Bool => {
+                visitor.push_int(*self as i64);
+            }
+            _ => return Err("expected bool".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl Encode for String {
+    type Err = Error;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), Error> {
+        match layout {
+            Layout::Symbol => {
+                let index = symbols.find(self);
+                visitor.push_int(index as i64);
+            }
+            _ => return Err("expected symbol".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl Encode for str {
+    type Err = Error;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), Error> {
+        match layout {
+            Layout::Symbol => {
+                let index = symbols.find(self);
+                visitor.push_int(index as i64);
+            }
+            _ => return Err("expected symbol".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl<T: Encode<Err = Error>> Encode for [T] {
+    type Err = T::Err;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), T::Err> {
+        match layout {
+            Layout::List(element, size) => {
+                if self.len() != *size {
+                    return Err(format!(
+                        "expected array of size {size}, got array of size {}",
+                        self.len()
+                    )
+                    .into());
+                }
+                for item in self {
+                    item.visit(element, symbols, visitor)?;
+                }
+            }
+            _ => return Err("expected list".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl<T: Encode<Err = Error>> Encode for Vec<T> {
+    type Err = T::Err;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), T::Err> {
+        match layout {
+            Layout::List(element, size) => {
+                if self.len() != *size {
+                    return Err(format!(
+                        "expected array of size {size}, got array of size {}",
+                        self.len()
+                    )
+                    .into());
+                }
+                for item in self {
+                    item.visit(element, symbols, visitor)?;
+                }
+            }
+            _ => return Err("expected list".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl<T: Encode<Err = Error>> Encode for HashMap<String, T> {
+    type Err = T::Err;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), T::Err> {
+        match layout {
+            Layout::Struct(fields) => {
+                for (name, field) in &fields.0 {
+                    let Some(value) = self.get(name) else {
+                        return Err(format!("missing field {name:?} in struct").into());
+                    };
+                    value.visit(field, symbols, visitor)?;
+                }
+            }
+            _ => return Err("expected struct".to_string().into()),
+        }
+
+        Ok(())
+    }
+}
+
+impl<T: Encode<Err = Error>> Encode for BTreeMap<String, T> {
+    type Err = T::Err;
+    fn visit(
+        &self,
+        layout: &Layout,
+        symbols: &mut dyn Sym,
+        visitor: &mut Visitor,
+    ) -> Result<(), T::Err> {
+        match layout {
+            Layout::Struct(fields) => {
+                for (name, field) in &fields.0 {
+                    let Some(value) = self.get(name) else {
+                        return Err(format!("missing field {name:?} in struct").into());
+                    };
+                    value.visit(field, symbols, visitor)?;
+                }
+            }
+            _ => return Err("expected struct".to_string().into()),
         }
 
         Ok(())

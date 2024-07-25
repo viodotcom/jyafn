@@ -7,13 +7,20 @@ use crate::{Error, Op};
 
 use super::Graph;
 
+/// The primitive types of data that can be represented in the computational graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GetSize)]
 #[repr(u8)]
 pub enum Type {
+    /// A floating point number.
     Float,
+    /// A boolean.
     Bool,
+    /// An _id_ referencing a piece of imutable text "somewhere".
     Symbol,
+    /// A pointer, with an origin node id. Pointers _cannot_ appear in the public
+    /// interface of a graph.
     Ptr { origin: usize },
+    /// An integer timestamp in microseconds.
     DateTime,
 }
 
@@ -58,6 +65,7 @@ impl Type {
         }
     }
 
+    /// All types in jyafn are 64 bits long. This function returns a constant.
     pub fn size(&self) -> usize {
         SIZE
     }
@@ -81,10 +89,14 @@ impl Type {
     }
 }
 
+/// A reference to a value in a graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GetSize)]
 pub enum Ref {
+    /// A reference to the input of a given id.
     Input(usize),
+    /// A constant value of a given type and given binary representation.
     Const(Type, u64),
+    /// A reference to a node of a given id.
     Node(usize),
 }
 
@@ -119,6 +131,7 @@ impl Ref {
         }
     }
 
+    /// Represents this ref as an f64, if it is a constant.
     pub fn as_f64(self) -> Option<f64> {
         if let Self::Const(Type::Float, c) = self {
             Some(f64::from_ne_bytes(u64::to_ne_bytes(c)))
@@ -127,6 +140,7 @@ impl Ref {
         }
     }
 
+    /// Represents this ref as an f64, if it is a constant.
     pub fn as_bool(self) -> Option<bool> {
         if let Self::Const(Type::Bool, c) = self {
             Some(c == 1)
@@ -136,10 +150,14 @@ impl Ref {
     }
 }
 
+/// A node of the computational graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
+    /// The operation that this node performs.
     pub(crate) op: Box<dyn Op>,
+    /// The inputs of the operation.
     pub(crate) args: Vec<Ref>,
+    /// The single output of the operation.
     pub(crate) ty: Type,
 }
 
@@ -156,6 +174,7 @@ impl GetSize for Node {
 }
 
 impl Node {
+    /// Creates a new node.
     pub(crate) fn init<O: Op>(
         node_id: usize,
         graph: &Graph,

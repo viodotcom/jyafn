@@ -1,10 +1,17 @@
+//! Constant values in the computational graph. Constants need to have a type and a binary
+//! representation as a 64-bit peice of data.
+
 use super::Type;
 
 use std::fmt::Debug;
 
+/// A constant. Constants need to have a type and a binary representation as a 64-bit
+/// peice of data.
 #[typetag::serde(tag = "type")]
 pub trait Const: 'static + Debug + Send {
+    /// The primitive. type of this constant.
     fn annotate(&self) -> Type;
+    /// The binary representation of this constant.
     fn render(&self) -> u64;
 }
 

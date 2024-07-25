@@ -5,14 +5,22 @@ use crate::Ref;
 
 use super::{Layout, Struct, ISOFORMAT};
 
+/// A ref value represents jyafn [`Ref`]s in a structured way, similar to [`serde_json::Value`].
 #[derive(Debug)]
 pub enum RefValue {
+    /// An empty value.
     Unit,
+    /// A floating point reference.
     Scalar(Ref),
+    /// A boolean reference.
     Bool(Ref),
+    /// A datetime reference.
     DateTime(Ref),
+    /// A symbol reference.
     Symbol(Ref),
+    /// A struct of values.
     Struct(HashMap<String, RefValue>),
+    /// A list of values, all of the same layout.
     List(Vec<RefValue>),
 }
 
@@ -43,6 +51,8 @@ impl Display for RefValue {
 }
 
 impl RefValue {
+    /// Creates a possible layout for this ref value. The putative layout is guaranteed
+    /// to structurally match `self`.
     pub fn putative_layout(&self) -> Layout {
         match self {
             Self::Unit => Layout::Unit,
@@ -68,12 +78,15 @@ impl RefValue {
         }
     }
 
+    /// Given a layout, creates a list of [`Ref`]s of this ref value. Returns `None` if
+    /// that is not possible.
     pub fn output_vec(&self, layout: &Layout) -> Option<Vec<Ref>> {
         let mut buffer = vec![];
         self.build_output_vec(layout, &mut buffer)?;
         Some(buffer)
     }
 
+    /// Does the heavy lifting for [`RefVa;ue::output_vec`].
     fn build_output_vec(&self, layout: &Layout, buf: &mut Vec<Ref>) -> Option<()> {
         match (self, layout) {
             (Self::Unit, Layout::Unit) => {}

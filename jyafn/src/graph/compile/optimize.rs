@@ -43,6 +43,7 @@ pub fn find_reachable(outputs: &[Ref], nodes: &[Node]) -> Vec<bool> {
     reachable
 }
 
+/// Runs constant evaluation optimization on the graph.
 pub fn const_eval(graph: &mut Graph) {
     let mut visited = vec![false; graph.nodes.len()];
 
@@ -79,6 +80,7 @@ pub fn const_eval(graph: &mut Graph) {
     graph.outputs = new_outputs;
 }
 
+/// The adjacency list of the reverse graph, with everything indexed only by node ids.
 fn reverse(nodes: &[Node]) -> Vec<Vec<usize>> {
     let mut reversed = nodes.iter().map(|_| vec![]).collect::<Vec<_>>();
     let mut visited = nodes.iter().map(|_| false).collect::<Vec<_>>();
@@ -108,32 +110,39 @@ fn reverse(nodes: &[Node]) -> Vec<Vec<usize>> {
 fn find_branches(
     nodes: &[Node],
     reversed: &[Vec<usize>],
-    choose: usize,
+    choose_node_id: usize,
 ) -> (BTreeSet<usize>, BTreeSet<usize>) {
     let is_accessible_later =
-        |node_id: usize| reversed[node_id].iter().any(|&other| other >= choose);
+        |node_id: usize| reversed[node_id].iter().any(|&other| other >= choose_node_id);
 
-    // Initial state
+    // The search queue
     let mut queue = BTreeSet::new();
+    // Nodes that reachable from the `if` side. These may also be accessble from the `else`
+    // side.
     let mut true_nodes = BTreeSet::new();
+    // Nodes that reachable from the `else` side. These may also be accessble from the `if`
+    // side.
     let mut false_nodes = BTreeSet::new();
-    let mut false_in_queue = 0;
+    // The number of nodes reachable from the `if` side in the queue.
     let mut true_in_queue = 0;
+    // The number of nodes reachable from the `else` side in the queue.
+    let mut false_in_queue = 0;
 
     // Extract arguments:
-    if let Ref::Node(condition) = nodes[choose].args[0] {
+    if let Ref::Node(condition) = nodes[choose_node_id].args[0] {
         queue.insert(condition);
+        // The test condition is accessible from _both_ the `if` and `else` sides.
         true_nodes.insert(condition);
         false_nodes.insert(condition);
         true_in_queue += 1;
         false_in_queue += 1;
     }
-    if let Ref::Node(t_node) = nodes[choose].args[1] {
+    if let Ref::Node(t_node) = nodes[choose_node_id].args[1] {
         queue.insert(t_node);
         true_nodes.insert(t_node);
         true_in_queue += 1;
     }
-    if let Ref::Node(f_node) = nodes[choose].args[2] {
+    if let Ref::Node(f_node) = nodes[choose_node_id].args[2] {
         queue.insert(f_node);
         false_nodes.insert(f_node);
         false_in_queue += 1;
@@ -142,6 +151,7 @@ fn find_branches(
     while let Some(node_id) = queue.pop_last() {
         let args = &nodes[node_id].args;
 
+        // If is accessible from the `if` side...
         if true_nodes.contains(&node_id) {
             true_in_queue -= 1;
             for &arg in args {
@@ -159,6 +169,7 @@ fn find_branches(
             }
         }
 
+        // If is accessible from the `else` side...
         if false_nodes.contains(&node_id) {
             false_in_queue -= 1;
             for &arg in args {
@@ -176,7 +187,7 @@ fn find_branches(
             }
         }
 
-        // If feverything is reachable from true and from false, there is no point in
+        // If everything is reachable from true and from false, there is no point in
         // pursuing the search further. This helps to cut the search waaay earlier in
         // case of big graphs.
         if true_in_queue == queue.len() && false_in_queue == queue.len() {
@@ -190,19 +201,29 @@ fn find_branches(
     )
 }
 
+/// A restructuring of your good old plain list of instructions into a cool tree structure
+/// that looks a lot like you averaged program written in a structured programming language.
 pub enum StatementOrConditional {
+    /// A single statement.
     Statement(usize),
+    /// A condition.
     Conditional {
+        /// The id of the node that contains the [`op::Choose`] operation.
         node_id: usize,
+        /// The test condition.
         condition: Ref,
+        /// Statements on the `if` side.
         true_side: Statements,
+        /// Statements on the `else` side.
         false_side: Statements,
     },
 }
 
+/// Statements are a list of statements or conditionals.
 pub struct Statements(Vec<StatementOrConditional>);
 
 impl Statements {
+    /// Build the nested conditional structure out of a list of topologically sorted nodes.
     pub fn build(nodes: &[Node]) -> Statements {
         let reversed = reverse(nodes);
         let all_node_ids = (0..nodes.len()).collect::<BTreeSet<_>>();
@@ -218,13 +239,17 @@ impl Statements {
 
             while let Some(node_id) = node_ids.pop_last() {
                 if nodes[node_id].op.as_any().is::<crate::op::Choose>() {
+                    // Found conditional! Let's split.
                     let condition = nodes[node_id].args[0];
                     let (true_side, false_side) = find_branches(nodes, reversed, node_id);
 
+                    // All these nodes are already accounted for in the branch. They do 
+                    // not belong to the main level. Therefore, remove!
                     true_side.iter().chain(false_side.iter()).for_each(|n| {
                         node_ids.remove(n);
                     });
 
+                    // Build conditional block:
                     buffer.push(StatementOrConditional::Conditional {
                         node_id,
                         condition,
@@ -232,6 +257,7 @@ impl Statements {
                         false_side: do_build(false_side, reversed, nodes),
                     });
                 } else {
+                    // Meh! just a plain old normal statement. Add it to the list.
                     buffer.push(StatementOrConditional::Statement(node_id));
                 }
             }
@@ -242,6 +268,7 @@ impl Statements {
         }
     }
 
+    /// Render the resulting nested structure into the provided QBE function builder.
     pub fn render_into(
         &self,
         graph: &Graph,

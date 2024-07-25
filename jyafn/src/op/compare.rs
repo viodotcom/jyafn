@@ -4,6 +4,7 @@ use crate::{impl_op, Graph, Ref, Type};
 
 use super::Op;
 
+/// Implements `a == b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Eq(pub Option<Type>);
 
@@ -58,6 +59,7 @@ impl Op for Eq {
     }
 }
 
+/// Implements `a > b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Gt;
 
@@ -101,6 +103,7 @@ impl Op for Gt {
     }
 }
 
+/// Implements `a < b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Lt;
 
@@ -144,6 +147,7 @@ impl Op for Lt {
     }
 }
 
+/// Implements `a >= b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ge;
 
@@ -187,6 +191,7 @@ impl Op for Ge {
     }
 }
 
+/// Implements `a <= b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Le;
 

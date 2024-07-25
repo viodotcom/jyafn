@@ -1,3 +1,5 @@
+//! _Pure_ functions that operate on raw jyafn data.
+
 use chrono::prelude::*;
 use lazy_static::lazy_static;
 use special_fun::FloatSpecial;
@@ -7,7 +9,9 @@ use std::sync::RwLock;
 
 use super::{utils, Error, Type};
 
-/// Only use with function pointers and _nothing_ else.
+/// A pointer that you pinky-promisse to be thread-safe (i.e., the reference behind it is
+/// `Send` and `Sync`). Only use with function pointers and _nothing_ else (this last
+/// bound is still difficult to express in the Rust type system).
 #[derive(Debug, Clone, Copy)]
 struct ThreadsafePointer(*const ());
 
@@ -20,14 +24,17 @@ impl From<ThreadsafePointer> for *const () {
     }
 }
 
+/// Wraps a closure that does compile-time evaluation for a pure function.
 #[derive(Clone, Copy)]
 pub(crate) struct ConstEval(pub(crate) &'static (dyn Send + Sync + Fn(&[f64]) -> Option<f64>));
 
 impl ConstEval {
+    /// No compile-time evaluation will be done.
     fn no_eval() -> ConstEval {
         ConstEval(&|_| None)
     }
 
+    /// Compile-time evalue for `fn(f64) -> f64`.
     fn call1(f: fn(f64) -> f64) -> ConstEval {
         let closure = move |args: &[f64]| {
             assert_eq!(args.len(), 1);
@@ -37,6 +44,7 @@ impl ConstEval {
         ConstEval(Box::leak(Box::new(closure)))
     }
 
+    /// Compile-time evalue for `fn(f64, f64) -> f64`.
     fn call2(f: fn(f64, f64) -> f64) -> ConstEval {
         let closure = move |args: &[f64]| {
             assert_eq!(args.len(), 2);
@@ -53,27 +61,44 @@ impl std::fmt::Debug for ConstEval {
     }
 }
 
+/// A pure function.
+///
+/// Pure functions should always
+/// 1. Yield the same result for the same inputs in all contexts.
+/// 2. Never fail. This includes panics, since jyafn is an FFI boundary and panics
+/// through FFI boundaries are undefined behavior.
+///
+///
 #[derive(Debug, Clone, Copy)]
 pub struct PFunc {
+    /// The raw function pointer to the function.
     fn_ptr: ThreadsafePointer,
+    /// The input types of the function.
     signature: &'static [Type],
+    /// The return type of the function.    /// The return type of the function
     returns: Type,
+    /// Provides compile-time evaluation behavior.
     pub(crate) const_eval: ConstEval,
 }
 
 impl PFunc {
+    /// The input types of the function.
     pub fn signature(self) -> &'static [Type] {
         self.signature
     }
 
+    /// The return type of the function
     pub fn returns(self) -> Type {
         self.returns
     }
 
+    /// The memory address of the function. This is what will be harcoded in the jyafn
+    /// code.
     pub fn location(self) -> usize {
         self.fn_ptr.0 as usize
     }
 
+    /// Creates a [`PFunc`] for a `fn(f64) -> f64`.
     fn call1(f: fn(f64) -> f64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
@@ -83,6 +108,7 @@ impl PFunc {
         }
     }
 
+    /// Creates a [`PFunc`] for a `fn(f64, 64) -> f64`.
     fn call2(f: fn(f64, f64) -> f64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
@@ -92,6 +118,7 @@ impl PFunc {
         }
     }
 
+    /// Creates a [`PFunc`] for a `fn(f64) -> bool`.
     fn call_bool_to_f64(f: fn(f64) -> bool) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
@@ -101,6 +128,7 @@ impl PFunc {
         }
     }
 
+    /// Creates a [`PFunc`] for a `fn(i64) -> f64`, where the input is a timestamp.
     pub fn call_dt_to_f64(f: fn(i64) -> f64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
@@ -110,6 +138,7 @@ impl PFunc {
         }
     }
 
+    /// Creates a [`PFunc`] for a `fn(f64) -> i64`, where the output is a timestamp.
     pub fn call_f64_to_dt(f: fn(f64) -> i64) -> PFunc {
         PFunc {
             fn_ptr: ThreadsafePointer(f as *const ()),
@@ -121,15 +150,19 @@ impl PFunc {
 }
 
 lazy_static! {
+    /// All the known [`PFunc`]s.
     static ref P_FUNCS: RwLock<HashMap<&'static str, PFunc>> = RwLock::new(init());
 }
 
+/// Inscribes a new pure function.
+///
 /// # Safety
 ///
 /// This function is unsafe because _anything_ can be passed as a function pointer,
 /// including stuff that are not a function. Its the caller responsibility to check that
 /// `fn_ptr` is in fact a function pointer and that the arguments match the signature
-/// given.
+/// given and that the function that is being supplied actually obeys all the expectations
+/// on a pure function (see [`PFunc`] for the requirements.)
 ///
 /// # Panics
 ///
@@ -163,11 +196,13 @@ pub unsafe fn inscribe(
     Ok(())
 }
 
+/// Gets a pure function by name, returning `None` if none is found.
 pub fn get(name: &str) -> Option<PFunc> {
     let guard = P_FUNCS.read().expect("poisoned");
     guard.get(name).copied()
 }
 
+/// Initalizes the [`P_FUNCS`] static with the standard pure function provided by jyafn.
 #[allow(unstable_name_collisions)]
 fn init() -> HashMap<&'static str, PFunc> {
     let mut map = HashMap::new();

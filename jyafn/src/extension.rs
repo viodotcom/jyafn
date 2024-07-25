@@ -40,25 +40,25 @@ pub struct Dumped(pub(crate) *mut ());
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtensionManifest {
     /// Tells us what this extension is.
-    metadata: ExtensionMetadata,
+    pub metadata: ExtensionMetadata,
     /// Describes the symbols to be used when accessing outcomes of fallible operations.
-    outcome: OutcomeManifest,
+    pub outcome: OutcomeManifest,
     /// Describes the symbols to be used when accessing buffers of binary memory.
-    dumped: DumpedManifest,
+    pub  dumped: DumpedManifest,
     /// Describes the symbols to be used when interfacing with each resource type provided
     /// by this extension.
-    resources: HashMap<String, ResourceManifest>,
+    pub resources: HashMap<String, ResourceManifest>,
 }
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtensionMetadata {
     /// This is the name of the extension and must match the file name in the filesystem.
-    name: String,
+    pub name: String,
     /// This is the version of the extension and must be a valid semantic version and
     /// must match the file name in the filesystem.
     #[serde_as(as = "DisplayFromStr")]
-    version: semver::Version,
+    pub version: semver::Version,
 }
 
 /// Lists the names of the symbols needed to create the interface between an outcome and
@@ -66,9 +66,9 @@ pub struct ExtensionMetadata {
 /// symbol.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutcomeManifest {
-    fn_get_err: String,
-    fn_get_ok: String,
-    fn_drop: String,
+    pub fn_get_err: String,
+    pub fn_get_ok: String,
+    pub fn_drop: String,
 }
 
 /// Lists the names of the symbols needed to create the interface between a dump of
@@ -76,9 +76,9 @@ pub struct OutcomeManifest {
 /// contract for each symbol.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DumpedManifest {
-    fn_get_ptr: String,
-    fn_get_len: String,
-    fn_drop: String,
+    pub fn_get_ptr: String,
+    pub fn_get_len: String,
+    pub fn_drop: String,
 }
 
 /// Lists the names of the symbols needed to create the interface between a resource and
@@ -86,19 +86,19 @@ pub struct DumpedManifest {
 /// symbol.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResourceManifest {
-    fn_from_bytes: String,
-    fn_dump: String,
-    fn_size: String,
-    fn_get_method_def: String,
-    fn_drop_method_def: String,
-    fn_drop: String,
+    pub fn_from_bytes: String,
+    pub fn_dump: String,
+    pub fn_size: String,
+    pub fn_get_method_def: String,
+    pub fn_drop_method_def: String,
+    pub fn_drop: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExternalMethod {
-    pub(crate) fn_ptr: usize,
-    pub(crate) input_layout: Struct,
-    pub(crate) output_layout: Layout,
+    pub fn_ptr: usize,
+    pub input_layout: Struct,
+    pub output_layout: Layout,
 }
 
 /// Checks for nul chars in the provided string and returns a nul-termindated slice.
@@ -121,14 +121,14 @@ unsafe fn get_symbol<T: Copy>(library: &Library, name: &str) -> Result<T, Error>
 pub struct OutcomeSymbols {
     /// Returns a C-style string if the given outcome is an error. Else, it should return
     /// null. This function will be called only once per outcome.
-    fn_get_err: unsafe extern "C" fn(Outcome) -> *const c_char,
+    pub fn_get_err: unsafe extern "C" fn(Outcome) -> *const c_char,
     /// Returns the successful result if the given outcome is success. The value in case
     /// of an error is undetermined. This function will be called at most one per outcome.
-    fn_get_ok: unsafe extern "C" fn(Outcome) -> *mut (),
+    pub fn_get_ok: unsafe extern "C" fn(Outcome) -> *mut (),
     /// Drops any memory associated with this outcome. This function will be called at
     /// most once per outcome and after it, no more calls involving the current outcome
     /// will ever be performed.
-    fn_drop: unsafe extern "C" fn(Outcome),
+    pub fn_drop: unsafe extern "C" fn(Outcome),
 }
 
 impl OutcomeSymbols {
@@ -153,12 +153,12 @@ impl OutcomeSymbols {
 #[derive(Debug)]
 pub struct DumpedSymbols {
     /// Gets the starting pointer of the binary representation.
-    pub(crate) fn_get_len: unsafe extern "C" fn(Dumped) -> usize,
+    pub fn_get_len: unsafe extern "C" fn(Dumped) -> usize,
     /// Gets the length of the binary representation.
-    pub(crate) fn_get_ptr: unsafe extern "C" fn(Dumped) -> *const u8,
+    pub fn_get_ptr: unsafe extern "C" fn(Dumped) -> *const u8,
     /// Drops any allocated memory created for this given dump. Will be called only once
     /// per dump.
-    pub(crate) fn_drop: unsafe extern "C" fn(Dumped),
+    pub fn_drop: unsafe extern "C" fn(Dumped),
 }
 
 impl DumpedSymbols {
@@ -181,25 +181,25 @@ impl DumpedSymbols {
 /// Lists the names of the symbols needed to create the interface between a resource and
 /// jyafn.
 #[derive(Debug, Clone)]
-pub(crate) struct ResourceSymbols {
+pub struct ResourceSymbols {
     /// Creates a new resource from the supplied binary data and length. This is the same
     /// data that is returned by the `fn_dump` function.
-    pub(crate) fn_from_bytes: unsafe extern "C" fn(*const u8, usize) -> Outcome,
+    pub fn_from_bytes: unsafe extern "C" fn(*const u8, usize) -> Outcome,
     /// Creates a dump, which points to the binary representation of the supplied resource.
-    pub(crate) fn_dump: unsafe extern "C" fn(RawResource) -> Outcome,
+    pub fn_dump: unsafe extern "C" fn(RawResource) -> Outcome,
     /// Gets the amount of heap memory (ie RAM) allocated by this resource.
-    pub(crate) fn_size: unsafe extern "C" fn(RawResource) -> usize,
+    pub fn_size: unsafe extern "C" fn(RawResource) -> usize,
     /// Given the `name` of a method and its `config` (i.e., aditional parameters) as
     /// C-style strings, returns the JSON representation of an [`ExternalMethod`] as a
     /// C-style string.
-    pub(crate) fn_get_method_def: unsafe extern "C" fn(RawResource, *const c_char) -> *mut c_char,
+    pub fn_get_method_def: unsafe extern "C" fn(RawResource, *const c_char) -> *mut c_char,
     /// Drops any allocated memory created for this given method definition. Will be
     /// called only once per method definiton created by `fn_get_method_def`.
-    pub(crate) fn_drop_method_def: unsafe extern "C" fn(*mut c_char),
+    pub fn_drop_method_def: unsafe extern "C" fn(*mut c_char),
     /// Drops any allocation memory created for this resource. This will be called only
     /// once per resource and, after this call, no more calls are expected on the given
     /// resource.
-    pub(crate) fn_drop: unsafe extern "C" fn(RawResource),
+    pub fn_drop: unsafe extern "C" fn(RawResource),
 }
 
 impl ResourceSymbols {
@@ -353,7 +353,7 @@ impl Extension {
         &self.metadata.version
     }
 
-    pub fn resources(&self) -> impl Iterator<Item=&str> {
+    pub fn resources(&self) -> impl Iterator<Item = &str> {
         self.resources.iter().map(|(key, _)| key.as_str())
     }
 }

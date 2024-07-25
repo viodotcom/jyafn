@@ -1,5 +1,18 @@
-use lightgbm3::Booster;
+//! This crate implements the `lightgbm` extension for jyafn. It exposes a minimal API
+//! for evaluating models in runtime.
+//! 
+//! The only resource declared by this extension is the `Lightgbm` resource, with three methods:
+//! ```
+//! // Predicts the probability of each class, given a list of feature values.
+//! predict(x: [scalar; n_features]) -> [scalar; n_classes];
+//! // The number of features in this model.
+//! num_features() -> scalar;
+//! // The number of classes in this model.
+//! num_classes() -> scalar;
+//! ```
+
 use jyafn_ext::{Input, Method, OutputBuilder, Resource};
+use lightgbm3::Booster;
 
 jyafn_ext::extension! {
     Lightgbm
@@ -12,7 +25,6 @@ struct Lightgbm {
 // TODO: wise? See... https://github.com/Mottl/lightgbm3-rs/issues/6
 unsafe impl Send for Lightgbm {}
 unsafe impl Sync for Lightgbm {}
-
 
 impl Resource for Lightgbm {
     fn from_bytes(bytes: &[u8]) -> Result<Self, impl ToString> {

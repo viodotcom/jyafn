@@ -5,6 +5,7 @@ use crate::{impl_is_eq, impl_op, pfunc, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
+/// Calls a pure function, given its name.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, GetSize)]
 pub struct Call(pub String);
 
@@ -60,6 +61,7 @@ impl Op for Call {
     }
 }
 
+/// Calls a sub-graph by its id.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CallGraph(pub usize);
 

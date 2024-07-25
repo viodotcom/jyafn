@@ -1,3 +1,5 @@
+//! A sample resource, included for testing and debugging purposes.
+
 use serde_derive::{Deserialize, Serialize};
 use std::pin::Pin;
 use std::sync::Arc;

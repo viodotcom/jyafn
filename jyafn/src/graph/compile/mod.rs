@@ -18,6 +18,7 @@ impl Graph {
             .find(|node| node.op.is_illegal(&node.args))
     }
 
+    /// Renders this graph as a QBE module.
     pub fn render(&self) -> qbe::Module<'static> {
         let mut module = qbe::Module::new();
         self.clone().do_render(&mut module, "run");
@@ -130,11 +131,15 @@ impl Graph {
     //     "#
     // }
 
+    /// Renders this graph as assembly code for the current machine's architecture,
+    /// using a standard assembler under the hood.
     pub fn render_assembly(&self) -> Result<String, Error> {
         let rendered = self.render();
         create_assembly(rendered)
     }
 
+    /// Compiles this graph to machine code and loads the resulting shared object into
+    /// the current process.
     pub fn compile(&self) -> Result<Function, Error> {
         let mut graph = self.clone();
         let mut module = qbe::Module::new();
@@ -152,6 +157,7 @@ impl Graph {
     }
 }
 
+/// Invokes QBE over some rendered QBE IR code. The result is assembly code.
 fn create_assembly<R>(rendered: R) -> Result<String, Error>
 where
     R: std::fmt::Display,
@@ -177,6 +183,7 @@ where
     Ok(String::from_utf8_lossy(&qbe_output.stdout).to_string())
 }
 
+/// Invokes an assembler on the provided assembly code to produce an output object.
 #[cfg(target_os = "macos")]
 fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     let mut r#as = Command::new("as")
@@ -201,6 +208,7 @@ fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     Ok(as_output.stdout)
 }
 
+/// Invokes an assembler on the provided assembly code to produce an output object.
 #[cfg(target_os = "linux")]
 fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     let tempdir = tempfile::tempdir()?;
@@ -229,6 +237,7 @@ fn assemble(assembly: &str) -> Result<Vec<u8>, Error> {
     Ok(std::fs::read(output)?)
 }
 
+/// Links the output object into a shared object using a linker.
 #[cfg(target_os = "macos")]
 fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
     let tempdir = tempfile::tempdir()?;
@@ -259,6 +268,7 @@ fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
     Ok(output)
 }
 
+/// Links the output object into a shared object using a linker.
 #[cfg(target_os = "linux")]
 fn link(unlinked: &[u8]) -> Result<NamedTempFile, Error> {
     let tempdir = tempfile::tempdir()?;

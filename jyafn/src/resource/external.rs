@@ -1,3 +1,5 @@
+//! A resource that provides its functionality via extensions (i.e., external code).
+
 use serde_derive::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use std::ffi::{CStr, CString};

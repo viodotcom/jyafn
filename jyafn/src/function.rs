@@ -40,6 +40,7 @@ impl From<String> for FnError {
 /// The function signature exposed from jyafn.
 pub type RawFn = unsafe extern "C" fn(*const u8, *mut u8) -> *mut FnError;
 
+/// All the data that a [`Function`] holds on to.
 #[derive(Debug)]
 pub struct FunctionData {
     graph: Graph,
@@ -73,6 +74,8 @@ impl GetSize for FunctionData {
     }
 }
 
+/// A function is a compiled representation of a computational graph, that can be called
+/// as a regular function.
 #[derive(Debug, Clone, GetSize)]
 pub struct Function {
     data: Arc<FunctionData>,
@@ -91,39 +94,50 @@ impl<'a> From<&'a Function> for Arc<FunctionData> {
 }
 
 impl Function {
+    /// The size of the input of this function, in bytes.
     pub fn input_size(&self) -> usize {
         self.data.input_size
     }
 
+    /// The size of the output of this function, in bytes.
     pub fn output_size(&self) -> usize {
         self.data.output_size
     }
 
+    /// The input layout of this function.
     pub fn input_layout(&self) -> &layout::Layout {
         &self.data.input_layout
     }
 
+    /// The output layout of this function.
     pub fn output_layout(&self) -> &layout::Layout {
         &self.data.output_layout
     }
 
+    /// The computational graph that generated this function.
     pub fn graph(&self) -> &Graph {
         &self.data.graph
     }
 
+    /// The raw function pointer of the compiled function in memory.
     pub fn fn_ptr(&self) -> RawFn {
         self.data.fn_ptr
     }
 
+    /// Returns the function data associated with this function.
     pub fn as_data(&self) -> Arc<FunctionData> {
         self.into()
     }
 
+    /// Loads a computational graph from the provided reader and compiles it, returning
+    /// the reulting function.
     pub fn load<R: Read + Seek>(reader: R) -> Result<Function, Error> {
         let graph = Graph::load(reader)?;
         graph.compile()
     }
 
+    /// Initializes a function from a given graph and a temporary file, containing the
+    /// shared object obtained from the compilation process.
     pub(crate) fn init(graph: Graph, shared_object: NamedTempFile) -> Result<Function, Error> {
         let library = unsafe {
             // Safety: shared object was complied straignt from the linker into the
@@ -166,6 +180,13 @@ impl Function {
         })
     }
 
+    /// Calls the function on an raw input and returns the result in the output. This
+    /// function panics if the input and the output are not of the correct size for this
+    /// function.
+    ///
+    /// This method is not unsafe in that it does not generate Undefined Behavior if some
+    /// contract is not obeyed. However, you should really know what you are doing here.
+    /// Consider using [`Function::eval`] instead.
     pub fn call_raw<I, O>(&self, input: I, mut output: O) -> *mut FnError
     where
         I: AsRef<[u8]>,
@@ -182,6 +203,12 @@ impl Function {
         unsafe { (self.data.fn_ptr)(input.as_ptr(), output.as_mut_ptr()) }
     }
 
+    /// Calls the function on an raw input and returns the result as boxed slice of bytes.
+    /// This function panics if the input is not of the correct size for this function.
+    ///
+    /// This method is not unsafe in that it does not generate Undefined Behavior if some
+    /// contract is not obeyed. However, you should really know what you are doing here.
+    /// Consider using [`Function::eval`] instead.
     pub fn eval_raw<I>(&self, input: I) -> Result<Box<[u8]>, Error>
     where
         I: AsRef<[u8]>,
@@ -198,6 +225,9 @@ impl Function {
         }
     }
 
+    /// Calls this function on an input that can be encoded to jyafn-compatible binary
+    /// data and builds the return value from the resulting binary data using the supplied
+    /// decoder.
     pub fn eval_with_decoder<E, D>(&self, input: &E, mut decoder: D) -> Result<D::Target, Error>
     where
         E: ?Sized + layout::Encode,
@@ -243,6 +273,8 @@ impl Function {
         Ok(decoder.build(&self.data.output_layout, &symbols_view, &mut decode_visitor))
     }
 
+    /// Runs this function on an input value and returns the the computation result or an
+    /// error in case there was some error during the computation process.
     pub fn eval<E, D>(&self, input: &E) -> Result<D, Error>
     where
         E: ?Sized + layout::Encode,
