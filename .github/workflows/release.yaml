@@ -54,7 +54,7 @@ jobs:
         ref: stable
     - name: Build wheels
       run: |
-        bash .utils/build-wheels.sh
+        bash ./utils/build-linux-wheels.sh
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
@@ -94,7 +94,7 @@ jobs:
         pip install maturin
     - name: Build wheels
       run: |
-        bash .utils/build-macos-wheels.sh
+        bash ./utils/build-macos-wheels.sh
     - name: Artifact update
       uses: actions/upload-artifact@v4
       with:
