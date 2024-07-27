@@ -112,8 +112,11 @@ fn find_branches(
     reversed: &[Vec<usize>],
     choose_node_id: usize,
 ) -> (BTreeSet<usize>, BTreeSet<usize>) {
-    let is_accessible_later =
-        |node_id: usize| reversed[node_id].iter().any(|&other| other >= choose_node_id);
+    let is_accessible_later = |node_id: usize| {
+        reversed[node_id]
+            .iter()
+            .any(|&other| other >= choose_node_id)
+    };
 
     // The search queue
     let mut queue = BTreeSet::new();
@@ -243,7 +246,7 @@ impl Statements {
                     let condition = nodes[node_id].args[0];
                     let (true_side, false_side) = find_branches(nodes, reversed, node_id);
 
-                    // All these nodes are already accounted for in the branch. They do 
+                    // All these nodes are already accounted for in the branch. They do
                     // not belong to the main level. Therefore, remove!
                     true_side.iter().chain(false_side.iter()).for_each(|n| {
                         node_ids.remove(n);

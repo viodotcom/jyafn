@@ -71,7 +71,7 @@ impl Op for CallGraph {
 
     fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         let subgraph = graph.subgraphs.get(self.0)?;
-        if &subgraph.inputs == args {
+        if subgraph.inputs == args {
             Some(Type::Ptr { origin: self_id })
         } else {
             None

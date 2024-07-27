@@ -37,7 +37,7 @@ fn types(graph: &mut Graph) -> Result<(), Error> {
                 }
             }
 
-            return Err(Error::Type(node.op, arg_types));
+            Err(Error::Type(node.op, arg_types))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -68,13 +68,13 @@ fn topsort(graph: &Graph) -> Result<(), Error> {
 fn pointers(graph: &Graph) -> Result<(), Error> {
     for &input in &graph.inputs {
         if matches!(input, Type::Ptr { .. }) {
-            return Err(format!("found pointer type in input").into());
+            return Err("found pointer type in input".to_string().into());
         }
     }
 
     for &output in &graph.outputs {
         if matches!(graph.type_of(output), Type::Ptr { .. }) {
-            return Err(format!("found pointer type in output").into());
+            return Err("found pointer type in output".to_string().into());
         }
     }
 

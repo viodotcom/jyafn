@@ -10,7 +10,7 @@ pub struct Input<'a>(&'a [u64]);
 impl<'a> Input<'a> {
     /// Creates a new input.
     ///
-    /// # Safety:
+    /// # Safety
     ///
     /// Make sure that `input` points to a slice with _memory size_ of `8 * n_slots` at
     /// least. Failing to do so, reads from bad memory may occur.
@@ -78,7 +78,7 @@ impl<'a> Drop for OutputBuilder<'a> {
 impl<'a> OutputBuilder<'a> {
     /// Creates a new input.
     ///
-    /// # Safety:
+    /// # Safety
     ///
     /// Make sure that `output` points to a slice with _memory size_ of `8 * n_slots` at
     /// least. Failing to do so, writes to bad memory may occur.

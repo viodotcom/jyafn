@@ -82,7 +82,7 @@ impl Type {
                 {
                     format!("{date}",)
                 } else {
-                    format!("<invalid datetime>")
+                    "<invalid datetime>".to_string()
                 }
             }
         }

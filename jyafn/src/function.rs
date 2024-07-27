@@ -215,7 +215,7 @@ impl Function {
     {
         let mut output = vec![0; self.data.output_size].into_boxed_slice();
         let status = self.call_raw(input, &mut output);
-        if status == std::ptr::null_mut() {
+        if status.is_null() {
             Ok(output)
         } else {
             // Safety: null was checked and the function pinky-promisses to return a valid
@@ -262,7 +262,7 @@ impl Function {
 
         // Call:
         let status = self.call_raw(&encode_visitor.0, &mut decode_visitor.0);
-        if status != std::ptr::null_mut() {
+        if !status.is_null() {
             // Safety: null was checked and the function pinky-promisses to return a valid
             // C string in case of error.
             let mut error = unsafe { Box::from_raw(status) };

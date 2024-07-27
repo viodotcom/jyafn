@@ -305,6 +305,16 @@ class Manifest:
         """Creates a new manifest instance with the supplied deploy token."""
         return Manifest(self.path, self.input_layout, self.output_layout, deploy_token)
 
+    @staticmethod
+    def from_json(s: str) -> Manifest:
+        obj: dict[str, Any] = json.loads(s)
+        return Manifest(
+            path=obj["path"],
+            input_layout=fn.Layout.from_json(json.dumps(obj["input_layout"])),
+            output_layout=fn.Layout.from_json(json.dumps(obj["output_layout"])),
+            deploy_token=obj.get("deploy_token", None),
+        )
+
     def to_json(self) -> str:
         """Generates a JSON string representation of this manifest."""
         input_json = self.input_layout.to_json()

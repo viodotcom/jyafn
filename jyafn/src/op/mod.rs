@@ -145,7 +145,7 @@ pub(crate) fn render_return_error(func: &mut qbe::Function, error: qbe::Value) {
         error_ptr.clone(),
         qbe::Type::Long,
         qbe::Instr::Call(
-            qbe::Value::Const(FnError::make_static as u64),
+            qbe::Value::Const(FnError::make_static as usize as u64),
             vec![(qbe::Type::Long, error)],
         ),
     );

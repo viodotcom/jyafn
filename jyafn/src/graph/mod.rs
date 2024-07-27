@@ -571,7 +571,7 @@ impl Graph {
             },
             list,
         )?;
-        let error = self.push_error(format!("Index out of bounds"));
+        let error = self.push_error("Index out of bounds".to_string());
 
         Ok(IndexedList {
             list,

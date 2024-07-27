@@ -26,12 +26,12 @@ macro_rules! extension {
         use std::ffi::{c_char, CString};
         use $crate::Outcome;
 
+        /// # Safety
+        ///
+        /// Expecting a valid pointer from input.
         #[no_mangle]
-        pub extern "C" fn outcome_get_err(outcome: *mut Outcome) -> *const c_char {
-            let outcome = unsafe {
-                // Safety: expecting a valid pointer from input.
-                &*outcome
-            };
+        pub unsafe extern "C" fn outcome_get_err(outcome: *mut Outcome) -> *const c_char {
+            let outcome = &*outcome;
 
             match outcome {
                 Outcome::Ok(_) => std::ptr::null(),
@@ -39,12 +39,12 @@ macro_rules! extension {
             }
         }
 
+        /// # Safety
+        ///
+        /// Expecting a valid pointer from input.
         #[no_mangle]
-        pub extern "C" fn outcome_get_ok(outcome: *mut Outcome) -> *mut () {
-            let outcome = unsafe {
-                // Safety: expecting a valid pointer from input.
-                &*outcome
-            };
+        pub unsafe extern "C" fn outcome_get_ok(outcome: *mut Outcome) -> *mut () {
+            let outcome = &*outcome;
 
             match outcome {
                 Outcome::Ok(ptr) => *ptr,
@@ -52,46 +52,43 @@ macro_rules! extension {
             }
         }
 
+        /// # Safety
+        ///
+        /// Expecting a valid pointer from input.
         #[no_mangle]
-        pub extern "C" fn outcome_drop(outcome: *mut Outcome) {
-            let _ = unsafe {
-                // Safety: expecting a valid pointer from input.
-                Box::from_raw(outcome)
-            };
+        pub unsafe extern "C" fn outcome_drop(outcome: *mut Outcome) {
+            let _ = Box::from_raw(outcome);
         }
 
+        /// # Safety
+        ///
+        /// Expecting a valid pointer from input.
         #[no_mangle]
-        pub extern "C" fn dump_get_len(dump: *const Vec<u8>) -> usize {
-            let dump = unsafe {
-                // Safety: expecting a valid pointer from input.
-                &*dump
-            };
+        pub unsafe extern "C" fn dump_get_len(dump: *const Vec<u8>) -> usize {
+            let dump = &*dump;
             dump.len()
         }
 
+        /// # Safety
+        ///
+        /// Expecting a valid pointer from input.
         #[no_mangle]
-        pub extern "C" fn dump_get_ptr(dump: *const Vec<u8>) -> *const u8 {
-            let dump = unsafe {
-                // Safety: expecting a valid pointer from input.
-                &*dump
-            };
+        pub unsafe extern "C" fn dump_get_ptr(dump: *const Vec<u8>) -> *const u8 {
+            let dump = &*dump;
             dump.as_ptr()
         }
 
+        /// # Safety
+        ///
+        /// Expecting a valid pointer from input.
         #[no_mangle]
-        pub extern "C" fn dump_drop(dump: *mut Vec<u8>) {
-            let _ = unsafe {
-                // Safety: expecting a valid pointer from input.
-                Box::from_raw(dump)
-            };
+        pub unsafe extern "C" fn dump_drop(dump: *mut Vec<u8>) {
+            let _ = Box::from_raw(dump);
         }
 
         #[no_mangle]
-        pub extern "C" fn method_def_drop(method: *mut c_char) {
-            let _ = unsafe {
-                // Safety: expecting a valid pointer from input.
-                CString::from_raw(method)
-            };
+        pub unsafe extern "C" fn method_def_drop(method: *mut c_char) {
+            let _ = CString::from_raw(method);
         }
 
         #[no_mangle]
@@ -251,7 +248,7 @@ macro_rules! resource {
 /// 1. Converts the raw pointer to a reference.
 /// 2. Converts the pointers into slices correctly.
 /// 3. Treats possible panics, converting them to errors. Panics are always unwanted, but
-/// panicking through an FFI boundary is UB. Therefore, this treatment is always necessary.
+///    panicking through an FFI boundary is UB. Therefore, this treatment is always necessary.
 ///
 /// # Usage
 ///

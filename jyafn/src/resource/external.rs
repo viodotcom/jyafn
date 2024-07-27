@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use crate::extension::{Dumped, Extension, ExternalMethod, RawResource, ResourceSymbols};
 use crate::Error;
 
-use super::{Resource, ResourceMethod, ResourceType};
+use super::{RawResourceMethod, Resource, ResourceMethod, ResourceType};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,7 +77,7 @@ impl ResourceType for External {
             extension.outcome_to_result(outcome)?
         };
 
-        if raw_ptr == std::ptr::null_mut() {
+        if raw_ptr.is_null() {
             return Err(format!("loaded resource for {self:?} from bytes was null").into());
         }
 
@@ -136,7 +136,7 @@ impl Resource for ExternalResource {
         unsafe {
             // Safety: extension is correctly implemented.
             let maybe_outcome = (resource.fn_dump)(self.ptr);
-            if maybe_outcome.0 == std::ptr::null_mut() {
+            if maybe_outcome.0.is_null() {
                 return Err(format!("dumped resource for {:?} was null", self.r#type).into());
             }
             extension.dumped_to_vec(Dumped(extension.outcome_to_result(maybe_outcome)?))
@@ -161,7 +161,7 @@ impl Resource for ExternalResource {
         let external_method = unsafe {
             // Safety: extension is correctly implemented.
             let maybe_method = (resource.fn_get_method_def)(self.ptr, c_method.as_ptr());
-            if maybe_method == std::ptr::null_mut() {
+            if maybe_method.is_null() {
                 return None;
             }
             scopeguard::defer! {
@@ -175,7 +175,7 @@ impl Resource for ExternalResource {
         Some(ResourceMethod {
             fn_ptr: unsafe {
                 // Safety: this should have been a valid address in the extension side.
-                std::mem::transmute(external_method.fn_ptr)
+                std::mem::transmute::<usize, RawResourceMethod>(external_method.fn_ptr)
             },
             input_layout: external_method.input_layout,
             output_layout: external_method.output_layout,

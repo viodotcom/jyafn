@@ -1,6 +1,6 @@
 //! This crate implements the `dummy` extension for jyafn. This extension is intended for
 //! testing and debugging purposes.
-//! 
+//!
 //! The only resource declared by this extension is the `Dummy` resource, with three methods:
 //! ```
 //! // Gets the divison of `x` by the number supplied in the resource creation.
@@ -35,7 +35,8 @@ impl Dummy {
         input: jyafn_ext::Input,
         mut output: jyafn_ext::OutputBuilder,
     ) -> Result<(), String> {
-        Ok(output.push_f64(self.do_get(input.get_f64(0))))
+        output.push_f64(self.do_get(input.get_f64(0)));
+        Ok(())
     }
 
     jyafn_ext::method!(get);

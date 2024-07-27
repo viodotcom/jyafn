@@ -66,7 +66,7 @@ impl std::fmt::Debug for ConstEval {
 /// Pure functions should always
 /// 1. Yield the same result for the same inputs in all contexts.
 /// 2. Never fail. This includes panics, since jyafn is an FFI boundary and panics
-/// through FFI boundaries are undefined behavior.
+///    through FFI boundaries are undefined behavior.
 ///
 ///
 #[derive(Debug, Clone, Copy)]

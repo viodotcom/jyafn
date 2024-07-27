@@ -83,7 +83,7 @@ impl Struct {
         for (name, field) in &self.0 {
             buf.push('\n');
             *buf += indent;
-            *buf += &name;
+            *buf += name;
             *buf += ": ";
             field.pretty_recursive(buf, indent);
             *buf += ",";
@@ -124,14 +124,12 @@ impl Struct {
             let (_, self_field) = self
                 .0
                 .iter()
-                .filter(|&(n, _)| n == name)
-                .next()
+                .find(|&(n, _)| n == name)
                 .expect("key exists");
             let (_, other_field) = other
                 .0
                 .iter()
-                .filter(|&(n, _)| n == name)
-                .next()
+                .find(|&(n, _)| n == name)
                 .expect("key exists");
 
             if !self_field.is_superset(other_field) {

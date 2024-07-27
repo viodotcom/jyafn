@@ -1,8 +1,8 @@
 //! Mappings are key-value pairs that can be randomly accessed in functions. These
 //! mappings are be backed by a plugable storage.
-//! 
+//!
 //! # A note about mappings
-//! 
+//!
 //! Mappings are lossy dictionaries. That is, if collisions do happen, only one of the
 //! values associated with that hash will remain. This is not really a concern for most
 //! applications, since collisions are very infrequent, especially with a good hash, such
@@ -211,7 +211,6 @@ impl Mapping {
     }
 
     /// Builds this storage from the supplied data.
-    #[must_use]
     pub(crate) fn read(&self, f: ZipFile<'_>) -> Result<Self, Error> {
         let storage = self.storage_type.read(f)?;
         Ok(Mapping {

@@ -37,6 +37,7 @@ pub struct ResourceMethod {
 #[typetag::serde(tag = "type")]
 pub trait ResourceType: std::fmt::Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     /// Creates a resource out of binary data.
+    #[allow(clippy::wrong_self_convention)]
     fn from_bytes(&self, bytes: &[u8]) -> Result<Pin<Box<dyn Resource>>, Error>;
 
     /// Reads a resource from a zip file entry.
@@ -115,7 +116,6 @@ impl ResourceContainer {
     }
 
     /// Reads the resource from a zip file entry.
-    #[must_use]
     pub(crate) fn read(&self, f: ZipFile<'_>) -> Result<Self, Error> {
         let resource = self.resource_type.read(f)?;
         Ok(ResourceContainer {
@@ -169,7 +169,7 @@ pub struct Input<'a>(&'a [u64]);
 impl<'a> Input<'a> {
     /// Creates a new input.
     ///
-    /// # Safety:
+    /// # Safety
     ///
     /// Make sure that `input` points to a slice with _memory size_ of `8 * n_slots` at
     /// least. Failing to do so, reads from bad memory may occur.
@@ -219,7 +219,7 @@ impl<'a> Drop for OutputBuilder<'a> {
 impl<'a> OutputBuilder<'a> {
     /// Creates a new input.
     ///
-    /// # Safety:
+    /// # Safety
     ///
     /// Make sure that `output` points to a slice with _memory size_ of `8 * n_slots` at
     /// least. Failing to do so, writes to bad memory may occur.
@@ -268,7 +268,8 @@ impl<'a> OutputBuilder<'a> {
 /// 1. Converts the raw pointer to a reference.
 /// 2. Converts the pointers into slices correctly.
 /// 3. Treats possible panics, converting them to errors. Panics are always unwanted, but
-/// panicking through an FFI boundary is UB. Therefore, this treatment is always necessary.
+///    panicking through an FFI boundary is UB. Therefore, this treatment is always
+///    necessary.
 ///
 /// # Usage
 ///

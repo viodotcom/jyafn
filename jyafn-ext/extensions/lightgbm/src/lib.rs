@@ -1,6 +1,6 @@
 //! This crate implements the `lightgbm` extension for jyafn. It exposes a minimal API
 //! for evaluating models in runtime.
-//! 
+//!
 //! The only resource declared by this extension is the `Lightgbm` resource, with three methods:
 //! ```
 //! // Predicts the probability of each class, given a list of feature values.
@@ -71,13 +71,15 @@ impl Lightgbm {
     jyafn_ext::method!(predict);
 
     fn num_features(&self, _: Input, mut output_builder: OutputBuilder) -> Result<(), String> {
-        Ok(output_builder.push_f64(self.booster.num_features() as f64))
+        output_builder.push_f64(self.booster.num_features() as f64);
+        Ok(())
     }
 
     jyafn_ext::method!(num_features);
 
     fn num_classes(&self, _: Input, mut output_builder: OutputBuilder) -> Result<(), String> {
-        Ok(output_builder.push_f64(self.booster.num_classes() as f64))
+        output_builder.push_f64(self.booster.num_classes() as f64);
+        Ok(())
     }
 
     jyafn_ext::method!(num_classes);

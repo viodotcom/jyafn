@@ -1,13 +1,12 @@
 //! An extension is a wrapper over a shared object comforming to a given interface.
 
-use lazy_static::lazy_static;
 use libloading::{Library, Symbol};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
 use crate::layout::{Layout, Struct};
 use crate::{Context, Error};
@@ -44,7 +43,7 @@ pub struct ExtensionManifest {
     /// Describes the symbols to be used when accessing outcomes of fallible operations.
     pub outcome: OutcomeManifest,
     /// Describes the symbols to be used when accessing buffers of binary memory.
-    pub  dumped: DumpedManifest,
+    pub dumped: DumpedManifest,
     /// Describes the symbols to be used when interfacing with each resource type provided
     /// by this extension.
     pub resources: HashMap<String, ResourceManifest>,
@@ -231,9 +230,8 @@ impl ResourceSymbols {
 
 type LoadedExtensionVersions = HashMap<semver::Version, Arc<Extension>>;
 
-lazy_static! {
-    static ref EXTENSIONS: RwLock<HashMap<String, LoadedExtensionVersions>> = RwLock::default();
-}
+static EXTENSIONS: LazyLock<RwLock<HashMap<String, LoadedExtensionVersions>>> =
+    LazyLock::new(RwLock::default);
 
 /// An extension is a wrapper over a shared object comforming to a given interface. This
 /// can be used to create extra "resources" that can be accessed from jyafn. It's useful
@@ -262,10 +260,10 @@ impl Extension {
         unsafe {
             // Safety: we can only pray nobody loads anything funny here. However, it's
             // not my responsibilty what kind of crap you install in your computer.
-            let library = Library::new(&path)?;
+            let library = Library::new(path)?;
             let extension_init: Symbol<ExtensionInit> = library.get(EXTENSION_INIT_SYMBOL)?;
             let outcome = extension_init();
-            if outcome == std::ptr::null_mut() {
+            if outcome.is_null() {
                 return Err(format!("library {path:?} failed to load").into());
             }
             let manifest: ExtensionManifest =
@@ -306,7 +304,7 @@ impl Extension {
             // Safety: supposing that the extension is correctly implmented and observing
             // the contract.
             let maybe_err = (self.outcome.fn_get_err)(outcome);
-            let result = if maybe_err != std::ptr::null() {
+            let result = if !maybe_err.is_null() {
                 Err(CStr::from_ptr(maybe_err)
                     .to_string_lossy()
                     .to_string()
@@ -332,7 +330,7 @@ impl Extension {
             }
 
             let dump_ptr = (self.dumped.fn_get_ptr)(dumped);
-            if dump_ptr == std::ptr::null_mut() {
+            if dump_ptr.is_null() {
                 return Err("dump location was null".to_string().into());
             }
             let dump_len = (self.dumped.fn_get_len)(dumped);
@@ -354,7 +352,7 @@ impl Extension {
     }
 
     pub fn resources(&self) -> impl Iterator<Item = &str> {
-        self.resources.iter().map(|(key, _)| key.as_str())
+        self.resources.keys().map(|key| key.as_str())
     }
 }
 
