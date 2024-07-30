@@ -1,4 +1,7 @@
 import jyafn as fn
+import os
+
+os.makedirs("data", exist_ok=True)
 
 
 @fn.func
