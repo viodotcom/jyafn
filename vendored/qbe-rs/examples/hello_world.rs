@@ -1,4 +1,4 @@
-use qbe::*;
+use jyafn_qbe::*;
 
 // Represents the hello world example from https://c9x.me/compile/
 

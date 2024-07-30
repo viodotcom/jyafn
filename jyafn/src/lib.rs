@@ -3,6 +3,8 @@
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("Currently `jyafn` only works in 64-bit atchitectures");
 
+extern crate jyafn_qbe as qbe;  // vendored
+
 pub mod r#const;
 pub mod extension;
 pub mod layout;

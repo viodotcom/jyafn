@@ -3,3 +3,6 @@ build:
 
 install:
 	./run-all.sh install
+
+publish:
+	cargo publish

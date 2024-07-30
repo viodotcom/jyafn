@@ -706,8 +706,8 @@ dependencies = [
  "glob",
  "hashbrown 0.14.5",
  "home",
+ "jyafn-qbe 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libloading",
- "qbe",
  "rand",
  "scopeguard",
  "semver",
@@ -744,6 +744,16 @@ dependencies = [
  "pyo3",
  "serde_json",
 ]
+
+[[package]]
+name = "jyafn-qbe"
+version = "2.1.1"
+
+[[package]]
+name = "jyafn-qbe"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1b55365d6be515655e092b3268908e3f12fbce4225ccc879bdb5698f9f1253"
 
 [[package]]
 name = "lazy_static"
@@ -1035,10 +1045,6 @@ dependencies = [
  "quote",
  "syn 2.0.71",
 ]
-
-[[package]]
-name = "qbe"
-version = "2.1.0"
 
 [[package]]
 name = "quote"
