@@ -138,7 +138,7 @@ fn unique_for(v: qbe::Value, prefix: &str) -> String {
     format!("{prefix}_{name}")
 }
 
-/// Renders the call to create an [`FnError`] out of a static string in jyafn code.
+/// Renders the call to create an [`FnError`] out of a static C-Style string in jyafn code.
 pub(crate) fn render_return_error(func: &mut qbe::Function, error: qbe::Value) {
     let error_ptr = qbe::Value::Temporary("__error_ptr".to_string());
     func.assign_instr(
@@ -146,6 +146,21 @@ pub(crate) fn render_return_error(func: &mut qbe::Function, error: qbe::Value) {
         qbe::Type::Long,
         qbe::Instr::Call(
             qbe::Value::Const(FnError::make_static as usize as u64),
+            vec![(qbe::Type::Long, error)],
+        ),
+    );
+    func.add_instr(qbe::Instr::Ret(Some(error_ptr)));
+}
+
+/// Renders the call to create an [`FnError`] out of an allocated C-style string in jyafn
+/// code.
+pub(crate) fn render_return_allocated_error(func: &mut qbe::Function, error: qbe::Value) {
+    let error_ptr = qbe::Value::Temporary("__error_ptr".to_string());
+    func.assign_instr(
+        error_ptr.clone(),
+        qbe::Type::Long,
+        qbe::Instr::Call(
+            qbe::Value::Const(FnError::make_allocated as usize as u64),
             vec![(qbe::Type::Long, error)],
         ),
     );

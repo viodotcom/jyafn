@@ -1,7 +1,6 @@
 //! This crate is intended to help extension authors. It exposes a minimal version of
 //! `jyafn` and many convenience macros to generate all the boilerplate involved.
 
-mod fn_error;
 mod io;
 mod layout;
 mod outcome;
@@ -13,18 +12,71 @@ pub use paste::paste;
 /// We need JSON support to zip JSON values around the FFI boundary.
 pub use serde_json;
 
-pub use fn_error::FnError;
 pub use io::{Input, OutputBuilder};
 pub use layout::{Layout, Struct, ISOFORMAT};
 pub use outcome::Outcome;
 pub use resource::{Method, Resource};
 
 /// Generates the boilerplate code for a `jyafn` extension.
+///
+/// # Usage
+///
+/// This macro accepts a list of comman-separated types, each of which has to implement
+/// the [`Resource`] trait, like so
+/// ```
+/// extension! {
+///     Foo, Bar, Baz
+/// }
+/// ```
+/// Optionally, you may define an init function, which takes no arguments and returns
+/// `Result<(), String>`, like so
+/// ```
+/// extension! {
+///     init = my_init;
+///     Foo, Bar, Baz
+/// }
+///
+/// fn my_init() -> Result<(), String> { /* ... */}
+/// ```
 #[macro_export]
 macro_rules! extension {
     ($($ty:ty),*) => {
+        fn noop() -> Result<(), String> { Ok (()) }
+
+        $crate::extension! {
+            init = noop;
+            $($ty),*
+        }
+    };
+    (init = $init_fn:ident; $($ty:ty),*) => {
         use std::ffi::{c_char, CString};
         use $crate::Outcome;
+
+        /// Creates a C-style string out of a `String` in a way that doesn't produce errors. This
+        /// function substitutes nul characters by the ` ` (space) character. This avoids an
+        /// allocation.
+        ///
+        /// This method **leaks** the string. So, don't forget to guarantee that somene somewhere
+        /// is freeing it.
+        ///
+        /// # Note
+        ///
+        /// Yes, I know! It's a pretty lousy implementation that is even... O(n^2) (!!). You can
+        /// do better than I in 10mins.
+        pub(crate) fn make_safe_c_str(s: String) -> CString {
+            let mut v = s.into_bytes();
+            loop {
+                match std::ffi::CString::new(v) {
+                    Ok(c_str) => return c_str,
+                    Err(err) => {
+                        let nul_position = err.nul_position();
+                        v = err.into_vec();
+                        v[nul_position] = b' ';
+                    }
+                }
+            }
+        }
+
 
         /// # Safety
         ///
@@ -87,13 +139,15 @@ macro_rules! extension {
         }
 
         #[no_mangle]
-        pub unsafe extern "C" fn method_def_drop(method: *mut c_char) {
+        pub unsafe extern "C" fn string_drop(method: *mut c_char) {
             let _ = CString::from_raw(method);
         }
 
         #[no_mangle]
         pub extern "C" fn extension_init() -> *const c_char {
-            fn safe_extension_init() -> String {
+            fn safe_extension_init() -> Result<$crate::serde_json::Value, String> {
+                $init_fn()?;
+
                 let manifest = $crate::serde_json::json!({
                     "metadata": {
                         "name": env!("CARGO_PKG_NAME"),
@@ -112,33 +166,40 @@ macro_rules! extension {
                         "fn_get_len": "dump_get_len",
                         "fn_drop": "dump_drop"
                     },
+                    "string": {
+                        "fn_drop": "string_drop"
+                    },
                     "resources": {$(
                         stringify!($ty): {
                             "fn_from_bytes": stringify!($ty).to_string() + "_from_bytes",
                             "fn_dump": stringify!($ty).to_string() + "_dump",
                             "fn_size": stringify!($ty).to_string() + "_size",
                             "fn_get_method_def": stringify!($ty).to_string() + "_get_method",
-                            "fn_drop_method_def": "method_def_drop",
                             "fn_drop": stringify!($ty).to_string() + "_drop"
                         },
                     )*}
                 });
 
-                manifest.to_string()
+                Ok(manifest)
             }
 
-            std::panic::catch_unwind(|| {
-                // This leak will never be un-leaked.
-                let boxed = CString::new(safe_extension_init())
-                    .expect("json output shouldn't contain nul characters")
-                    .into_boxed_c_str();
-                let c_str = Box::leak(boxed);
-                c_str.as_ptr()
-            })
-            .unwrap_or_else(|_| {
-                eprintln!("extension initialization panicked. See stderr");
-                std::ptr::null()
-            })
+            let outcome = std::panic::catch_unwind(|| {
+                match safe_extension_init() {
+                    Ok(manifest) => manifest,
+                    Err(err) => {
+                        $crate::serde_json::json!({"error": err})
+                    }
+                }
+            }).unwrap_or_else(|_| {
+                $crate::serde_json::json!({
+                    "error": "extension initialization panicked. See stderr"
+                })
+            });
+
+            match CString::new(outcome.to_string()) {
+                Ok(s) => s.into_raw(),
+                Err(_) => std::ptr::null(),
+            }
         }
 
         $(
@@ -279,7 +340,7 @@ macro_rules! method {
                 input_slots: u64,
                 output_ptr: *mut u8,
                 output_slots: u64,
-            ) -> *mut $crate::FnError {
+            ) -> *mut u8 {
                 match std::panic::catch_unwind(|| {
                     unsafe {
                         // Safety: all this stuff came from jyafn code. The jyafn code should
@@ -297,16 +358,14 @@ macro_rules! method {
                 }) {
                     Ok(Ok(())) => std::ptr::null_mut(),
                     Ok(Err(err)) => {
-                        let boxed = Box::new(err.to_string().into());
-                        Box::leak(boxed)
+                        make_safe_c_str(err).into_raw() as *mut u8
                     }
                     // DON'T forget the nul character when working with bytes directly!
                     Err(_) => {
-                        let boxed = Box::new(format!(
+                        make_safe_c_str(format!(
                             "method {:?} panicked. See stderr",
                             stringify!($safe_interface),
-                        ).into());
-                        Box::leak(boxed)
+                        )).into_raw() as *mut u8
                     }
                 }
             }

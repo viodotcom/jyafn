@@ -1,7 +1,7 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_is_eq, impl_op, Graph, Ref, Type};
+use crate::{graph::SLOT_SIZE, impl_is_eq, impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
@@ -80,7 +80,7 @@ impl Op for CallResource {
                 qbe::Type::Long,
                 qbe::Instr::Add(
                     data_ptr.clone(),
-                    qbe::Value::Const(graph.type_of(arg).size() as u64),
+                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
                 ),
             );
         }
@@ -109,8 +109,7 @@ impl Op for CallResource {
             end_side.clone(),
         ));
         func.add_block(raise_side);
-        // This status is already a `*mut FnError`. So, no need to make.
-        func.add_instr(qbe::Instr::Ret(Some(status)));
+        super::render_return_allocated_error(func, status);
         func.add_block(end_side);
         func.assign_instr(output, qbe::Type::Long, qbe::Instr::Copy(output_ptr));
     }

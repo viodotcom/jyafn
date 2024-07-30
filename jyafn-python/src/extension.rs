@@ -1,5 +1,6 @@
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::resource::ResourceType;
@@ -11,6 +12,14 @@ pub struct Extension(Arc<rust::extension::Extension>);
 
 #[pymethods]
 impl Extension {
+    #[staticmethod]
+    fn list_loaded() -> HashMap<String, Vec<String>> {
+        rust::extension::list()
+            .into_iter()
+            .map(|(name, versions)| (name, versions.into_iter().map(|v| v.to_string()).collect()))
+            .collect()
+    }
+
     #[new]
     #[pyo3(signature = (name, version_req = "*"))]
     fn new(name: &str, version_req: &str) -> PyResult<Extension> {

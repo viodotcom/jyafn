@@ -9,23 +9,51 @@ use tempfile::NamedTempFile;
 
 use crate::Function;
 
-use super::{Error, Graph, Node};
+use super::{Error, Graph, Node, SLOT_SIZE};
 
 impl Graph {
+    /// Renders this graph as a QBE module. This fails if the graph contains illegal
+    /// operations that cannot be optimized away (e.g., unconditional errors).
+    pub fn render(&self) -> Result<qbe::Module<'static>, Error> {
+        let mut module = qbe::Module::new();
+        let mut graph = self.clone();
+        graph.do_check_optimize()?;
+        graph.do_render(&mut module, "run");
+
+        Ok(module)
+    }
+
+    /// Finds illegal instructions in graphs.
     fn find_illegal(&self) -> Option<&Node> {
         self.nodes
             .iter()
             .find(|node| node.op.is_illegal(&node.args))
     }
 
-    /// Renders this graph as a QBE module.
-    pub fn render(&self) -> qbe::Module<'static> {
-        let mut module = qbe::Module::new();
-        self.clone().do_render(&mut module, "run");
-        module
+    /// Performs optimizations in the current graph. These optimizations currently are,
+    /// in this order:
+    /// 1. Constant evaluation: things like `1 * x` or `2 + 2`, which we already know the
+    ///    result beforehand.
+    /// 2. Reachability eliminations: remove nodes that will never be computed.
+    /// 3. Finds illegal instructions that remain: thigs that are not allowed, such as
+    ///    unconditionally failing assertions.
+    fn do_check_optimize(&mut self) -> Result<(), Error> {
+        // Constant evaluation:
+        optimize::const_eval(self);
+
+        // Reachability (needs to be after const eval):
+        let reachable = optimize::find_reachable(&self.outputs, &self.nodes);
+        optimize::remap_reachable(self, &reachable);
+
+        // Find illegal (needs to be after reachability):
+        if let Some(node) = self.find_illegal() {
+            return Err(Error::IllegalInstruction(format!("{node:?}")));
+        }
+
+        Ok(())
     }
 
-    fn do_render(&mut self, module: &mut qbe::Module<'static>, namespace: &str) {
+    fn do_render(&self, module: &mut qbe::Module<'static>, namespace: &str) {
         // Rendering main:
         let main = module.add_function(qbe::Function::new(
             qbe::Linkage::public(),
@@ -48,12 +76,11 @@ impl Graph {
                 qbe::Value::Temporary("in".to_string()),
                 qbe::Type::Long,
                 qbe::Instr::Add(
-                    qbe::Value::Const(input.size() as u64),
+                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
                     qbe::Value::Temporary("in".to_string()),
                 ),
             );
         }
-
         // This is the old naive implementation, kept here in case you need a quick
         // rollback...
         // // Supposes that the nodes were already declared in topological order:
@@ -64,11 +91,8 @@ impl Graph {
         //     }
         // }
 
-        // This is the fancier implementation, that passes the right nodes to the inside
-        // of conditionals.
-        optimize::const_eval(self);
-        let reachable = optimize::find_reachable(&self.outputs, &self.nodes);
-        optimize::Statements::build(&self.nodes).render_into(self, &reachable, main, namespace);
+        // optimize::Statements::build(&self.nodes).render_into(self, &reachable, main, namespace);
+        optimize::Statements::build(&self.nodes).render_into(self, main, namespace);
 
         for output in &self.outputs {
             main.add_instr(qbe::Instr::Store(
@@ -80,7 +104,7 @@ impl Graph {
                 qbe::Value::Temporary("out".to_string()),
                 qbe::Type::Long,
                 qbe::Instr::Add(
-                    qbe::Value::Const(self.type_of(*output).size() as u64),
+                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
                     qbe::Value::Temporary("out".to_string()),
                 ),
             );
@@ -107,7 +131,7 @@ impl Graph {
         }
 
         // Render sub-graphs:
-        for (i, subgraph) in self.subgraphs.iter_mut().enumerate() {
+        for (i, subgraph) in self.subgraphs.iter().enumerate() {
             subgraph.do_render(module, &format!("{namespace}.graph.{i}"))
         }
     }
@@ -134,22 +158,14 @@ impl Graph {
     /// Renders this graph as assembly code for the current machine's architecture,
     /// using a standard assembler under the hood.
     pub fn render_assembly(&self) -> Result<String, Error> {
-        let rendered = self.render();
+        let rendered = self.render()?;
         create_assembly(rendered)
     }
 
     /// Compiles this graph to machine code and loads the resulting shared object into
     /// the current process.
     pub fn compile(&self) -> Result<Function, Error> {
-        let mut graph = self.clone();
-        let mut module = qbe::Module::new();
-        graph.do_render(&mut module, "run");
-
-        if let Some(node) = graph.find_illegal() {
-            return Err(Error::IllegalInstruction(format!("{node:?}")));
-        }
-
-        let assembly = create_assembly(module)?;
+        let assembly = self.render_assembly()?;
         let unlinked = assemble(&assembly)?;
         let shared_object = link(&unlinked)?;
 

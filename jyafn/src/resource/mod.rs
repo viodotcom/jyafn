@@ -15,11 +15,11 @@ use std::sync::Arc;
 use zip::read::ZipFile;
 
 use crate::layout::{Layout, Struct};
-use crate::{Error, FnError};
+use crate::Error;
 
 /// The signature of the function that will be invoked from inside the function code.
 pub type RawResourceMethod =
-    unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut FnError;
+    unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut u8;
 
 /// A method from a resource.
 #[derive(Debug)]
@@ -298,7 +298,7 @@ macro_rules! safe_method {
             input_slots: u64,
             output_ptr: *mut u8,
             output_slots: u64,
-        ) -> *mut $crate::FnError {
+        ) -> *mut u8 {
             match std::panic::catch_unwind(|| {
                 unsafe {
                     // Safety: all this stuff came from jyafn code. The jyafn code should
@@ -315,15 +315,9 @@ macro_rules! safe_method {
                 }
             }) {
                 Ok(Ok(())) => std::ptr::null_mut(),
-                Ok(Err(err)) => {
-                    let boxed = Box::new(err.to_string().into());
-                    Box::leak(boxed)
-                }
-                // DON'T forget the nul character when working with bytes directly!
-                Err(_) => {
-                    let boxed = Box::new("method panicked. See stderr".to_string().into());
-                    Box::leak(boxed)
-                }
+                Ok(Err(err)) => crate::utils::make_safe_c_str(err).into_raw() as *mut u8,
+                Err(_) => crate::utils::make_safe_c_str("method panicked. See stderr".to_string())
+                    .into_raw() as *mut u8,
             }
         }
 

@@ -1,6 +1,7 @@
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3::types::PyTuple;
 use rust::layout::{Decoder, Encode, Layout as RustLayout, Sym, Visitor};
 
 pub struct Obj<'py>(pub Bound<'py, PyAny>);
@@ -69,6 +70,17 @@ impl<'py> Encode for Obj<'py> {
                     Obj(item).visit(field, symbols, visitor)?;
                 }
             }
+            RustLayout::Tuple(fields) => {
+                for (idx, field) in fields.iter().enumerate() {
+                    let Ok(item) = self.0.get_item(idx) else {
+                        return Err(exceptions::PyTypeError::new_err(format!(
+                            "missing field {idx} in {}",
+                            self.0
+                        )));
+                    };
+                    Obj(item).visit(field, symbols, visitor)?;
+                }
+            }
             RustLayout::List(element, size) => {
                 let mut n_items = 0;
                 for item in self.0.iter()? {
@@ -131,6 +143,16 @@ impl<'py> Decoder for PyDecoder<'py> {
 
                 dict.to_object(self.0)
             }
+            RustLayout::Tuple(fields) => {
+                let tuple = pyo3::types::PyTuple::new_bound(
+                    self.0,
+                    fields
+                        .iter()
+                        .map(|field| self.build(field, symbols, visitor)),
+                );
+
+                tuple.to_object(self.0)
+            }
             RustLayout::List(element, size) => pyo3::types::PyList::new_bound(
                 self.0,
                 (0..*size).map(|_| self.build(element, symbols, visitor)),
@@ -192,6 +214,14 @@ impl Layout {
         matches!(&self.0, rust::layout::Layout::Symbol)
     }
 
+    fn is_struct(&self) -> bool {
+        matches!(&self.0, rust::layout::Layout::Struct(_))
+    }
+
+    fn is_tuple(&self) -> bool {
+        matches!(&self.0, rust::layout::Layout::Tuple(_))
+    }
+
     fn struct_keys(&self, py: Python) -> PyResult<PyObject> {
         let rust::layout::Layout::Struct(s) = &self.0 else {
             return Ok(pyo3::types::PyNone::get_bound(py).to_object(py));
@@ -248,5 +278,15 @@ impl Layout {
         Ok(Layout(rust::layout::Layout::Struct(rust::layout::Struct(
             fields,
         ))))
+    }
+
+    #[staticmethod]
+    fn tuple_of(fields: &Bound<'_, PyTuple>) -> PyResult<Layout> {
+        let fields = fields
+            .iter()
+            .map(|value| Ok(value.extract::<Layout>()?.0))
+            .collect::<PyResult<Vec<rust::layout::Layout>>>()?;
+
+        Ok(Layout(rust::layout::Layout::Tuple(fields)))
     }
 }

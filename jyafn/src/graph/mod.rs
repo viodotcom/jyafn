@@ -2,8 +2,12 @@ mod check;
 mod compile;
 mod node;
 mod serde;
+mod r#type;
 
-pub use node::{Node, Ref, Type};
+pub mod size;
+
+pub use node::{Node, Ref};
+pub use r#type::{Type, SLOT_SIZE};
 
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
@@ -171,6 +175,9 @@ impl Graph {
                     .map(|(name, field)| (name.clone(), self.alloc_input(field)))
                     .collect(),
             ),
+            Layout::Tuple(fields) => {
+                RefValue::Tuple(fields.iter().map(|field| self.alloc_input(field)).collect())
+            }
             Layout::List(element, size) => {
                 RefValue::List((0..*size).map(|_| self.alloc_input(element)).collect())
             }

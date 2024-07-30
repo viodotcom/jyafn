@@ -4,7 +4,7 @@ import jyafn as fn
 
 
 @fn.func
-def make_date(dt: fn.datetime) -> fn.datetime["%Y-%m-%d"]:
+def make_date(dt: fn.datetime) -> fn.datetime[b"%Y-%m-%d"]:
     return dt
 
 

@@ -78,9 +78,12 @@ type ffiType struct {
 	layoutIsDatetime     func(LayoutPtr) bool
 	layoutIsSymbol       func(LayoutPtr) bool
 	layoutIsStruct       func(LayoutPtr) bool
+	layoutIsTuple        func(LayoutPtr) bool
 	layoutIsList         func(LayoutPtr) bool
 	layoutDatetimeFormat func(LayoutPtr) AllocatedStr
 	layoutAsStruct       func(LayoutPtr) StructPtr
+	layoutTupleSize      func(LayoutPtr) uintptr
+	layoutGetTupleItem   func(LayoutPtr) LayoutPtr
 	layoutListElement    func(LayoutPtr) LayoutPtr
 	layoutListSize       func(LayoutPtr) uintptr
 	layoutIsSuperset     func(LayoutPtr, LayoutPtr) bool
@@ -185,9 +188,12 @@ func init() {
 	register(&ffi.layoutIsDatetime, "layout_is_datetime")
 	register(&ffi.layoutIsSymbol, "layout_is_symbol")
 	register(&ffi.layoutIsStruct, "layout_is_struct")
+	register(&ffi.layoutIsTuple, "layout_is_tuple")
 	register(&ffi.layoutIsList, "layout_is_list")
 	register(&ffi.layoutDatetimeFormat, "layout_datetime_format")
 	register(&ffi.layoutAsStruct, "layout_as_struct")
+	register(&ffi.layoutTupleSize, "layout_tuple_size")
+	register(&ffi.layoutGetTupleItem, "layout_get_tuple_item")
 	register(&ffi.layoutListElement, "layout_list_element")
 	register(&ffi.layoutListSize, "layout_list_size")
 	register(&ffi.layoutIsSuperset, "layout_is_superset")

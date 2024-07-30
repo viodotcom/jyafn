@@ -20,10 +20,13 @@ pub use dataset::Dataset;
 pub use function::{FnError, Function, FunctionData, RawFn};
 pub use graph::{Graph, IndexedList, Node, Ref, Type};
 pub use op::Op;
+pub use graph::size;
 pub use r#const::Const;
 
 use std::{
+    borrow::Cow,
     error::Error as StdError,
+    ffi::CStr,
     fmt::{self, Debug, Display},
     process::ExitStatus,
 };
@@ -37,7 +40,7 @@ pub enum Error {
     #[error("reference for {0:?} has already been defined")]
     AlreadyDefined(String),
     #[error("io error: {0}")]
-    Io(std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("found illegal instruction: {0}")]
     IllegalInstruction(String),
     #[error("qbe failed with {status}: {err}")]
@@ -47,9 +50,9 @@ pub enum Error {
     #[error("linker failed with status {status}: {err}")]
     Linker { status: ExitStatus, err: String },
     #[error("loader error: {0}")]
-    Loader(libloading::Error),
-    #[error("function raised status: {0}")]
-    StatusRaised(String),
+    Loader(#[from] libloading::Error),
+    #[error("function raised status: {0:?}")]
+    StatusRaised(Cow<'static, CStr>),
     #[error("encode error: {0}")]
     EncodeError(Box<dyn StdError + Send>),
     #[error("wrong layout: expected {expected}, got {got}")]
@@ -63,11 +66,11 @@ pub enum Error {
         got: layout::RefValue,
     },
     #[error("bincode error: {0}")]
-    Bincode(bincode::Error),
+    Bincode(#[from] bincode::Error),
     #[error("json error: {0}")]
-    Json(serde_json::Error),
+    Json(#[from] serde_json::Error),
     #[error("zip error: {0}")]
-    Zip(zip::result::ZipError),
+    Zip(#[from] zip::result::ZipError),
     #[error("{0}")]
     Other(String),
     #[error("{error}\n\n{context}")]
@@ -75,24 +78,6 @@ pub enum Error {
         error: Box<Error>,
         context: ContextStack,
     },
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
-        Error::Io(err)
-    }
-}
-
-impl From<libloading::Error> for Error {
-    fn from(err: libloading::Error) -> Error {
-        Error::Loader(err)
-    }
-}
-
-impl From<zip::result::ZipError> for Error {
-    fn from(err: zip::result::ZipError) -> Error {
-        Error::Zip(err)
-    }
 }
 
 impl From<String> for Error {
@@ -184,7 +169,7 @@ mod test {
     #[test]
     fn test_render_simple_graph() {
         let graph = create_simple_graph();
-        println!("{}", graph.render());
+        println!("{}", graph.render().unwrap());
     }
 
     #[test]
@@ -203,7 +188,7 @@ mod test {
     fn test_run_simple_graph() {
         let graph = create_simple_graph();
         let func = graph.compile().unwrap();
-        println!("{}", graph.render());
+        println!("{}", graph.render().unwrap());
         println!("{}", graph.render_assembly().unwrap());
 
         let i = [5.0, 6.0];
@@ -231,7 +216,7 @@ mod test {
     fn test_run_pfunc() {
         let graph = create_pfunc_graph();
         let func = graph.compile().unwrap();
-        println!("{}", graph.render());
+        println!("{}", graph.render().unwrap());
         println!("{:?}", func);
 
         let num = 4.0;
@@ -262,7 +247,7 @@ mod test {
     fn test_run_abs() {
         let graph = create_abs_graph();
         let func = graph.compile().unwrap();
-        println!("{}", graph.render());
+        println!("{}", graph.render().unwrap());
         println!("{:?}", func);
 
         let num = 4.0;

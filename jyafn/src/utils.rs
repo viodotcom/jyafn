@@ -1,5 +1,7 @@
 //! Utilities for this crate.
 
+use std::ffi::CString;
+
 use chrono::{
     format::{ParseError, ParseErrorKind},
     DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc,
@@ -75,6 +77,31 @@ impl From<i64> for Timestamp {
 /// Tranforms an integer into a datetime in UTC.
 pub fn int_to_datetime(i: i64) -> DateTime<Utc> {
     DateTime::<Utc>::from(Timestamp::from(i))
+}
+
+/// Creates a C-style string out of a `String` in a way that doesn't produce errors. This
+/// function substitutes nul characters by the ` ` (space) character. This avoids an
+/// allocation.
+///
+/// This method **leaks** the string. So, don't forget to guarantee that somene somewhere
+/// is freeing it.
+///
+/// # Note
+///
+/// Yes, I know! It's a pretty lousy implementation that is even... O(n^2) (!!). You can
+/// do better than I in 10mins.
+pub(crate) fn make_safe_c_str(s: String) -> CString {
+    let mut v = s.into_bytes();
+    loop {
+        match std::ffi::CString::new(v) {
+            Ok(c_str) => return c_str,
+            Err(err) => {
+                let nul_position = err.nul_position();
+                v = err.into_vec();
+                v[nul_position] = b' ';
+            }
+        }
+    }
 }
 
 #[cfg(test)]

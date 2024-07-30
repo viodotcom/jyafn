@@ -1,6 +1,6 @@
 [package]
 name = "jyafn"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,9 +23,6 @@ hashbrown = { version = "0.14.3", features = ["serde", "raw"] }
 home = "0.5.9"
 lazy_static = "1.4.0"
 libloading = "0.8.4"
-maplit = "1.0.2"
-memmap = "0.7.0"
-no-panic = "0.1.29"
 qbe = { path = "../vendored/qbe-rs" }
 rand = "0.8.5"
 scopeguard = "1.2.0"
@@ -34,7 +31,6 @@ serde = { version = "1.0.197", features = ["rc"] }
 serde_derive = "1.0.197"
 serde_json = "1.0.115"
 serde_with = "3.9.0"
-smallvec = { version = "1.13.2", features = ["serde"] }
 special-fun = "0.3.0"
 tempfile = "3.10.1"
 thiserror = "1.0.58"

@@ -1,6 +1,7 @@
 use get_size::GetSize;
 use libloading::Library;
-use std::ffi::{c_char, CStr};
+use std::borrow::Cow;
+use std::ffi::{c_char, CStr, CString};
 use std::{
     cell::RefCell,
     fmt::Debug,
@@ -10,30 +11,39 @@ use std::{
 use tempfile::NamedTempFile;
 use thread_local::ThreadLocal;
 
-use super::{layout, Error, Graph, Type};
+use crate::size::Size;
+
+use super::{layout, Error, Graph};
 
 /// The error type returned from the compiled function. If you need to create a new error
 /// from your code, use `String::into`.
-pub struct FnError(Option<String>);
+pub struct FnError(Option<Cow<'static, CStr>>);
 
 impl FnError {
     /// Takes the underlying error message from this error. Calling this method more than
     /// once will result in a panic.
-    pub fn take(&mut self) -> String {
+    pub fn take(&mut self) -> Cow<'static, CStr> {
         self.0.take().expect("can only call take once")
     }
 
     /// This is used from inside jyafn to create an error from static C-style error
     /// messages.
     pub(crate) unsafe extern "C" fn make_static(s: *const c_char) -> *mut FnError {
-        let boxed = Box::new(Self(Some(CStr::from_ptr(s).to_string_lossy().to_string())));
+        let boxed = Box::new(Self(Some(Cow::Borrowed(CStr::from_ptr(s)))));
+        Box::leak(boxed)
+    }
+
+    /// This is used from inside jyafn to create an error from static C-style error
+    /// messages.
+    pub(crate) unsafe extern "C" fn make_allocated(s: *mut c_char) -> *mut FnError {
+        let boxed = Box::new(Self(Some(Cow::Owned(CString::from_raw(s)))));
         Box::leak(boxed)
     }
 }
 
 impl From<String> for FnError {
     fn from(s: String) -> FnError {
-        FnError(Some(s))
+        FnError(Some(Cow::Owned(crate::utils::make_safe_c_str(s))))
     }
 }
 
@@ -48,8 +58,8 @@ pub struct FunctionData {
     library_len: u64,
     input_layout: layout::Layout,
     output_layout: layout::Layout,
-    input_size: usize,
-    output_size: usize,
+    input_size: Size,
+    output_size: Size,
     fn_ptr: RawFn,
     input: ThreadLocal<RefCell<layout::Visitor>>,
     output: ThreadLocal<RefCell<layout::Visitor>>,
@@ -95,12 +105,12 @@ impl<'a> From<&'a Function> for Arc<FunctionData> {
 
 impl Function {
     /// The size of the input of this function, in bytes.
-    pub fn input_size(&self) -> usize {
+    pub fn input_size(&self) -> Size {
         self.data.input_size
     }
 
     /// The size of the output of this function, in bytes.
-    pub fn output_size(&self) -> usize {
+    pub fn output_size(&self) -> Size {
         self.data.output_size
     }
 
@@ -160,9 +170,9 @@ impl Function {
         let mut data = FunctionData {
             _library: library,
             library_len: std::fs::metadata(shared_object.path())?.len(),
-            input_size: input_size_in_floats * Type::Float.size(),
+            input_size: input_size_in_floats,
             input_layout: input_layout.into(),
-            output_size: output_size_in_floats * Type::Float.size(),
+            output_size: output_size_in_floats,
             output_layout,
             fn_ptr,
             graph,
@@ -195,8 +205,8 @@ impl Function {
         let input = input.as_ref();
         let output = output.as_mut();
 
-        assert_eq!(self.data.input_size, input.len());
-        assert_eq!(self.data.output_size, output.len());
+        assert_eq!(self.data.input_size.in_bytes(), input.len());
+        assert_eq!(self.data.output_size.in_bytes(), output.len());
 
         // Safety: input and output sizes are checked and function pinky-promisses not to
         // accesses anything out of bounds.
@@ -213,7 +223,7 @@ impl Function {
     where
         I: AsRef<[u8]>,
     {
-        let mut output = vec![0; self.data.output_size].into_boxed_slice();
+        let mut output = vec![0; self.data.output_size.in_bytes()].into_boxed_slice();
         let status = self.call_raw(input, &mut output);
         if status.is_null() {
             Ok(output)
@@ -237,11 +247,11 @@ impl Function {
         let local_input = self
             .data
             .input
-            .get_or(|| RefCell::new(layout::Visitor::new(self.data.input_size / 8)));
+            .get_or(|| RefCell::new(layout::Visitor::new(self.data.input_size)));
         let local_output = self
             .data
             .output
-            .get_or(|| RefCell::new(layout::Visitor::new(self.data.output_size / 8)));
+            .get_or(|| RefCell::new(layout::Visitor::new(self.data.output_size)));
         let mut encode_visitor = local_input.borrow_mut();
         encode_visitor.reset();
         let mut decode_visitor = local_output.borrow_mut();

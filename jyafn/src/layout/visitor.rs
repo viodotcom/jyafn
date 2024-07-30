@@ -1,6 +1,8 @@
 use byte_slice_cast::*;
 use std::convert::AsRef;
 
+use crate::size::Size;
+
 /// A builder of binary data to be sent to and from functions. This represents a sequence
 /// of slots of 64-bit data that can be grown by pushing more 64-bid data into it.
 #[derive(Debug, Clone)]
@@ -13,8 +15,8 @@ impl AsRef<[u8]> for Visitor {
 }
 
 impl Visitor {
-    pub(crate) fn new(size: usize) -> Visitor {
-        Visitor(vec![0; size * 8].into_boxed_slice(), 0)
+    pub(crate) fn new(size: Size) -> Visitor {
+        Visitor(vec![0; size.in_bytes()].into_boxed_slice(), 0)
     }
 
     pub(crate) fn into_inner(self) -> Box<[u8]> {

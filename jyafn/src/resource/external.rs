@@ -156,6 +156,7 @@ impl Resource for ExternalResource {
 
     fn get_method(&self, method: &str) -> Option<ResourceMethod> {
         let c_method = CString::new(method.as_bytes()).expect("method cannot contain nul bytes");
+        let extension = self.r#type.extension();
         let resource = self.r#type.resource();
 
         let external_method = unsafe {
@@ -165,7 +166,7 @@ impl Resource for ExternalResource {
                 return None;
             }
             scopeguard::defer! {
-                (resource.fn_drop_method_def)(maybe_method)
+                (extension.string.fn_drop)(maybe_method)
             }
 
             serde_json::from_slice::<ExternalMethod>(CStr::from_ptr(maybe_method).to_bytes())

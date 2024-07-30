@@ -1,4 +1,3 @@
-# type:ignore
 import jyafn as fn
 import sys
 
@@ -87,6 +86,7 @@ def describe_graph(graph: fn.Graph) -> str:
 
 
 def describe(thing: str | fn.Graph | fn.Function) -> str:
+    """Describes a graph, function or file as a nicely-formatted report."""
     if isinstance(thing, str):
         return describe_fn(fn.read_fn(thing))
     elif isinstance(thing, fn.Graph):

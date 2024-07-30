@@ -65,12 +65,12 @@ impl Function {
 
     #[getter]
     fn input_size(&self) -> usize {
-        self.inner().input_size()
+        self.inner().input_size().in_bytes()
     }
 
     #[getter]
     fn output_size(&self) -> usize {
-        self.inner().output_size()
+        self.inner().output_size().in_bytes()
     }
 
     #[getter]

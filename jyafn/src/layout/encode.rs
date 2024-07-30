@@ -258,6 +258,47 @@ impl<T: Encode<Err = Error>> Encode for BTreeMap<String, T> {
     }
 }
 
+macro_rules! impl_encode_tuple {
+    ($($n:tt: $typ:ident),*) => {
+        impl< $( $typ, )* > Encode for ( $( $typ, )* ) where $($typ: Encode<Err = Error>),* {
+            type Err = Error;
+            fn visit(
+                &self,
+                layout: &Layout,
+                symbols: &mut dyn Sym,
+                visitor: &mut Visitor,
+            ) -> Result<(), Error> {
+                match layout {
+                    Layout::Tuple(fields) => {
+                        $(
+                            self.$n.visit(
+                                fields.get($n).ok_or_else(|| format!("missing field {} in tuple", $n))?,
+                                symbols,
+                                visitor,
+                            )?;
+                        )*
+                    }
+                    _ => return Err("expected a tuple".to_string().into()),
+                }
+
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_encode_tuple!(0: A);
+impl_encode_tuple!(0: A, 1: B);
+impl_encode_tuple!(0: A, 1: B, 2: C);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J);
+impl_encode_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K);
+
 impl Encode for serde_json::Value {
     type Err = Error;
     fn visit(

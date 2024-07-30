@@ -291,7 +291,9 @@ pub unsafe extern "C" fn graph_to_json(graph: *const ()) -> *const c_char {
 /// Expects `graph` to be a valid pointer to a graph.
 #[no_mangle]
 pub unsafe extern "C" fn graph_render(graph: *const ()) -> Outcome {
-    with(graph, |graph: &Graph| new_c_str(graph.render().to_string()))
+    try_with(graph, |graph: &Graph| {
+        Ok(new_c_str(graph.render()?.to_string()))
+    })
 }
 
 /// # Safety
@@ -361,7 +363,7 @@ pub unsafe extern "C" fn layout_from_json(json: *const c_char) -> Outcome {
 /// Expects the `layout` parameter to be a valid pointer to a layout.
 #[no_mangle]
 pub unsafe extern "C" fn layout_size(layout: *const ()) -> usize {
-    with_unchecked(layout, |layout: &Layout| layout.size())
+    with_unchecked(layout, |layout: &Layout| layout.size()).in_bytes()
 }
 
 /// # Safety
@@ -420,6 +422,14 @@ pub unsafe extern "C" fn layout_is_struct(layout: *const ()) -> bool {
 ///
 /// Expects the `layout` parameter to be a valid pointer to a layout.
 #[no_mangle]
+pub unsafe extern "C" fn layout_is_tuple(layout: *const ()) -> bool {
+    with_unchecked(layout, |layout: &Layout| matches!(layout, Layout::Tuple(_)))
+}
+
+/// # Safety
+///
+/// Expects the `layout` parameter to be a valid pointer to a layout.
+#[no_mangle]
 pub unsafe extern "C" fn layout_is_list(layout: *const ()) -> bool {
     with_unchecked(layout, |layout: &Layout| {
         matches!(layout, Layout::List(_, _))
@@ -451,6 +461,36 @@ pub unsafe extern "C" fn layout_as_struct(layout: *const ()) -> *const () {
         } else {
             std::ptr::null()
         }
+    })
+}
+
+/// # Safety
+///
+/// Expects the `strct` parameter to be a valid pointer to a jyafn struct.
+#[no_mangle]
+pub unsafe extern "C" fn layout_tuple_size(layout: *const ()) -> usize {
+    with_unchecked(layout, |layout: &Layout| {
+        if let Layout::Tuple(t) = layout {
+            return t.len();
+        }
+
+        0
+    })
+}
+
+/// # Safety
+///
+/// Expects the `layout` parameter to be a valid pointer to a layout.
+#[no_mangle]
+pub unsafe extern "C" fn layout_get_tuple_item(layout: *const (), index: usize) -> *const () {
+    with_unchecked(layout, |layout: &Layout| {
+        if let Layout::Tuple(t) = layout {
+            if index < t.len() {
+                return &t[index] as *const Layout as *const ();
+            }
+        }
+
+        std::ptr::null()
     })
 }
 
@@ -565,7 +605,7 @@ pub unsafe extern "C" fn function_name(func: *const ()) -> *const c_char {
 /// Expects the `func` parameter to be a valid pointer to a jyafn function.
 #[no_mangle]
 pub unsafe extern "C" fn function_input_size(func: *const ()) -> usize {
-    with_unchecked(func, |func: &Function| func.input_size())
+    with_unchecked(func, |func: &Function| func.input_size()).in_bytes()
 }
 
 /// # Safety
@@ -573,7 +613,7 @@ pub unsafe extern "C" fn function_input_size(func: *const ()) -> usize {
 /// Expects the `func` parameter to be a valid pointer to a jyafn function.
 #[no_mangle]
 pub unsafe extern "C" fn function_output_size(func: *const ()) -> usize {
-    with_unchecked(func, |func: &Function| func.output_size())
+    with_unchecked(func, |func: &Function| func.output_size()).in_bytes()
 }
 
 /// # Safety
@@ -692,13 +732,15 @@ pub unsafe extern "C" fn function_call_raw(
 ) -> Outcome {
     with_unchecked(func, |func: &Function| {
         match std::panic::catch_unwind(|| {
-            let input = std::slice::from_raw_parts(input, func.input_size());
-            let output = std::slice::from_raw_parts_mut(output, func.output_size());
+            let input = std::slice::from_raw_parts(input, func.input_size().in_bytes());
+            let output = std::slice::from_raw_parts_mut(output, func.output_size().in_bytes());
 
             let fn_err = func.call_raw(input, output);
             if !fn_err.is_null() {
                 let fn_err = Box::from_raw(fn_err).take();
-                return Outcome::from_result(Result::<(), Error>::Err(fn_err.into()));
+                return Outcome::from_result(Result::<(), Error>::Err(rust::Error::StatusRaised(
+                    fn_err,
+                )));
             }
 
             Outcome::from_result(Result::<(), Error>::Ok(()))
@@ -720,7 +762,7 @@ pub unsafe extern "C" fn function_call_raw(
 #[no_mangle]
 pub unsafe extern "C" fn function_eval_raw(func: *const (), input: *const u8) -> Outcome {
     with(func, |func: &Function| {
-        let input = std::slice::from_raw_parts(input, func.input_size());
+        let input = std::slice::from_raw_parts(input, func.input_size().in_bytes());
         Outcome::from_result(
             func.eval_raw(input)
                 .map(|output| Box::leak(output) as *const [u8] as *const ()),

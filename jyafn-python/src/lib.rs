@@ -132,6 +132,16 @@ fn pythonize_ref_value(py: Python, val: rust::layout::RefValue) -> PyResult<PyOb
             }
             dict.unbind().into()
         }
+        rust::layout::RefValue::Tuple(fields) => {
+            let tuple = PyTuple::new_bound(
+                py,
+                fields
+                    .into_iter()
+                    .map(|val| pythonize_ref_value(py, val))
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+            tuple.unbind().into()
+        }
         rust::layout::RefValue::List(l) => PyTuple::new_bound(
             py,
             l.into_iter()
@@ -180,7 +190,7 @@ fn depythonize_ref_value(
                 .iter()
                 .map(|val| depythonize_inner(g, &val))
                 .collect::<PyResult<Vec<rust::layout::RefValue>>>()?;
-            return Ok(rust::layout::RefValue::List(vals));
+            return Ok(rust::layout::RefValue::Tuple(vals));
         }
 
         if let Ok(scalar) = const_from_py(g, obj) {

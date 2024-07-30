@@ -101,12 +101,28 @@ func (l Layout) IsStruct() bool {
 	return ffi.layoutIsStruct(l.ptr)
 }
 
+func (l Layout) IsTuple() bool {
+	return ffi.layoutIsTuple(l.ptr)
+}
+
 func (l Layout) IsList() bool {
 	return ffi.layoutIsList(l.ptr)
 }
 
 func (l Layout) AsStruct() Struct {
 	return Struct{ptr: ffi.layoutAsStruct(l.ptr)}
+}
+
+func (l Layout) TupleSize() uint {
+	return uint(ffi.layoutTupleSize(l.ptr))
+}
+
+func (l Layout) GetItemLayout() Layout {
+	item := ffi.layoutGetTupleItem(l.ptr)
+	if item == 0 {
+		panic("called GetItemLayout on a Tuple out of bounds")
+	}
+	return Layout{ptr: item}
 }
 
 func (l Layout) DateTimeFormat() string {

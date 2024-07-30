@@ -75,7 +75,7 @@ pub struct PFunc {
     fn_ptr: ThreadsafePointer,
     /// The input types of the function.
     signature: &'static [Type],
-    /// The return type of the function.    /// The return type of the function
+    /// The return type of the function.
     returns: Type,
     /// Provides compile-time evaluation behavior.
     pub(crate) const_eval: ConstEval,

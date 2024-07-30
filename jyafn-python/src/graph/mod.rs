@@ -199,8 +199,14 @@ impl Graph {
             .insert(key, value);
     }
 
-    fn render(&self) -> String {
-        self.0.lock().expect("poisoned").render().to_string()
+    fn render(&self) -> PyResult<String> {
+        Ok(self
+            .0
+            .lock()
+            .expect("poisoned")
+            .render()
+            .map_err(ToPyErr)?
+            .to_string())
     }
 
     fn render_assembly(&self) -> PyResult<String> {

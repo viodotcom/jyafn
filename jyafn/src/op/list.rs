@@ -1,6 +1,6 @@
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_op, Graph, Ref, Type};
+use crate::{graph::SLOT_SIZE, impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
@@ -34,7 +34,7 @@ impl Op for List {
         func.assign_instr(
             output.clone(),
             qbe::Type::Long,
-            qbe::Instr::Alloc8((self.element.size() * self.n_elements) as u64),
+            qbe::Instr::Alloc8((self.n_elements * SLOT_SIZE).in_bytes() as u64),
         );
         func.assign_instr(
             data_ptr.clone(),
@@ -53,7 +53,7 @@ impl Op for List {
                 qbe::Type::Long,
                 qbe::Instr::Add(
                     data_ptr.clone(),
-                    qbe::Value::Const(self.element.size() as u64),
+                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
                 ),
             )
         }
@@ -134,7 +134,7 @@ impl Op for Index {
             qbe::Type::Long,
             qbe::Instr::Mul(
                 displacement.clone(),
-                qbe::Value::Const(self.element.size() as u64),
+                qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
             ),
         );
         func.assign_instr(
@@ -236,7 +236,7 @@ impl Op for IndexOf {
                 qbe::Type::Long,
                 qbe::Instr::Add(
                     displacement.clone(),
-                    qbe::Value::Const(self.element.size() as u64),
+                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
                 ),
             );
         }

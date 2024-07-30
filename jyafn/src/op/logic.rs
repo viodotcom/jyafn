@@ -202,7 +202,7 @@ impl Op for And {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_bool(), args[1].as_bool()) {
+        if let Some((a, b)) = args[0].as_bool().zip(args[1].as_bool()) {
             Some(Ref::from(a && b))
         } else {
             None
@@ -241,7 +241,7 @@ impl Op for Or {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_bool(), args[1].as_bool()) {
+        if let Some((a, b)) = args[0].as_bool().zip(args[1].as_bool()) {
             Some(Ref::from(a || b))
         } else {
             None

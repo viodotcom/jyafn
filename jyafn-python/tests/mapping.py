@@ -1,6 +1,6 @@
 import jyafn as fn
 
-silly_map = fn.mapping("silly", fn.symbol, fn.scalar, {"a": 2, "b": 4})
+silly_map = fn.mapping(fn.symbol, fn.scalar, {"a": 2, "b": 4})
 
 
 @fn.func

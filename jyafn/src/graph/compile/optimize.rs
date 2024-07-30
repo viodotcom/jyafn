@@ -1,6 +1,6 @@
 //! Graph optimizations (those not covered by qbe).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BTreeMap};
 
 use crate::{Graph, Node, Ref};
 
@@ -12,6 +12,7 @@ pub fn find_reachable(outputs: &[Ref], nodes: &[Node]) -> Vec<bool> {
     let mut stack = outputs
         .iter()
         .filter_map(|r| {
+            // All output nodes.
             if let &Ref::Node(node_id) = r {
                 Some(node_id)
             } else {
@@ -41,6 +42,43 @@ pub fn find_reachable(outputs: &[Ref], nodes: &[Node]) -> Vec<bool> {
     }
 
     reachable
+}
+
+/// Remaps the nodes of this graph to exclude unreachable nodes.
+pub fn remap_reachable(graph: &mut Graph, reachable: &[bool]) {
+    // Create new ids:
+    let id_map = reachable
+        .iter()
+        .enumerate()
+        .filter(|(_, &is_reachable)| is_reachable)
+        .map(|(old_id, _)| old_id)
+        .enumerate()
+        .map(|(new_id, old_id)| (old_id, new_id))
+        .collect::<BTreeMap<_, _>>();
+
+    // Retain only reachable nodes:
+    let mut node_id = 0;
+    graph.nodes.retain(|_| {
+        let retain = id_map.contains_key(&node_id);
+        node_id += 1;
+        retain
+    });
+
+    // Rewrite references in nodes:
+    for node in &mut graph.nodes {
+        for arg in &mut node.args {
+            if let Ref::Node(id) = arg {
+                *id = id_map[id];
+            }
+        }
+    }
+
+    // Rewrite references in output:
+    for output in &mut graph.outputs {
+        if let Ref::Node(id) = output {
+            *id = id_map[id];
+        }
+    }
 }
 
 /// Runs constant evaluation optimization on the graph.
@@ -275,13 +313,12 @@ impl Statements {
     pub fn render_into(
         &self,
         graph: &Graph,
-        reachable: &[bool],
         func: &mut qbe::Function,
         namespace: &str,
     ) {
         for statement in &self.0 {
             match statement {
-                &StatementOrConditional::Statement(node_id) if reachable[node_id] => {
+                &StatementOrConditional::Statement(node_id) => {
                     let node = &graph.nodes[node_id];
                     node.op.render_into(
                         graph,
@@ -310,7 +347,7 @@ impl Statements {
                     ));
 
                     func.add_block(true_label);
-                    true_side.render_into(graph, reachable, func, namespace);
+                    true_side.render_into(graph, func, namespace);
                     func.assign_instr(
                         output.clone(),
                         node.ty.render(),
@@ -319,7 +356,7 @@ impl Statements {
                     func.add_instr(qbe::Instr::Jmp(end_label.clone()));
 
                     func.add_block(false_label);
-                    false_side.render_into(graph, reachable, func, namespace);
+                    false_side.render_into(graph, func, namespace);
                     func.assign_instr(
                         output,
                         node.ty.render(),
@@ -328,7 +365,6 @@ impl Statements {
 
                     func.add_block(end_label);
                 }
-                _ => {}
             }
         }
     }

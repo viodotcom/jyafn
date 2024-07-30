@@ -28,10 +28,7 @@ impl IndexedList {
             };
 
             let layout = first.putative_layout();
-            if let Some(different) = depythonized
-                .iter()
-                .find(|v| v.putative_layout() != layout)
-            {
+            if let Some(different) = depythonized.iter().find(|v| v.putative_layout() != layout) {
                 return Err(exceptions::PyTypeError::new_err(format!(
                     "not all elements in list have the same layout. Expected {layout} and found \
                     {different}"

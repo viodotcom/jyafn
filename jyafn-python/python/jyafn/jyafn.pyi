@@ -373,6 +373,10 @@ class Layout:
         """Whether this layout is of the flavor "datetime"."""
     def is_symbol(self) -> bool:
         """Whether this layout is of the flavor "symbol"."""
+    def is_struct(self) -> bool:
+        """Whether this layout is of the flavor "struct"."""
+    def is_tuple(self) -> bool:
+        """Whether this layout is of the flavor "tuple"."""
     def struct_keys(self) -> Optional[list[str]]:
         """
         Returns the field names of this struct layout, if it is of flavor "struct", else
@@ -403,6 +407,12 @@ class Layout:
     def struct_of(fields: dict[str, Layout]) -> Layout:
         """
         Returns a new layout of flavor "struct", with the fields given by the supplied
+        Python dictionary.
+        """
+    @staticmethod
+    def tuple_of(fields: tuple[Layout, ...]) -> Layout:
+        """
+        Returns a new layout of flavor "tuple", with the fields given by the supplied
         Python dictionary.
         """
 
@@ -556,21 +566,23 @@ class Extension:
     ```
     """
 
+    @staticmethod
+    def list_loaded() -> dict[str, list[str]]:
+        """
+        Lists the loaded extensions as the keys of a dictionary and all the loaded
+        versions as the elements of the values.
+        """
     def __init__(self, name: str, version_req: str = "*") -> None:
         """Loads a new extension of name `name` with the given version requirements."""
-
     @property
     def name(self) -> str:
         """The name of this extension."""
-
     @property
     def version(self) -> str:
         """The version of this extension."""
-
     @property
     def resources(self) -> list[str]:
         """The resources that this extension provides."""
-
     def get(self, resource_name: str) -> ResourceType:
         """
         Gets a resource that this extension declares. Throws an `IndexError` if the

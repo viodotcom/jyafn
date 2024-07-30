@@ -1,7 +1,7 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_is_eq, impl_op, pfunc, Graph, Ref, Type};
+use crate::{graph::SLOT_SIZE, impl_is_eq, impl_op, pfunc, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
@@ -101,14 +101,14 @@ impl Op for CallGraph {
                 graph.subgraphs[self.0]
                     .inputs
                     .iter()
-                    .map(|ty| ty.size())
+                    .map(|ty| SLOT_SIZE.in_bytes())
                     .sum::<usize>() as u64,
             ),
         );
         func.assign_instr(
             output_ptr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Alloc8(graph.subgraphs[self.0].output_layout.size() as u64 * 8),
+            qbe::Instr::Alloc8(graph.subgraphs[self.0].output_layout.size().in_bytes() as u64),
         );
 
         func.assign_instr(
@@ -128,7 +128,7 @@ impl Op for CallGraph {
                 qbe::Type::Long,
                 qbe::Instr::Add(
                     data_ptr.clone(),
-                    qbe::Value::Const(subgraph.type_of(arg).size() as u64),
+                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
                 ),
             );
         }

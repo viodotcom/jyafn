@@ -78,3 +78,19 @@ impl Resource for Dummy {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_load() {
+        unsafe {
+            let ptr = extension_init() as *mut i8;
+            if ptr.is_null() {
+                panic!("prt was null");
+            }
+            println!("{:?}", CString::from_raw(ptr));
+        }
+    }
+}

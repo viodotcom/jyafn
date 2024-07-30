@@ -1,9 +1,9 @@
 //! Constant values in the computational graph. Constants need to have a type and a binary
 //! representation as a 64-bit peice of data.
 
-use super::Type;
-
 use std::fmt::Debug;
+
+use super::Type;
 
 /// A constant. Constants need to have a type and a binary representation as a 64-bit
 /// peice of data.

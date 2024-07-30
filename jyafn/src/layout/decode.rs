@@ -79,6 +79,11 @@ impl Decode for serde_json::Value {
                 .map(|(name, field)| (name.clone(), Self::build(field, symbols, visitor)))
                 .collect::<serde_json::Map<_, _>>()
                 .into(),
+            Layout::Tuple(fields) => fields
+                .iter()
+                .map(|field| Self::build(field, symbols, visitor))
+                .collect::<Vec<_>>()
+                .into(),
             Layout::List(element, size) => (0..*size)
                 .map(|_| Self::build(element, symbols, visitor))
                 .collect::<Vec<_>>()

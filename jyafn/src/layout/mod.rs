@@ -20,6 +20,8 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fmt::{self, Display};
 
+use crate::size::{InSlots, Size, Unit};
+
 use super::{Ref, Type};
 
 /// The `strptime` format for ISO 8601, the standard used in the [`Layout::DateTime`]
@@ -58,7 +60,7 @@ impl Display for Struct {
 
 impl Struct {
     /// The size in slots of this struct.
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> Size {
         self.0.iter().map(|(_, layout)| layout.size()).sum()
     }
 
@@ -121,11 +123,7 @@ impl Struct {
         }
 
         for name in other_keys {
-            let (_, self_field) = self
-                .0
-                .iter()
-                .find(|&(n, _)| n == name)
-                .expect("key exists");
+            let (_, self_field) = self.0.iter().find(|&(n, _)| n == name).expect("key exists");
             let (_, other_field) = other
                 .0
                 .iter()
@@ -159,8 +157,10 @@ pub enum Layout {
     DateTime(String),
     /// An imutable piece of text.
     Symbol,
-    /// An ordered sequence of values, layed out in memory sequentially.
+    /// An ordered sequence of named values, layed out in memory sequentially.
     Struct(Struct),
+    /// An ordered sequence of unnamed values, layed out in memory sequentially.
+    Tuple(Vec<Layout>),
     /// A layout repeated a given number of times.
     List(Box<Layout>, usize),
 }
@@ -182,6 +182,15 @@ impl Display for Layout {
             Layout::Symbol => write!(f, "symbol"),
             Layout::Struct(fields) if f.alternate() => write!(f, "{fields:#}"),
             Layout::Struct(fields) => write!(f, "{fields}"),
+            Layout::Tuple(fields) => write!(
+                f,
+                "({})",
+                fields
+                    .iter()
+                    .map(|field| field.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Layout::List(element, size) if element.as_ref() == &Layout::Scalar => {
                 write!(f, "[{size}]")
             }
@@ -192,15 +201,16 @@ impl Display for Layout {
 
 impl Layout {
     /// The size in slots of this struct.
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> Size {
         match self {
-            Layout::Unit => 0,
-            Layout::Scalar => 1,
-            Layout::Bool => 1,
-            Layout::DateTime(_) => 1,
-            Layout::Symbol => 1,
+            Layout::Unit => 0 * InSlots::UNIT,
+            Layout::Scalar => 1 * InSlots::UNIT,
+            Layout::Bool => 1 * InSlots::UNIT,
+            Layout::DateTime(_) => 1 * InSlots::UNIT,
+            Layout::Symbol => 1 * InSlots::UNIT,
             Layout::Struct(fields) => fields.size(),
-            Layout::List(element, size) => size * element.size(),
+            Layout::Tuple(fields) => fields.iter().map(Layout::size).sum(),
+            Layout::List(element, size) => *size * element.size(),
         }
     }
 
@@ -213,6 +223,7 @@ impl Layout {
             Layout::DateTime(_) => vec![Type::DateTime],
             Layout::Symbol => vec![Type::Symbol],
             Layout::Struct(fields) => fields.slots(),
+            Layout::Tuple(fields) => fields.iter().map(Layout::slots).flatten().collect(),
             Layout::List(element, size) => [element.slots()]
                 .into_iter()
                 .cycle()
@@ -238,6 +249,14 @@ impl Layout {
                     .iter()
                     .map(|(name, field)| {
                         Some((name.clone(), field.build_ref_value_inner(it.by_ref())?))
+                    })
+                    .collect::<Option<_>>()?,
+            ),
+            Layout::Tuple(fields) => RefValue::Tuple(
+                fields
+                    .iter()
+                    .map(|field| {
+                        Some(field.build_ref_value_inner(it.by_ref())?)
                     })
                     .collect::<Option<_>>()?,
             ),

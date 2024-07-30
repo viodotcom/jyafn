@@ -51,8 +51,8 @@ impl Op for Eq {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
-            Some(Ref::from(a == b))
+        if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
+            Some(Ref::from(x == y))
         } else {
             None
         }
@@ -95,8 +95,8 @@ impl Op for Gt {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
-            Some(Ref::from(a > b))
+        if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
+            Some(Ref::from(x > y))
         } else {
             None
         }
@@ -139,8 +139,8 @@ impl Op for Lt {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
-            Some(Ref::from(a < b))
+        if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
+            Some(Ref::from(x < y))
         } else {
             None
         }
@@ -183,8 +183,8 @@ impl Op for Ge {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
-            Some(Ref::from(a >= b))
+        if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
+            Some(Ref::from(x >= y))
         } else {
             None
         }
@@ -227,8 +227,8 @@ impl Op for Le {
     }
 
     fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
-        if let (Some(a), Some(b)) = (args[0].as_f64(), args[1].as_f64()) {
-            Some(Ref::from(a <= b))
+        if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
+            Some(Ref::from(x <= y))
         } else {
             None
         }

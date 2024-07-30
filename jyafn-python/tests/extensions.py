@@ -5,6 +5,8 @@
 import jyafn as fn
 import traceback
 
+print("Before func creation...")
+
 
 @fn.func
 def with_resources(x: fn.scalar) -> fn.scalar:
@@ -19,6 +21,7 @@ def with_resources(x: fn.scalar) -> fn.scalar:
     return the_result
 
 
+print("Starting call...")
 print(with_resources.get_graph().render())
 assert with_resources(2.5) == 1.0
 
@@ -81,3 +84,5 @@ def with_resources(x: fn.scalar) -> fn.scalar:
 serialized = with_resources.write("with_resources.jyafn")
 deserialized = fn.read_fn("with_resources.jyafn")
 assert deserialized(2.5) == 1.0
+
+print(fn.Extension.list_loaded())

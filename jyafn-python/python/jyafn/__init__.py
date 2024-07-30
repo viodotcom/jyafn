@@ -1,5 +1,3 @@
-# type: ignore
-
 from .jyafn import *
 
 import jyafn as fn
@@ -15,6 +13,7 @@ from typing import Any, Callable, Iterable
 from dataclasses import dataclass
 
 from .np_dropin import *
+from .describe import describe  # re-export
 
 
 __version__ = fn.__get_version()
@@ -98,8 +97,10 @@ class datetime(BaseAnnotation):
         match args:
             case ():
                 return fn.Layout.datetime()
-            case (format,):
+            case (format,) if isinstance(format, str):
                 return fn.Layout.datetime(format)
+            case (format,) if isinstance(format, bytes):
+                return fn.Layout.datetime(format.decode("utf8"))
             case _:
                 raise TypeError(f"Invalid args for datetime annotation: {args}")
 
@@ -273,7 +274,9 @@ class GraphFactory:
                 for arg, param in type_hints.items()
                 if arg != "return"
             }
-            _ret_from_annotation(self.original(**inputs), type_hints["return"])
+            _ret_from_annotation(
+                self.original(**inputs), type_hints.get("return", inspect._empty)
+            )
 
         for key, value in self.metadata.items():
             g.set_metadata(str(key), str(value))
@@ -373,11 +376,23 @@ def func(*args, metadata: dict = {}, debug: bool = False) -> fn.Function:
     return inner(args[0]) if len(args) == 1 else inner
 
 
+ANONYMOUS_COUNTER: dict[str, int] = {}
+
+
+def __anonymous_name(kind: str) -> str:
+    """Generates an anononymous name for a "kind" of thing."""
+    num = ANONYMOUS_COUNTER.setdefault(kind, 0)
+    name = f"{kind}_{num}"
+    ANONYMOUS_COUNTER[kind] += 1
+
+    return name
+
+
 def mapping(
-    name: str,
     key_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias,
     value_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias,
-    obj: Any,
+    obj: Any = {},
+    name: str | None = None,
 ) -> fn.LazyMapping:
     """
     Creates a new key-value mapping to be used in a graph. Mappings in JYAFN work very
@@ -389,6 +404,8 @@ def mapping(
     mapping will be marked as consumed and an exception will be raised on reuse. This is
     done to avoid errors stemming from already spent iterators.
     """
+    if name is None:
+        name = __anonymous_name("mapping")
     return fn.LazyMapping(name, make_layout(key_layout), make_layout(value_layout), obj)
 
 
@@ -490,7 +507,7 @@ def resource_type(
 
 
 def resource(
-    name: str,
+    name: str | None = None,
     *,
     data: bytes,
     type: str = "External",
@@ -508,6 +525,39 @@ def resource(
     to make sure that they are installed in your environment (you can use the `jyafn get`
     CLI utility for managing extensions).
     """
+    if name is None:
+        name = __anonymous_name("resource")
     return resource_type(
         type=type, extension=extension, resource=resource, **kwargs
     ).load(name, data)
+
+
+# This needs to be down here because it redefines the name for `tuple`.
+pytuple = tuple
+
+
+class tuple(BaseAnnotation):
+    """Annotates the `tuple` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        match args:
+            case fields if isinstance(fields, pytuple):
+                tup = []
+                for field in fields:
+                    match field:
+                        case type():
+                            tup.append(field.make_layout(()))
+                        case types.GenericAlias():
+                            tup.append(
+                                typing.get_origin(field).make_layout(
+                                    typing.get_args(field)
+                                )
+                            )
+                        case _:
+                            raise TypeError(
+                                f"Invalid arg for tuple field annotation: {field}"
+                            )
+                return fn.Layout.tuple_of(pytuple(tup))
+            case _:
+                raise TypeError(f"Invalid args for tuple annotation: {args}")

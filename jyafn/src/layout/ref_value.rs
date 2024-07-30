@@ -20,6 +20,8 @@ pub enum RefValue {
     Symbol(Ref),
     /// A struct of values.
     Struct(HashMap<String, RefValue>),
+    /// Atuple of values.
+    Tuple(Vec<RefValue>),
     /// A list of values, all of the same layout.
     List(Vec<RefValue>),
 }
@@ -38,6 +40,13 @@ impl Display for RefValue {
                     write!(f, "{name}: {field}, ")?;
                 }
                 write!(f, "}}")
+            }
+            Self::Tuple(fields) => {
+                write!(f, "( ")?;
+                for field in fields {
+                    write!(f, "{field}, ")?;
+                }
+                write!(f, ")")
             }
             Self::List(list) => {
                 write!(f, "[ ")?;
@@ -68,6 +77,9 @@ impl RefValue {
                 strct.sort_unstable_by_key(|(n, _)| n.clone());
                 strct
             })),
+            Self::Tuple(fields) => {
+                Layout::Tuple(fields.iter().map(Self::putative_layout).collect())
+            }
             Self::List(list) => {
                 if let Some(first) = list.first() {
                     Layout::List(Box::new(first.putative_layout()), list.len())
@@ -97,6 +109,15 @@ impl RefValue {
             (Self::Struct(vals), Layout::Struct(fields)) => {
                 for (name, field) in &fields.0 {
                     vals.get(name)?.build_output_vec(field, buf);
+                }
+            }
+            (Self::Tuple(vals), Layout::Tuple(fields)) => {
+                if vals.len() != fields.len() {
+                    return None;
+                }
+
+                for (val, field) in vals.iter().zip(fields) {
+                    val.build_output_vec(field, buf)?;
                 }
             }
             (Self::List(list), Layout::List(element, size)) if list.len() == *size => {
