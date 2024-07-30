@@ -1,12 +1,15 @@
 [package]
-name = "qbe"
-version = "2.1.0"
+name = "jyafn-qbe"
+version = "2.1.1"
 edition = "2021"
-authors = ["Garrit Franke <garrit@slashdev.space>"]
+authors = [
+    "Garrit Franke <garrit@slashdev.space>",
+    "Pedro Arruda <parruda@vio.com>",
+]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/garritfra/qbe-rs"
+repository = "https://github.com/viodotcom/jyafn/vendored/qbe-rs"
 keywords = ["qbe", "compiler", "ir"]
-description = "QBE IR for Rust"
+description = "QBE IR for Rust (forked from https://github.com/garritfra/qbe-rs for jyafn)"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
