@@ -1,10 +1,10 @@
 # Just Your Average Function
 
-![PyPI - Version](https://img.shields.io/pypi/v/jyafn)
-![Crates.io Version](https://img.shields.io/crates/v/jyafn)
-![docs.rs](https://img.shields.io/docsrs/jyafn)
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/viodotcom/jyafn?filename=jyafn-go%2Fgo.mod)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/viodotcom/jyafn/release.yaml?branch=stable)
+[![PyPI - Version](https://img.shields.io/pypi/v/jyafn)](https://pypi.org/project/jyafn/)
+[![Crates.io Version](https://img.shields.io/crates/v/jyafn)](https://crates.io/crates/jyafn)
+[![docs.rs](https://img.shields.io/docsrs/jyafn)](https://docs.rs/jyafn/latest/jyafn/)
+[![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/viodotcom/jyafn?filename=jyafn-go%2Fgo.mod)](https://github.com/viodotcom/jyafn/tree/main/jyafn-go)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/viodotcom/jyafn/release.yaml?branch=stable)](https://github.com/viodotcom/jyafn/actions)
 
 `jyafn` is a project for enabling MLOps by using Computational graphs that compile to machine code, with a convenient and familiar Python interface.
 
