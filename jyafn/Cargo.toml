@@ -2,6 +2,15 @@
 name = "jyafn"
 version = "0.2.0"
 edition = "2021"
+authors = ["Pedro Arruda <parruda@vio.com>"]
+description = "Computational graphs for Data Science that compile to machine code"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/viodotcom/jyafn"
+repository = "https://github.com/viodotcom/jyafn"
+exclude = ["vendored/qbe-rs"]
+readme = "../readme.md"
+keywords = ["mlops", "graph", "data", "datascience", "onnx"]
+categories = ["compilers", "science", "mathematics"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -1,14 +1,24 @@
 # Just Your Average Function
 
+![PyPI - Version](https://img.shields.io/pypi/v/jyafn)
+![Crates.io Version](https://img.shields.io/crates/v/jyafn)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/viodotcom/jyafn?filename=jyafn-go%2Fgo.mod)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/viodotcom/jyafn/release.yaml?branch=stable)
+![GitHub Release](https://img.shields.io/github/v/release/viodotcom/jyafn)
+
+`jyafn` is a project for enabling MLOps by using Computational graphs that compile to machine code, with a convenient and familiar Python interface.
+
 > 💡 Don't forget to check out the [docs](./docs/index.md) for more in-depth info.
+
 
 <div style="text-align:center">
 <img src="./nothing-going-on.jpg" alt="There is something going on!"/>
 </div>
 
-Look at this innocent-looking piece of code:
+Look at this little innocent piece of code:
 ```python
 import jyafn as fn
+import numpy as np
 
 @fn.func
 def reduce_sum(mat: fn.tensor[2, 2]) -> fn.scalar:
@@ -18,7 +28,7 @@ I know: it looks a bit funny but what if I told you that
 
 1. This compiles to machine code.
 2. You can still call it as a regular Python function.
-3. You can export it, load it and call it from Go.
+3. You can export it, load it and call it from Go (or Rust, or Python, or C!)
 
 Neat, huh? It's basically `tf.function` + `onnx` in a single package!
 
