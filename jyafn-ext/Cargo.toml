@@ -2,6 +2,10 @@
 name = "jyafn-ext"
 version = "0.1.0"
 edition = "2021"
+authors = ["Pedro Arruda <parruda@vio.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/viodotcom/jyafn/jyafn-ext"
+description = "Jyafn extension creation helper library"
 
 [dependencies]
 byte-slice-cast = "1.2.2"
