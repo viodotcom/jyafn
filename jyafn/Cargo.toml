@@ -21,7 +21,6 @@ get-size = { version = "0.1.4", features = ["derive"] }
 glob = "0.3.1"
 hashbrown = { version = "0.14.3", features = ["serde", "raw"] }
 home = "0.5.9"
-lazy_static = "1.4.0"
 libloading = "0.8.4"
 qbe = { path = "../vendored/qbe-rs" }
 rand = "0.8.5"
