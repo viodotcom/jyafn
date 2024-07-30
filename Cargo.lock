@@ -707,6 +707,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "home",
  "jyafn-qbe 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static",
  "libloading",
  "rand",
  "scopeguard",

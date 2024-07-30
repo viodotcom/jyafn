@@ -6,7 +6,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{Arc, RwLock};
 
 use crate::layout::{Layout, Struct};
 use crate::{Context, Error};
@@ -279,8 +279,10 @@ impl ResourceSymbols {
 
 type LoadedExtensionVersions = HashMap<semver::Version, Arc<Extension>>;
 
-static EXTENSIONS: LazyLock<RwLock<HashMap<String, LoadedExtensionVersions>>> =
-    LazyLock::new(RwLock::default);
+lazy_static::lazy_static! {
+    static ref EXTENSIONS: RwLock<HashMap<String, LoadedExtensionVersions>> =
+        RwLock::default();
+}
 
 /// An extension is a wrapper over a shared object comforming to a given interface. This
 /// can be used to create extra "resources" that can be accessed from jyafn. It's useful

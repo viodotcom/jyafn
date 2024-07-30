@@ -2,7 +2,7 @@
 
 use chrono::prelude::*;
 use special_fun::FloatSpecial;
-use std::{collections::HashMap, sync::LazyLock};
+use std::collections::HashMap;
 use std::ops::Rem;
 use std::sync::RwLock;
 
@@ -148,8 +148,10 @@ impl PFunc {
     }
 }
 
-/// All the known [`PFunc`]s.
-static P_FUNCS: LazyLock<RwLock<HashMap<&'static str, PFunc>>> = LazyLock::new(|| RwLock::new(init()));
+lazy_static::lazy_static! {
+    /// All the known [`PFunc`]s.
+    static ref P_FUNCS: RwLock<HashMap<&'static str, PFunc>> = RwLock::new(init());
+}
 
 /// Inscribes a new pure function.
 ///

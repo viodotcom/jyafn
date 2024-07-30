@@ -1,11 +1,13 @@
 use rand::random;
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
 use std::{env, fs, io};
 
 const BIN: &[u8] = include_bytes!("../../../../vendored/qbe/qbe");
 
-static CURRENT_QBE: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(Mutex::default);
+lazy_static::lazy_static! {
+    static ref CURRENT_QBE: Mutex<Option<PathBuf>> = Mutex::default();
+}
 
 #[cfg(unix)]
 fn load() -> Result<PathBuf, io::Error> {

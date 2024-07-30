@@ -7,7 +7,7 @@ authors = [
     "Pedro Arruda <parruda@vio.com>",
 ]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/viodotcom/jyafn/vendored/qbe-rs"
+repository = "https://github.com/viodotcom/jyafn"
 keywords = ["qbe", "compiler", "ir"]
 description = "QBE IR for Rust (forked from https://github.com/garritfra/qbe-rs for jyafn)"
 
