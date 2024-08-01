@@ -28,7 +28,7 @@ def with_servers(func: Callable[[dict[str, Any]], dict[str, Any]]) -> None:
     try:
         servers = func(servers)
     except Exception as e:
-        print("error:", str(e))
+        click.echo("error: " + str(e), file=sys.stderr)
         exit(1)
 
     with open(os.path.expanduser("~/.jyafn/servers.yaml"), "w") as f:
@@ -45,20 +45,20 @@ def print_json(obj: Any) -> None:
         colorful_json = highlight(
             formatted_json, lexers.JsonLexer(), formatters.TerminalFormatter()
         )
-        print(colorful_json)
+        click.echo(colorful_json)
     else:
-        print(json.dumps(obj))
+        click.echo(json.dumps(obj))
 
 
 def show_text_with_less(text: str) -> None:
     if sys.stdout.isatty():
-        print(text)
+        click.echo(text)
     else:
         process = subprocess.Popen(["less"], stdin=subprocess.PIPE)
         try:
             process.communicate(input=text.encode())
         except Exception as e:
-            print(f"An error occurred: {e}")
+            click.echo(f"An error occurred: {e}")
 
 
 @click.group(help="Manages connections to jyafn servers")
@@ -67,9 +67,13 @@ def cloud():
 
 
 @cloud.command(help="Shows current profiles")
-def profile_ls():
+@click.option("--full", is_flag=True)
+def profile_ls(full: bool):
     def mutate(servers: dict[str, Any]) -> dict[str, Any]:
-        print_json(servers)
+        if full:
+            print_json(servers)
+        else:
+            print_json(list(servers.keys()))
         return servers
 
     with_servers(mutate)
@@ -109,7 +113,24 @@ def manifest(profile: str, path: str) -> None:
     try:
         print_json(json.loads(server.get_manifest(path).to_json()))
     except Exception as e:
-        print("error:", str(e).strip())
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
+        exit(1)
+
+
+@cloud.command(help="Lists all manifests residing in a server")
+@click.option("--profile", default="default")
+@click.option("--full", is_flag=True)
+def manifest_ls(profile: str, full: bool) -> None:
+    server = load_server(profile)
+    try:
+        if full:
+            print_json(
+                [json.loads(manifest.to_json()) for manifest in server.get_manifests()]
+            )
+        else:
+            print_json([manifest.path for manifest in server.get_manifests()])
+    except Exception as e:
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
         exit(1)
 
 
@@ -128,7 +149,7 @@ def manifest_post(profile: str, path: str) -> None:
                 }
             )
     except Exception as e:
-        print("error:", str(e).strip())
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
         exit(1)
 
 
@@ -140,7 +161,27 @@ def version(profile: str, path: str) -> None:
     try:
         print_json(server.get_version(path))
     except Exception as e:
-        print("error:", str(e).strip())
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
+        exit(1)
+
+
+@cloud.command(help="Downloads the current version of a function from a server")
+@click.option("--profile", default="default")
+@click.argument("path")
+@click.option("--output", "-o", default=None)
+def download(profile: str, path: str, output: str | None) -> None:
+    server = load_server(profile)
+    try:
+        if output is None:
+            output = path.split("/")[-1] + ".jyafn"
+
+        if output != "-":
+            with open(output, "wb") as out:
+                out.write(server.get_version_artifact(path))
+        else:
+            sys.stdout.write(server.get_version_artifact(path))
+    except Exception as e:
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
         exit(1)
 
 
@@ -156,7 +197,7 @@ def version_put(profile: str, deploy_token: str, path: str, filename: str) -> No
             server.put_version(path, fn.read_graph(filename), deploy_token=deploy_token)
         )
     except Exception as e:
-        print("error:", str(e).strip())
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
         exit(1)
 
 
@@ -171,9 +212,9 @@ def logs(profile: str, less: bool, path: str) -> None:
         if less:
             show_text_with_less(to_show)
         else:
-            print(to_show)
+            click.echo(to_show)
     except Exception as e:
-        print("error:", str(e).strip())
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
         exit(1)
 
 
@@ -184,5 +225,5 @@ def usage(profile: str) -> None:
     try:
         print_json(server.get_usage())
     except Exception as e:
-        print("error:", str(e).strip())
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
         exit(1)

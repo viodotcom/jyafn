@@ -15,6 +15,7 @@ for c in cases:
     print(f"relu({c}) = {relu(c)}")
 
 try:
+
     @fn.func
     def should_fail(a: fn.scalar) -> fn.scalar:
         if a.to_bool():
@@ -22,9 +23,17 @@ try:
         else:
             return 1.0
 
-
     print(f"should_fail({1.0}) = {should_fail(1.0)}")
 except Exception:
     traceback.print_exc()
 else:
     raise Exception("should fail")
+
+
+@fn.func
+def logic_with_symbols(favorite_color: fn.symbol) -> fn.symbol:
+    return (favorite_color == "blue").choose("off you go", "aaaaaah!")
+
+
+assert logic_with_symbols("blue") == "off you go"
+assert logic_with_symbols("yellow") == "aaaaaah!"

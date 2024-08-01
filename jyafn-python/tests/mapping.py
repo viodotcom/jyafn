@@ -1,6 +1,6 @@
 import jyafn as fn
 
-silly_map = fn.mapping(fn.symbol, fn.scalar, {"a": 2, "b": 4})
+silly_map = fn.mapping({"a": 2, "b": 4})
 
 
 @fn.func
@@ -15,6 +15,8 @@ def foo(x: fn.symbol) -> fn.scalar:
 # print(foo("a"))
 # print(foo("b"))
 # print(foo("c"))
+
+silly_map = fn.mapping({"a": 2, "b": 4})
 
 
 @fn.func(metadata={"foo": "bar", "qux": "quz"})

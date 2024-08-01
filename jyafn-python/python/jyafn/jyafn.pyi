@@ -33,13 +33,16 @@ class Graph:
         Creates a JSON representation of the graph. This JSON representation does not
         take _mappings_ into account, so it cannot be used to recreate the graph later.
         """
+    @property
     def input_layout(self) -> Layout:
         """
         Returns the input layout of this graph. This layout is guaranteed to be of the
         "flavor" struct.
         """
+    @property
     def output_layout(self) -> Layout:
         """Returns the output layout of this graph."""
+    @property
     def metadata(self) -> dict[str, str]:
         """
         Returns all metadata key-value pairs associated with the graph. This is a _copy_
@@ -192,23 +195,29 @@ class Function:
     """
 
     def __call__(self, *args, **kwargs) -> Any: ...
+    @property
     def name(self) -> str:
         """
         Returns the name of the current function. The name is user-defined and is a JYAFN
         thing, not associated with Python's `__name__` or `__qualname__`. This field
         exists for identification and documentation purposes.
         """
+    @property
     def input_size(self) -> int:
         """The size of the input buffer, in bytes."""
+    @property
     def output_size(self) -> int:
         """The size of the output buffer, in bytes."""
+    @property
     def input_layout(self) -> Layout:
         """
         Returns the input layout of this function. This layout is guaranteed to be of the
         "flavor" struct.
         """
+    @property
     def output_layout(self) -> Layout:
         """Returns the output layout of this function."""
+    @property
     def fn_ptr(self) -> int:
         """The raw function pointer associated with this function."""
     original: Optional[Callable]
@@ -242,6 +251,7 @@ class Function:
         of the graph, which is an expensive operation (especially if you have large
         mappings).
         """
+    @property
     def metadata(self) -> dict[str, str]:
         """
         Returns all metadata key-value pairs associated with the function. This is a

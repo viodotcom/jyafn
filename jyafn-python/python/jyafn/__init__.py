@@ -5,6 +5,7 @@ import inspect
 import types
 import typing
 import json
+import itertools
 import numpy as np
 import datetime as pydatetime
 
@@ -17,6 +18,12 @@ from .describe import describe  # re-export
 
 
 __version__ = fn.__get_version()
+
+
+# This needs to be here because this module redefines the name for basic python types.
+__pytuple = tuple
+__pylist = list
+__pybool = bool
 
 
 class BaseAnnotation(ABC):
@@ -63,131 +70,6 @@ def make_layout(a: fn.Layout | type[BaseAnnotation] | types.GenericAlias) -> fn.
                 raise TypeError(f"cannot make layout of a generic of {origin}")
         case _:
             raise TypeError(f"Cannot make layout out of {a}")
-
-
-class unit(BaseAnnotation):
-    """Annotates the `unit` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        return fn.Layout.unit()
-
-
-class scalar(BaseAnnotation):
-    """Annotates the `scalar` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        return fn.Layout.scalar()
-
-
-class bool(BaseAnnotation):
-    """Annotates the `bool` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        return fn.Layout.bool()
-
-
-class datetime(BaseAnnotation):
-    """Annotates the `datetime` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        match args:
-            case ():
-                return fn.Layout.datetime()
-            case (format,) if isinstance(format, str):
-                return fn.Layout.datetime(format)
-            case (format,) if isinstance(format, bytes):
-                return fn.Layout.datetime(format.decode("utf8"))
-            case _:
-                raise TypeError(f"Invalid args for datetime annotation: {args}")
-
-
-class symbol(BaseAnnotation):
-    """Annotates the `symbol` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        return fn.Layout.symbol()
-
-
-class struct(BaseAnnotation):
-    """Annotates the `struct` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        match args:
-            case (fields,) if isinstance(fields, dict):
-                struct = {}
-                for name, field in fields.items():
-                    match field:
-                        case type():
-                            struct[name] = field.make_layout(())
-                        case types.GenericAlias():
-                            struct[name] = typing.get_origin(field).make_layout(
-                                typing.get_args(field)
-                            )
-                        case _:
-                            raise TypeError(
-                                f"Invalid arg for struct field annotation: {field}"
-                            )
-                return fn.Layout.struct_of(struct)
-            case _:
-                raise TypeError(f"Invalid args for struct annotation: {args}")
-
-
-class list(BaseAnnotation):
-    """Annotates the `list` layout."""
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        match args:
-            case (size,):
-                return fn.Layout.list_of(fn.Layout.scalar(), size)
-            case (
-                ann,
-                size,
-            ) if isinstance(ann, types.GenericAlias):
-                return fn.Layout.list_of(
-                    typing.get_origin(ann).make_layout(typing.get_args(ann)),
-                    size,
-                )
-            case (
-                ty,
-                size,
-            ) if isinstance(ty, type):
-                return fn.Layout.list_of(ty.make_layout(()), size)
-            case _:
-                raise TypeError(f"Invalid args for list annotation: {args}")
-
-
-class tensor(BaseAnnotation):
-    """
-    Does not annotate any specific layout, but creates an input that is an `np.ndarray`
-    populated with `fn.Ref`s. This can be used to make tensor operations backed by
-    `numpy`.
-    """
-
-    @classmethod
-    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
-        layout = fn.Layout.scalar()
-        for dim_size in reversed(args):
-            layout = fn.Layout.list_of(layout, dim_size)
-
-        return layout
-
-    @classmethod
-    def transform_input(cls, input: Any) -> Any:
-        return np.array(input)
-
-    @classmethod
-    def transform_output(cls, output: Any) -> Any:
-        if isinstance(output, np.ndarray):
-            return output.tolist()
-        else:
-            return output
 
 
 def _input_from_annotation(name: str, a: Any) -> fn.Layout:
@@ -388,10 +270,56 @@ def __anonymous_name(kind: str) -> str:
     return name
 
 
+def py_val_putative_layout(obj: Any) -> fn.Layout:
+    """
+    Creates an `fn.Layout` out of any Python object, making the correct translation
+    between Python and jyafn.
+
+    For, example:
+    ```
+    fn.py_val_putative_layout(1)            # scalar
+    fn.py_val_putative_layout(None)         # unit
+    fn.py_val_putative_layout((True, 1))    # (bool, scalar)
+
+    fn.py_val_putative_layout({"a":1, "b": True}) # struct { a: scalar, b: bool }
+    ```
+    """
+    match obj:
+        case fn.Layout():
+            return obj
+        case fn.Ref():
+            return fn.putative_layout(obj)
+        case None:
+            return fn.Layout.unit()
+        case int() | float():
+            return fn.Layout.scalar()
+        case __pybool():
+            return fn.Layout.bool()
+        case pydatetime.datetime():
+            return fn.Layout.datetime()
+        case pydatetime.date:
+            return Layout.datetime("%Y-%m-%dT%H:%M:%S%.f")
+        case str():
+            return fn.Layout.symbol()
+        case __pylist() | np.ndarray() if len(obj) > 0:
+            return fn.Layout.list_of(putative_layout(obj[0]), len(obj))
+        case __pylist():
+            return fn.Layout.list_of(fn.Layout.scalar(), 0)
+        case tuple():
+            return fn.Layout.tuple_of(tuple(putative_layout(item) for item in obj))
+        case dict():
+            return fn.Layout.struct_of(
+                {key: putative_layout(value) for key, value in obj.items()}
+            )
+        case _:
+            raise TypeError(f"Cannot create putative layout of {obj}")
+
+
 def mapping(
-    key_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias,
-    value_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias,
     obj: Any = {},
+    *,
+    key_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias | None = None,
+    value_layout: fn.Layout | type[BaseAnnotation] | types.GenericAlias | None = None,
     name: str | None = None,
 ) -> fn.LazyMapping:
     """
@@ -404,9 +332,30 @@ def mapping(
     mapping will be marked as consumed and an exception will be raised on reuse. This is
     done to avoid errors stemming from already spent iterators.
     """
+    match obj:
+        case dict():
+            it = iter(obj.items())
+        case _:
+            it = iter(obj)
+
     if name is None:
         name = __anonymous_name("mapping")
-    return fn.LazyMapping(name, make_layout(key_layout), make_layout(value_layout), obj)
+
+    if key_layout is None or value_layout is None:
+        try:
+            key, value = next(it)
+        except StopIteration:
+            raise Exception("empty iterator")
+
+        if key_layout is None:
+            key_layout = py_val_putative_layout(key)
+
+        if value_layout is None:
+            value_layout = py_val_putative_layout(value)
+
+        it = itertools.chain([(key, value)], it)
+
+    return fn.LazyMapping(name, make_layout(key_layout), make_layout(value_layout), it)
 
 
 def make_timestamp(
@@ -532,8 +481,137 @@ def resource(
     ).load(name, data)
 
 
-# This needs to be down here because it redefines the name for `tuple`.
-pytuple = tuple
+class unit(BaseAnnotation):
+    """Annotates the `unit` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        return fn.Layout.unit()
+
+
+class scalar(BaseAnnotation):
+    """Annotates the `scalar` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        return fn.Layout.scalar()
+
+
+class bool(BaseAnnotation):
+    """Annotates the `bool` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        return fn.Layout.bool()
+
+
+class datetime(BaseAnnotation):
+    """Annotates the `datetime` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        match args:
+            case ():
+                return fn.Layout.datetime()
+            case (format,) if isinstance(format, str):
+                return fn.Layout.datetime(format)
+            case (format,) if isinstance(format, bytes):
+                return fn.Layout.datetime(format.decode("utf8"))
+            case _:
+                raise TypeError(f"Invalid args for datetime annotation: {args}")
+
+
+class date(BaseAnnotation):
+    """Annotates the `datetime` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        return fn.Layout.datetime("%Y-%m-%d")
+
+
+class symbol(BaseAnnotation):
+    """Annotates the `symbol` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        return fn.Layout.symbol()
+
+
+class struct(BaseAnnotation):
+    """Annotates the `struct` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        match args:
+            case (fields,) if isinstance(fields, dict):
+                struct = {}
+                for name, field in fields.items():
+                    match field:
+                        case type():
+                            struct[name] = field.make_layout(())
+                        case types.GenericAlias():
+                            struct[name] = typing.get_origin(field).make_layout(
+                                typing.get_args(field)
+                            )
+                        case _:
+                            raise TypeError(
+                                f"Invalid arg for struct field annotation: {field}"
+                            )
+                return fn.Layout.struct_of(struct)
+            case _:
+                raise TypeError(f"Invalid args for struct annotation: {args}")
+
+
+class list(BaseAnnotation):
+    """Annotates the `list` layout."""
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        match args:
+            case (size,):
+                return fn.Layout.list_of(fn.Layout.scalar(), size)
+            case (
+                ann,
+                size,
+            ) if isinstance(ann, types.GenericAlias):
+                return fn.Layout.list_of(
+                    typing.get_origin(ann).make_layout(typing.get_args(ann)),
+                    size,
+                )
+            case (
+                ty,
+                size,
+            ) if isinstance(ty, type):
+                return fn.Layout.list_of(ty.make_layout(()), size)
+            case _:
+                raise TypeError(f"Invalid args for list annotation: {args}")
+
+
+class tensor(BaseAnnotation):
+    """
+    Does not annotate any specific layout, but creates an input that is an `np.ndarray`
+    populated with `fn.Ref`s. This can be used to make tensor operations backed by
+    `numpy`.
+    """
+
+    @classmethod
+    def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
+        layout = fn.Layout.scalar()
+        for dim_size in reversed(args):
+            layout = fn.Layout.list_of(layout, dim_size)
+
+        return layout
+
+    @classmethod
+    def transform_input(cls, input: Any) -> Any:
+        return np.array(input)
+
+    @classmethod
+    def transform_output(cls, output: Any) -> Any:
+        if isinstance(output, np.ndarray):
+            return output.tolist()
+        else:
+            return output
 
 
 class tuple(BaseAnnotation):
@@ -542,7 +620,7 @@ class tuple(BaseAnnotation):
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         match args:
-            case fields if isinstance(fields, pytuple):
+            case fields if isinstance(fields, __pytuple):
                 tup = []
                 for field in fields:
                     match field:
@@ -558,6 +636,6 @@ class tuple(BaseAnnotation):
                             raise TypeError(
                                 f"Invalid arg for tuple field annotation: {field}"
                             )
-                return fn.Layout.tuple_of(pytuple(tup))
+                return fn.Layout.tuple_of(__pytuple(tup))
             case _:
                 raise TypeError(f"Invalid args for tuple annotation: {args}")

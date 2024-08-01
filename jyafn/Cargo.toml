@@ -1,6 +1,6 @@
 [package]
 name = "jyafn"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Pedro Arruda <parruda@vio.com>"]
 description = "Computational graphs for Data Science that compile to machine code"

@@ -144,6 +144,30 @@ class Server:
             deploy_token=outcome["deploy_token"],
         )
 
+    def get_manifests(self) -> list[Manifest]:
+        """Lists all the manifests currently runing in the sever."""
+        response = requests.get(
+            f"{self.host}/manifest",
+            headers={
+                "Authorization": f"Bearer {self.token}",
+            },
+        )
+
+        if response.status_code >= 400:
+            raise Exception(response.text)
+
+        outcome = response.json()
+
+        return [
+            Manifest(
+                entry["path"],
+                fn.Layout.from_json(json.dumps(entry["input_layout"])),
+                fn.Layout.from_json(json.dumps(entry["output_layout"])),
+                deploy_token=entry["deploy_token"],
+            )
+            for entry in outcome
+        ]
+
     def delete_manifest(self, path: str, *, deploy_token: str) -> None:
         """Deletes the manifest associated with the supplied path."""
         response = requests.delete(
@@ -193,6 +217,22 @@ class Server:
             raise Exception(response.text)
 
         return response.json()
+
+    def get_version_artifact(self, path: str) -> bytes:
+        """
+        Downloads the currently running jyafn function at the supplied path.
+        """
+        response = requests.get(
+            f"{self.host}/version-artifact/{path}",
+            headers={
+                "Authorization": f"Bearer {self.token}",
+            },
+        )
+
+        if response.status_code >= 400:
+            raise Exception(response.text)
+
+        return response.content
 
     def call(self, path: str, **input) -> Any:
         """Calls the function associated with the supplied path, given the arguments."""

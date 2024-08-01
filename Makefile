@@ -37,7 +37,7 @@ install-so: cjyafn
 	cp target/release/libcjyafn.so /usr/local/lib/
 
 bump-minor:
-	cargo set-version --bump minor --package cjyafn jyafn jyafn-python
+	cargo set-version --bump minor --package cjyafn --package jyafn --package jyafn-python
 
 bump:
 	cargo set-version --bump patch --package cjyafn --package jyafn --package jyafn-python
