@@ -335,6 +335,14 @@ class Manifest:
     token has to be supplied every time a new function version is sent and every time this
     manifest has to be updated or deleted. 
     """
+    docs: Optional[str] = None
+    """
+    A short documentation explaining this function.
+    """
+    tests: Optional[dict[str, Any]] = None
+    """
+    A set of tests to succeed when uploading a new version.
+    """
 
     def _maybe_generate_deploy_token(self) -> None:
         """Generates a deploy token if this manifest dones't yet have one."""
@@ -345,6 +353,22 @@ class Manifest:
         """Creates a new manifest instance with the supplied deploy token."""
         return Manifest(self.path, self.input_layout, self.output_layout, deploy_token)
 
+    def add_tests(
+        self,
+        name: str,
+        *,
+        input: Any,
+        condition: str,
+        output: Optional[Any] = None,
+    ) -> None:
+        if self.tests is None:
+            self.tests = {}
+        self.tests[name] = {
+            "input": input,
+            "condition": condition,
+            "output": output,
+        }
+
     @staticmethod
     def from_json(s: str) -> Manifest:
         obj: dict[str, Any] = json.loads(s)
@@ -353,6 +377,8 @@ class Manifest:
             input_layout=fn.Layout.from_json(json.dumps(obj["input_layout"])),
             output_layout=fn.Layout.from_json(json.dumps(obj["output_layout"])),
             deploy_token=obj.get("deploy_token", None),
+            docs=obj.get("docs"),
+            tests=obj.get("tests"),
         )
 
     def to_json(self) -> str:
@@ -360,11 +386,16 @@ class Manifest:
         input_json = self.input_layout.to_json()
         output_json = self.output_layout.to_json()
 
-        return '{{"path":{},"deploy_token":{},"input_layout":{},"output_layout":{}}}'.format(
+        return (
+            '{{"path":{},"deploy_token":{},"input_layout":{},'
+            '"output_layout":{},"docs":{},tests:{}}}'
+        ).format(
             json.dumps(self.path),
             json.dumps(self.deploy_token),
             input_json,
             output_json,
+            json.dumps(self.docs or ""),
+            json.dumps(self.tests or {}),
         )
 
     @staticmethod
@@ -423,6 +454,6 @@ def manifest(path: str) -> Callable[[Callable], Manifest]:
         )
         output_layout = _ret_layout_from_annotation(signature.return_annotation)
 
-        return Manifest(path, input_layout, output_layout)
+        return Manifest(path, input_layout, output_layout, docs=prototype.__doc__)
 
     return manifest_
