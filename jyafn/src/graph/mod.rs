@@ -319,6 +319,7 @@ impl Graph {
         let value_pointer = self.insert(
             op::CallMapping {
                 name: name.to_string(),
+                value_slots: None,
             },
             key_args,
         )?;
@@ -354,6 +355,7 @@ impl Graph {
         let value_pointer = self.insert(
             op::CallMapping {
                 name: name.to_string(),
+                value_slots: None,
             },
             key_args,
         )?;
@@ -416,6 +418,7 @@ impl Graph {
         let value_pointer = self.insert(
             op::CallMapping {
                 name: name.to_string(),
+                value_slots: None,
             },
             key_args,
         )?;
@@ -482,6 +485,7 @@ impl Graph {
             op::CallResource {
                 name: name.to_string(),
                 method: method_name.to_string(),
+                resolved: None,
             },
             args,
         )?;

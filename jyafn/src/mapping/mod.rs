@@ -255,8 +255,8 @@ impl Mapping {
     }
 
     /// Gets the raw data associated with the supplied raw key.
-    pub fn get(&self, key: Box<[u8]>) -> Option<&[u8]> {
-        self.storage.as_ref().and_then(|s| s.get(hash(&key)))
+    pub fn get(&self, key: &[u8]) -> Option<&[u8]> {
+        self.storage.as_ref().and_then(|s| s.get(hash(key)))
     }
 
     unsafe extern "C" fn call_mapping(mapping: *const Mapping, hash: u64) -> *const u8 {

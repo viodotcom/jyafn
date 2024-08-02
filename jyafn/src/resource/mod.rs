@@ -3,6 +3,7 @@
 
 pub mod dummy;
 pub mod external;
+pub mod linalg;
 
 use byte_slice_cast::*;
 use get_size::GetSize;
@@ -18,11 +19,16 @@ use crate::layout::{Layout, Struct};
 use crate::Error;
 
 /// The signature of the function that will be invoked from inside the function code.
-pub type RawResourceMethod =
-    unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut u8;
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RawResourceMethod(
+    pub unsafe extern "C" fn(*const (), *const u8, u64, *mut u8, u64) -> *mut u8,
+);
+
+impl GetSize for RawResourceMethod {}
 
 /// A method from a resource.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ResourceMethod {
     /// The bare function that will be invoked from inside the function code.
     pub(crate) fn_ptr: RawResourceMethod,
@@ -177,6 +183,14 @@ impl<'a> Input<'a> {
         Self(std::slice::from_raw_parts(input as *const u64, n_slots))
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn get_f64(&self, idx: usize) -> f64 {
         f64::from_ne_bytes(self.0[idx].to_ne_bytes())
     }
@@ -321,6 +335,6 @@ macro_rules! safe_method {
             }
         }
 
-        safe_interface
+        $crate::resource::RawResourceMethod(safe_interface)
     }};
 }

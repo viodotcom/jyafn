@@ -43,7 +43,7 @@ impl Op for Assert {
         func.add_block(true_side);
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some(true) = args[0].as_bool() {
             Some(Ref::from(true))
         } else {
@@ -55,7 +55,7 @@ impl Op for Assert {
         true
     }
 
-    fn is_illegal(&self, args: &[Ref]) -> bool {
+    fn is_illegal(&self, graph: &Graph, args: &[Ref]) -> bool {
         matches!(args[0].as_bool(), Some(false))
     }
 }
@@ -111,7 +111,7 @@ impl Op for Choose {
         func.add_block(end_side);
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if Ref::from(true) == args[0] {
             return Some(args[1]);
         }
@@ -158,7 +158,7 @@ impl Op for Not {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if Ref::from(true) == args[0] {
             return Some(Ref::from(false));
         }
@@ -201,7 +201,7 @@ impl Op for And {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((a, b)) = args[0].as_bool().zip(args[1].as_bool()) {
             Some(Ref::from(a && b))
         } else {
@@ -240,7 +240,7 @@ impl Op for Or {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((a, b)) = args[0].as_bool().zip(args[1].as_bool()) {
             Some(Ref::from(a || b))
         } else {

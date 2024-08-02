@@ -34,7 +34,7 @@ impl Op for Add {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if Ref::from(0.0) == args[0] {
             return Some(args[1]);
         }
@@ -81,7 +81,7 @@ impl Op for Sub {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Ref::Const(Type::Float, 0) = args[1] {
             return Some(args[0]);
         }
@@ -124,7 +124,7 @@ impl Op for Mul {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if Ref::from(1.0) == args[0] {
             return Some(args[1]);
         }
@@ -171,7 +171,7 @@ impl Op for Div {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if Ref::from(1.0) == args[1] {
             return Some(args[0]);
         }
@@ -211,7 +211,7 @@ impl Op for Rem {
         super::call::Call("rem".to_string()).render_into(graph, output, args, func, namespace)
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
             return Some((x % y).into());
         }
@@ -250,7 +250,7 @@ impl Op for Neg {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some(x) = args[0].as_f64() {
             return Some((-x).into());
         }
@@ -322,7 +322,7 @@ impl Op for Abs {
         func.add_block(end_side);
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some(x) = args[0].as_f64() {
             return Some(x.abs().into());
         }

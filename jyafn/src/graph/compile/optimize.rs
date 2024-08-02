@@ -1,6 +1,6 @@
 //! Graph optimizations (those not covered by qbe).
 
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{Graph, Node, Ref};
 
@@ -100,7 +100,8 @@ pub fn const_eval(graph: &mut Graph) {
         let node = &mut graph.nodes[node_id];
         node.args = new_args;
 
-        if let Some(evald) = node.op.const_eval(&node.args) {
+        let node = &graph.nodes[node_id]; // reborrow as immutable
+        if let Some(evald) = node.op.const_eval(graph, &node.args) {
             evald
         } else {
             Ref::Node(node_id)
@@ -310,12 +311,7 @@ impl Statements {
     }
 
     /// Render the resulting nested structure into the provided QBE function builder.
-    pub fn render_into(
-        &self,
-        graph: &Graph,
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
+    pub fn render_into(&self, graph: &Graph, func: &mut qbe::Function, namespace: &str) {
         for statement in &self.0 {
             match statement {
                 &StatementOrConditional::Statement(node_id) => {

@@ -255,9 +255,7 @@ impl Layout {
             Layout::Tuple(fields) => RefValue::Tuple(
                 fields
                     .iter()
-                    .map(|field| {
-                        Some(field.build_ref_value_inner(it.by_ref())?)
-                    })
+                    .map(|field| Some(field.build_ref_value_inner(it.by_ref())?))
                     .collect::<Option<_>>()?,
             ),
             Layout::List(element, size) => RefValue::List(
@@ -331,26 +329,29 @@ macro_rules! layout {
     ({$($key:literal : $ty:tt),*}) => {
         $crate::r#struct!($($key : $ty),*)
     };
+    (($($ty:tt),*)) => {
+        $crate::layout::Tuple(vec![$($ty),*])
+    };
     (unit) => {
-        $crate::Layout::Unit
+        $crate::layout::Layout::Unit
     };
     (scalar) => {
-        $crate::Layout::Scalar
+        $crate::layout::Layout::Scalar
     };
     (bool) => {
-        $crate::Layout::Bool
+        $crate::layout::Layout::Bool
     };
     (datetime $format:expr) => {
-        $crate::Layout::DateTime($format.to_string())
+        $crate::layout::Layout::DateTime($format.to_string())
     };
     (datetime) => {
-        $crate::Layout::DateTime($crate::ISOFORMAT.to_string())
+        $crate::layout::Layout::DateTime($crate::ISOFORMAT.to_string())
     };
     (symbol) => {
-        $crate::Layout::Symbol
+        $crate::layout::Layout::Symbol
     };
     ([$element:tt; $size:expr]) => {
-        $crate::Layout::List(Box::new($crate::layout!($element)), $size)
+        $crate::layout::Layout::List(Box::new($crate::layout!($element)), $size)
     }
 }
 
@@ -358,7 +359,7 @@ macro_rules! layout {
 #[macro_export]
 macro_rules! r#struct {
     ($($key:tt : $ty:tt),*) => {
-        $crate::Struct(vec![$(
+        $crate::layout::Struct(vec![$(
             $crate::struct_field!($key : $ty)
         ),*])
     };

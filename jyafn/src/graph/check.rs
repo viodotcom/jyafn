@@ -20,28 +20,22 @@ pub fn run_checks(graph: &mut Graph) -> Result<(), Error> {
 /// This function mutates the graph because some operations are mutated by the inference
 /// of the input parameters.
 fn types(graph: &mut Graph) -> Result<(), Error> {
-    let checked_nodes = graph
-        .nodes
-        .iter()
-        .enumerate()
-        .map(|(node_id, node)| {
-            let mut node = node.clone();
-            let arg_types = node
-                .args
-                .iter()
-                .map(|&r| graph.type_of(r))
-                .collect::<Vec<_>>();
-            if let Some(ty) = node.op.annotate(node_id, &*graph, &arg_types) {
-                if ty == node.ty {
-                    return Ok(node);
-                }
+    for node_id in 0..graph.nodes.len() {
+        let mut node = graph.nodes[node_id].clone();
+
+        let arg_types = node
+            .args
+            .iter()
+            .map(|&r| graph.type_of(r))
+            .collect::<Vec<_>>();
+        if let Some(ty) = node.op.annotate(node_id, graph, &arg_types) {
+            if ty != node.ty {
+                return Err(Error::Type(node.op, arg_types));
             }
+        }
 
-            Err(Error::Type(node.op, arg_types))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    graph.nodes = checked_nodes;
+        graph.nodes[node_id] = node;
+    }
 
     Ok(())
 }
@@ -75,6 +69,16 @@ fn pointers(graph: &Graph) -> Result<(), Error> {
     for &output in &graph.outputs {
         if matches!(graph.type_of(output), Type::Ptr { .. }) {
             return Err("found pointer type in output".to_string().into());
+        }
+    }
+
+    for node in &graph.nodes {
+        for arg in &node.args {
+            if let &Ref::Const(Type::Ptr { .. }, ptr) = arg {
+                if ptr != 0 {
+                    return Err(format!("found hardcoded non-null pointer in node {node:?}").into());
+                }
+            }
         }
     }
 

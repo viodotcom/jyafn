@@ -1,3 +1,6 @@
+use std::usize;
+
+use byte_slice_cast::AsByteSlice;
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
@@ -9,6 +12,10 @@ use super::{unique_for, Op};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, GetSize)]
 pub(crate) struct CallMapping {
     pub name: String,
+    #[serde(default)]
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    pub value_slots: Option<Vec<Type>>,
 }
 
 #[typetag::serde]
@@ -18,6 +25,7 @@ impl Op for CallMapping {
     fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
         if let Some(mapping) = graph.mappings.get(&self.name) {
             if mapping.key_layout().slots() == args {
+                self.value_slots = Some(mapping.value_layout().slots());
                 return Some(Type::Ptr { origin: self_id });
             }
         }
@@ -48,6 +56,27 @@ impl Op for CallMapping {
     fn get_size(&self) -> usize {
         GetSize::get_size(self)
     }
+
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
+        let key = args
+            .iter()
+            .copied()
+            .map(|arg| {
+                if let Ref::Const(_, repr) = arg {
+                    Some(repr)
+                } else {
+                    None
+                }
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let key_ptr = if let Some(value) = graph.mappings[&self.name].get(key.as_byte_slice()) {
+            value.as_ptr() as usize as u64
+        } else {
+            0
+        };
+
+        Some(Ref::Const(Type::Ptr { origin: usize::MAX }, key_ptr))
+    }
 }
 
 /// Loads the value of a mapping call for a given slot or yields an error if none was
@@ -72,6 +101,7 @@ impl Op for LoadMappingValue {
             return None;
         };
 
+        // Check if the origin is legit...
         let call_mapping_op = graph.nodes.get(origin)?.op.downcast_ref::<CallMapping>()?;
         if call_mapping_op.name != self.mapping {
             return None;
@@ -124,6 +154,12 @@ impl Op for LoadMappingValue {
     fn get_size(&self) -> usize {
         GetSize::get_size(self)
     }
+
+    fn is_illegal(&self, graph: &Graph, args: &[Ref]) -> bool {
+        // If const is zero = value not found.
+        // If const not zero = hardcoding pointers?! sus...
+        matches!(args[0], Ref::Const(_, _))
+    }
 }
 
 /// Loads the value of a mapping call for a given slot or yields an error if none was
@@ -140,7 +176,7 @@ impl Op for LoadOrDefaultMappingValue {
     impl_is_eq! {}
 
     fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
-        if args.len() != 2 && args[1] != Type::Float {
+        if args.len() != 2 {
             return None;
         }
 
@@ -154,10 +190,14 @@ impl Op for LoadOrDefaultMappingValue {
             return None;
         }
 
-        let mapping = graph.mappings.get(&self.mapping)?;
-        let slots = mapping.value_layout().slots();
+        let slots = call_mapping_op.value_slots.as_ref()?;
 
-        slots.get(self.slot).copied()
+        let slot = *slots.get(self.slot)?;
+        if slot == args[1] {
+            Some(slot)
+        } else {
+            None
+        }
     }
 
     fn render_into(
@@ -206,5 +246,24 @@ impl Op for LoadOrDefaultMappingValue {
 
     fn get_size(&self) -> usize {
         GetSize::get_size(self)
+    }
+
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
+        if matches!(args[0], Ref::Const(_, 0)) {
+            Some(args[1])
+        } else {
+            None
+        }
+    }
+
+    fn is_illegal(&self, graph: &Graph, args: &[Ref]) -> bool {
+        if let Ref::Const(_, ptr) = args[0] {
+            // If const not zero = hardcoding pointers?! sus...
+            if ptr != 0 {
+                return true;
+            }
+        }
+
+        false
     }
 }

@@ -3,7 +3,7 @@
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("Currently `jyafn` only works in 64-bit atchitectures");
 
-extern crate jyafn_qbe as qbe;  // vendored
+extern crate jyafn_qbe as qbe; // vendored
 
 pub mod r#const;
 pub mod extension;
@@ -20,9 +20,9 @@ mod graph;
 #[cfg(feature = "map-reduce")]
 pub use dataset::Dataset;
 pub use function::{FnError, Function, FunctionData, RawFn};
+pub use graph::size;
 pub use graph::{Graph, IndexedList, Node, Ref, Type};
 pub use op::Op;
-pub use graph::size;
 pub use r#const::Const;
 
 use std::{

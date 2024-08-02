@@ -9,11 +9,11 @@ import itertools
 import numpy as np
 import datetime as pydatetime
 
+
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterable
 from dataclasses import dataclass
 
-from .np_dropin import *
 from .describe import describe  # re-export
 
 
@@ -21,9 +21,9 @@ __version__ = fn.__get_version()
 
 
 # This needs to be here because this module redefines the name for basic python types.
-__pytuple = tuple
-__pylist = list
-__pybool = bool
+_pytuple = tuple
+_pylist = list
+_pybool = bool
 
 
 class BaseAnnotation(ABC):
@@ -77,7 +77,7 @@ def _input_from_annotation(name: str, a: Any) -> fn.Layout:
     Gets an annotation and a field name and creates the associated input layout structure.
     """
     match a:
-        case type():
+        case type() if issubclass(a, BaseAnnotation):
             layout = a.make_layout(())
         case types.GenericAlias():
             layout = typing.get_origin(a).make_layout(typing.get_args(a))
@@ -87,7 +87,7 @@ def _input_from_annotation(name: str, a: Any) -> fn.Layout:
     input = fn.input(name, layout)
 
     match a:
-        case type():
+        case type() if issubclass(a, BaseAnnotation):
             return a.transform_input(input)
         case types.GenericAlias():
             return typing.get_origin(a).transform_input(input)
@@ -106,7 +106,7 @@ def _ret_from_annotation(ret: Any, a: Any) -> None:
         case type() if a is type(None):
             ret = None
             layout = unit.make_layout(())
-        case type():
+        case type() if issubclass(a, BaseAnnotation):
             ret = a.transform_output(ret)
             layout = a.make_layout(())
         case types.GenericAlias() if True:
@@ -293,17 +293,17 @@ def py_val_putative_layout(obj: Any) -> fn.Layout:
             return fn.Layout.unit()
         case int() | float():
             return fn.Layout.scalar()
-        case __pybool():
+        case _pybool():
             return fn.Layout.bool()
         case pydatetime.datetime():
             return fn.Layout.datetime()
-        case pydatetime.date:
+        case pydatetime.date():
             return Layout.datetime("%Y-%m-%dT%H:%M:%S%.f")
         case str():
             return fn.Layout.symbol()
-        case __pylist() | np.ndarray() if len(obj) > 0:
+        case _pylist() | np.ndarray() if len(obj) > 0:
             return fn.Layout.list_of(putative_layout(obj[0]), len(obj))
-        case __pylist():
+        case _pylist():
             return fn.Layout.list_of(fn.Layout.scalar(), 0)
         case tuple():
             return fn.Layout.tuple_of(tuple(putative_layout(item) for item in obj))
@@ -496,6 +496,18 @@ class scalar(BaseAnnotation):
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.scalar()
 
+    @classmethod
+    def transform_output(cls, output: Any) -> Any:
+        """Extra transformations to the output before its insertion in the graph."""
+        if (
+            isinstance(output, np.ndarray)
+            and output.shape == ()
+            and np.prod(output.shape) == 1
+        ):
+            return cls.transform_output(output.item())
+        else:
+            return output
+
 
 class bool(BaseAnnotation):
     """Annotates the `bool` layout."""
@@ -503,6 +515,18 @@ class bool(BaseAnnotation):
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.bool()
+
+    @classmethod
+    def transform_output(cls, output: Any) -> Any:
+        """Extra transformations to the output before its insertion in the graph."""
+        if (
+            isinstance(output, np.ndarray)
+            and output.shape == ()
+            and np.prod(output.shape) == 1
+        ):
+            return cls.transform_output(output.item())
+        else:
+            return output
 
 
 class datetime(BaseAnnotation):
@@ -587,7 +611,7 @@ class list(BaseAnnotation):
                 raise TypeError(f"Invalid args for list annotation: {args}")
 
 
-class tensor(BaseAnnotation):
+class tensor(BaseAnnotation, np.ndarray):
     """
     Does not annotate any specific layout, but creates an input that is an `np.ndarray`
     populated with `fn.Ref`s. This can be used to make tensor operations backed by
@@ -604,7 +628,7 @@ class tensor(BaseAnnotation):
 
     @classmethod
     def transform_input(cls, input: Any) -> Any:
-        return np.array(input)
+        return array(input)  # from np_dropin
 
     @classmethod
     def transform_output(cls, output: Any) -> Any:
@@ -613,6 +637,65 @@ class tensor(BaseAnnotation):
         else:
             return output
 
+    def __eq__(self, other: Any) -> "tensor":
+        return equal(self, other)
+
+    def __ne__(self, other: Any) -> "tensor":
+        return not_equal(self, other)
+
+    def __gt__(self, other: Any) -> "tensor":
+        return greater(self, other)
+
+    def __ge__(self, other: Any) -> "tensor":
+        return greater_equal(self, other)
+
+    def __lt__(self, other: Any) -> "tensor":
+        return less(self, other)
+
+    def __le__(self, other: Any) -> "tensor":
+        return less_equal(self, other)
+
+    @property
+    def max(self):
+        return maximum.reduce
+
+    @property
+    def min(self):
+        return maximum.reduce
+
+    @property
+    def any(self):
+        return logical_or.reduce
+
+    @property
+    def all(self):
+        return logical_and.reduce
+
+    @staticmethod
+    def __numpythonize(a):
+        """
+        This avoid infnite recusrion, by disabling __array_function__ invocation in
+        case the drop-in is not found.
+        """
+        if isinstance(a, tensor):
+            return a.view(np.ndarray)
+        else:
+            return a
+
+    def __array_function__(self, func, types, args, kwargs):
+        drop_in = DROP_IN.get(func, func)
+        return drop_in(
+            *map(self.__numpythonize, args),
+            **{key: self.__numpythonize(val) for key, val in kwargs.items()},
+        )
+
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        drop_in = DROP_IN.get(ufunc, ufunc)
+        return getattr(drop_in, method)(
+            *map(self.__numpythonize, args),
+            **{key: self.__numpythonize(val) for key, val in kwargs.items()},
+        )
+
 
 class tuple(BaseAnnotation):
     """Annotates the `tuple` layout."""
@@ -620,7 +703,7 @@ class tuple(BaseAnnotation):
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         match args:
-            case fields if isinstance(fields, __pytuple):
+            case fields if isinstance(fields, _pytuple):
                 tup = []
                 for field in fields:
                     match field:
@@ -636,6 +719,11 @@ class tuple(BaseAnnotation):
                             raise TypeError(
                                 f"Invalid arg for tuple field annotation: {field}"
                             )
-                return fn.Layout.tuple_of(__pytuple(tup))
+                return fn.Layout.tuple_of(_pytuple(tup))
             case _:
                 raise TypeError(f"Invalid args for tuple annotation: {args}")
+
+
+# This needs to be down here, after everything is said and done, because it overrides
+# even _more_ Python stuff.
+from .np_dropin import *

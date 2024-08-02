@@ -21,6 +21,11 @@ impl Ref {
     }
 }
 
+#[pyfunction]
+pub fn make(obj: &Bound<PyAny>) -> PyResult<Ref> {
+    Ref::make(obj)
+}
+
 #[pymethods]
 impl Ref {
     fn __repr__(&self) -> String {
@@ -36,7 +41,8 @@ impl Ref {
     fn __bool__(&self) -> PyResult<bool> {
         Err(exceptions::PyTypeError::new_err(
             "Cannot assert the truthiness of a Ref\n\
-            hint: look for a replacement in `jyafn` instead (e.g. `np.max` -> `fn.max`)",
+            hint: look for a replacement in `jyafn` instead (e.g. use `fn.tensor` instead of \
+            `np.ndarray`)",
         ))
     }
 
@@ -136,13 +142,21 @@ impl Ref {
         insert_in_current(rust::op::Call("trunc".to_string()), vec![self.0])
     }
 
-    fn __rouns__(&self) -> PyResult<Ref> {
+    fn __round__(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::Call("round".to_string()), vec![self.0])
     }
 
     fn __eq__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
         let other = Ref::make(other)?;
         insert_in_current(rust::op::Eq(None), vec![self.0, other.0])
+    }
+
+    fn __ne__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
+        let other = Ref::make(other)?;
+        insert_in_current(
+            rust::op::Not,
+            vec![insert_in_current(rust::op::Eq(None), vec![self.0, other.0])?.0],
+        )
     }
 
     fn __lt__(&self, other: &Bound<PyAny>) -> PyResult<Ref> {
@@ -231,6 +245,11 @@ impl Ref {
 
     fn to_float(&self) -> PyResult<Ref> {
         insert_in_current(rust::op::ToFloat, vec![self.0])
+    }
+
+    /// This is a noop for numpy. Since jyafn has no complex type, nothing needs to be done.
+    fn conjugate(&self) -> Ref {
+        self.clone()
     }
 
     // Reimplementing pfuncs as methods allows us to take advantage of numpy

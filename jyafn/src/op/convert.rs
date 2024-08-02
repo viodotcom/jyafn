@@ -39,7 +39,7 @@ impl Op for ToBool {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some(x) = args[0].as_f64() {
             return Some((x != 0.0).into());
         }
@@ -78,7 +78,7 @@ impl Op for ToFloat {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some(x) = args[0].as_bool() {
             return Some((x as i64 as f64).into());
         }

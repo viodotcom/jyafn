@@ -1,3 +1,4 @@
+import time
 import click
 import timeit as pytimeit
 import jyafn as fn
@@ -61,12 +62,28 @@ def timeit(number, file, input):
         return f"{rel_time:.2f}{units[unit_id]}s"
 
     try:
+        tic = time.time()
         func = fn.read_fn(file)
-        click.echo(f"\n    Call result is: {func.eval_json(input, pretty=True)}")
-        click.echo(f"\n    Running {number} simulations...")
-        mean_ms = pytimeit.timeit(lambda: func.eval_json(input), number=number)
+        toc = time.time()
+        click.echo(f"Function load took {toc-tic:.2f}s")
 
-        click.echo(f"    Time per call: {fmt_time(mean_ms*1e6)}\n")
+        try:
+            evaled = func.eval_json(input, pretty=True)
+            click.echo(f"\nCall result is: {evaled}")
+        except Exception as e:
+            click.echo(f"\nCall failed with:    {e}")
+
+        click.echo(f"\nRunning {number} simulations...")
+
+        def eval():
+            try:
+                func.eval_json(input)
+            except Exception as e:
+                pass
+
+        mean_ms = pytimeit.timeit(eval, number=number)
+
+        click.echo(f"Time per call: {fmt_time(mean_ms/number*1e9)}\n")
     except Exception as e:
         click.echo(e)
         click.echo(f"hint: try `jyafn desc {file}` for help on this function")

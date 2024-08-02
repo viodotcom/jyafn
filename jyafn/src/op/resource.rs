@@ -1,7 +1,7 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{graph::SLOT_SIZE, impl_is_eq, impl_op, Graph, Ref, Type};
+use crate::{graph::SLOT_SIZE, impl_is_eq, impl_op, resource::ResourceMethod, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
@@ -9,6 +9,10 @@ use super::{unique_for, Op};
 pub(crate) struct CallResource {
     pub name: String,
     pub method: String,
+    #[serde(default)]
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    pub resolved: Option<ResourceMethod>,
 }
 
 #[typetag::serde]
@@ -16,17 +20,14 @@ impl Op for CallResource {
     impl_is_eq! {}
 
     fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type> {
-        if let Some(method) = graph
-            .resources
-            .get(&self.name)
-            .and_then(|r| r.get_method(&self.method))
-        {
-            if method.input_layout.slots() == args {
-                return Some(Type::Ptr { origin: self_id });
-            }
-        }
+        let method = graph.resources.get(&self.name)?.get_method(&self.method)?;
 
-        None
+        if method.input_layout.slots() == args {
+            self.resolved = Some(method);
+            Some(Type::Ptr { origin: self_id })
+        } else {
+            None
+        }
     }
 
     fn render_into(
@@ -89,7 +90,7 @@ impl Op for CallResource {
             status.clone(),
             qbe::Type::Long,
             qbe::Instr::Call(
-                qbe::Value::Const(method.fn_ptr as *const () as u64),
+                qbe::Value::Const(method.fn_ptr.0 as *const () as u64),
                 vec![
                     (
                         qbe::Type::Long,
@@ -138,11 +139,22 @@ impl Op for LoadMethodOutput {
             return None;
         };
         // Ensure origin call exists.
-        graph.nodes.get(origin)?.op.downcast_ref::<CallResource>()?;
+        let call_resource = graph.nodes.get(origin)?.op.downcast_ref::<CallResource>()?;
 
-        // There needed to be some more strict checking here, but leave it for the future.
+        // Ensure return type matches.
+        let call_resource_type = call_resource
+            .resolved
+            .as_ref()?
+            .output_layout
+            .slots()
+            .get(self.slot)
+            .copied()?;
 
-        Some(self.return_type)
+        if call_resource_type == self.return_type {
+            Some(self.return_type)
+        } else {
+            None
+        }
     }
 
     fn render_into(
@@ -169,5 +181,11 @@ impl Op for LoadMethodOutput {
 
     fn must_use(&self) -> bool {
         true
+    }
+
+    fn is_illegal(&self, graph: &Graph, args: &[Ref]) -> bool {
+        // If const is zero = null pointer.
+        // If const not zero = hardcoding pointers?! sus...
+        matches!(args[0], Ref::Const(_, _))
     }
 }

@@ -50,7 +50,7 @@ impl Op for Eq {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
             Some(Ref::from(x == y))
         } else {
@@ -94,7 +94,7 @@ impl Op for Gt {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
             Some(Ref::from(x > y))
         } else {
@@ -138,7 +138,7 @@ impl Op for Lt {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
             Some(Ref::from(x < y))
         } else {
@@ -182,7 +182,7 @@ impl Op for Ge {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
             Some(Ref::from(x >= y))
         } else {
@@ -226,7 +226,7 @@ impl Op for Le {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         if let Some((x, y)) = args[0].as_f64().zip(args[1].as_f64()) {
             Some(Ref::from(x <= y))
         } else {

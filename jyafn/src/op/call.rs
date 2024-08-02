@@ -46,7 +46,7 @@ impl Op for Call {
         )
     }
 
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         let pfunc = pfunc::get(&self.0).expect("pfunc existence already checked");
         let const_args = args
             .iter()

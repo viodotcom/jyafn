@@ -46,3 +46,4 @@ thread_local = "1.1.8"
 typetag = "0.2.16"
 zip = { version = "2.1.3", default-features = false, features = ["deflate"] }
 lazy_static = "1.5.0"
+faer = { version = "0.19.1", default-features = false, features = ["std"] }

@@ -30,6 +30,7 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_graph, m)?)?;
     m.add_function(wrap_pyfunction!(read_fn, m)?)?;
     m.add_function(wrap_pyfunction!(graph::current_graph, m)?)?;
+    m.add_function(wrap_pyfunction!(graph::make, m)?)?;
     m.add_function(wrap_pyfunction!(r#const, m)?)?;
     m.add_function(wrap_pyfunction!(input, m)?)?;
     m.add_function(wrap_pyfunction!(ret, m)?)?;
@@ -142,7 +143,7 @@ fn pythonize_ref_value(py: Python, val: rust::layout::RefValue) -> PyResult<PyOb
             );
             tuple.unbind().into()
         }
-        rust::layout::RefValue::List(l) => PyTuple::new_bound(
+        rust::layout::RefValue::List(l) => PyList::new_bound(
             py,
             l.into_iter()
                 .map(|el| pythonize_ref_value(py, el))

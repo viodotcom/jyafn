@@ -2,7 +2,7 @@ mod indexed;
 mod r#ref;
 
 pub use indexed::IndexedList;
-pub use r#ref::Ref;
+pub use r#ref::{make, Ref};
 
 use pyo3::exceptions;
 use pyo3::prelude::*;

@@ -57,7 +57,7 @@ pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcas
     /// Attempts to evaluate the result of the application of this operation in compile
     /// time. Returns `None` if that is not possible. The default implementation always
     /// returns `None`.
-    fn const_eval(&self, args: &[Ref]) -> Option<Ref> {
+    fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         None
     }
 
@@ -71,7 +71,7 @@ pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcas
     /// Checks whether this operation is correctly formed. This method can also be used
     /// to detect runtime errors in compilation time.
     #[allow(unused_variables)]
-    fn is_illegal(&self, args: &[Ref]) -> bool {
+    fn is_illegal(&self, graph: &Graph, args: &[Ref]) -> bool {
         false
     }
 }

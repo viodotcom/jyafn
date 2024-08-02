@@ -105,6 +105,18 @@ def profile_rm(profile: str):
     with_servers(mutate)
 
 
+@cloud.command(help="Pings the server")
+@click.option("--profile", default="default")
+def ping(profile: str) -> None:
+    server = load_server(profile)
+    try:
+        server.ping()
+        click.echo("ping!")
+    except Exception as e:
+        click.echo("error: " + str(e).strip(), file=sys.stderr)
+        exit(1)
+
+
 @cloud.command(help="Gets a manifest from a server")
 @click.option("--profile", default="default")
 @click.argument("path")

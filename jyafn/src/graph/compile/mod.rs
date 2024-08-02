@@ -27,7 +27,7 @@ impl Graph {
     fn find_illegal(&self) -> Option<&Node> {
         self.nodes
             .iter()
-            .find(|node| node.op.is_illegal(&node.args))
+            .find(|node| node.op.is_illegal(self, &node.args))
     }
 
     /// Performs optimizations in the current graph. These optimizations currently are,
