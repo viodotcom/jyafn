@@ -329,8 +329,8 @@ macro_rules! safe_method {
                 }
             }) {
                 Ok(Ok(())) => std::ptr::null_mut(),
-                Ok(Err(err)) => crate::utils::make_safe_c_str(err).into_raw() as *mut u8,
-                Err(_) => crate::utils::make_safe_c_str("method panicked. See stderr".to_string())
+                Ok(Err(err)) => $crate::utils::make_safe_c_str(err).into_raw() as *mut u8,
+                Err(_) => $crate::utils::make_safe_c_str("method panicked. See stderr".to_string())
                     .into_raw() as *mut u8,
             }
         }

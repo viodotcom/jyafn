@@ -58,6 +58,30 @@ unsafe fn from_c_str<'a>(s: *const c_char) -> Cow<'a, str> {
     cstr.to_string_lossy()
 }
 
+/// # Safety
+///
+/// Expects `bytes` to be a valid pointer to `bytes` data returned by a function in this
+/// library.
+pub unsafe extern "C" fn get_bytes_ptr(bytes: *const ()) -> *const u8 {
+    with_unchecked(bytes, |bytes: &Vec<u8>| bytes.as_ptr())
+}
+
+/// # Safety
+///
+/// Expects `bytes` to be a valid pointer to `bytes` data returned by a function in this
+/// library.
+pub unsafe extern "C" fn get_bytes_len(bytes: *const ()) -> usize {
+    with_unchecked(bytes, |bytes: &Vec<u8>| bytes.len())
+}
+
+/// # Safety
+///
+/// Expects `bytes` to be a valid pointer to `bytes` data returned by a function in this
+/// library. The pointer becomes invalid after it is sent to this function.
+pub unsafe extern "C" fn bytes_drop(bytes: *mut ()) {
+    let _: Box<Vec<u8>> = Box::from_raw(bytes as *mut Vec<u8>);
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct Outcome(*mut ());
@@ -275,6 +299,18 @@ pub unsafe extern "C" fn graph_get_metadata_json(graph: *const ()) -> *const c_c
 pub unsafe extern "C" fn graph_load(bytes: *const u8, len: usize) -> Outcome {
     try_panic_to_outcome(|| {
         Graph::load(std::io::Cursor::new(std::slice::from_raw_parts(bytes, len)))
+    })
+}
+
+/// # Safety
+///
+/// Expects the `graph` parameter to be a valid pointer to a graph.
+#[no_mangle]
+pub unsafe extern "C" fn graph_dump(graph: *const ()) -> Outcome {
+    try_with(graph, |graph: &Graph| {
+        let mut buf = std::io::Cursor::new(vec![]);
+        graph.dump(&mut buf)?;
+        Ok(buf.into_inner())
     })
 }
 

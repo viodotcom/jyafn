@@ -41,7 +41,7 @@ pub enum LoadOutcome {
         /// The reason why it failed.
         error: String,
     },
-    Loaded(ExtensionManifest),
+    Loaded(Box<ExtensionManifest>),
 }
 
 /// This is the data format, returned as a C-style string from the `extension_init`

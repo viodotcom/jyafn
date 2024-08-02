@@ -1,5 +1,3 @@
-use std::usize;
-
 use byte_slice_cast::AsByteSlice;
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};

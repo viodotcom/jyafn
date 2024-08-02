@@ -202,6 +202,7 @@ impl Display for Layout {
 impl Layout {
     /// The size in slots of this struct.
     pub fn size(&self) -> Size {
+        #[allow(clippy::erasing_op)]
         match self {
             Layout::Unit => 0 * InSlots::UNIT,
             Layout::Scalar => 1 * InSlots::UNIT,
@@ -223,7 +224,7 @@ impl Layout {
             Layout::DateTime(_) => vec![Type::DateTime],
             Layout::Symbol => vec![Type::Symbol],
             Layout::Struct(fields) => fields.slots(),
-            Layout::Tuple(fields) => fields.iter().map(Layout::slots).flatten().collect(),
+            Layout::Tuple(fields) => fields.iter().flat_map(Layout::slots).collect(),
             Layout::List(element, size) => [element.slots()]
                 .into_iter()
                 .cycle()
@@ -255,7 +256,7 @@ impl Layout {
             Layout::Tuple(fields) => RefValue::Tuple(
                 fields
                     .iter()
-                    .map(|field| Some(field.build_ref_value_inner(it.by_ref())?))
+                    .map(|field| field.build_ref_value_inner(it.by_ref()))
                     .collect::<Option<_>>()?,
             ),
             Layout::List(element, size) => RefValue::List(
