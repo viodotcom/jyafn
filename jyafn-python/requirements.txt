@@ -1,6 +1,17 @@
+certifi==2024.7.4
+charset-normalizer==3.3.2
 click==8.1.7
 click-default-group==1.2.4
--e git+ssh://git@github.com/viodotcom/jyafn.git@10be663896e1735f7bdc95e4ba4a04e038d7f70e#egg=jyafn&subdirectory=jyafn-python
+idna==3.7
+Jinja2==3.1.4
+-e git+ssh://git@github.com/viodotcom/jyafn.git@24ba72eb19d5995bfcde1a16c5fa6a017fa1f21a#egg=jyafn&subdirectory=jyafn-python
+MarkupSafe==2.1.5
 numpy==2.0.0
+pdoc==14.6.0
 polars==1.2.0
+Pygments==2.18.0
+PyYAML==6.0.1
+requests==2.32.3
 scipy==1.14.0
+semver==3.0.2
+urllib3==2.2.2
