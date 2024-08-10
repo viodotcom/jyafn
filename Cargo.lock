@@ -1409,7 +1409,9 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "ppca"
-version = "0.5.1"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "959760f19d3dd2f107ccbd806e0d759f0d78af060b9c3e4966147d8c5c1afc4d"
 dependencies = [
  "approx",
  "bit-vec",
