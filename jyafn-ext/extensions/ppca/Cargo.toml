@@ -1,5 +1,5 @@
 [package]
-name = "ppca"
+name = "jyafn_ppca"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,5 +12,5 @@ crate-type = ["cdylib"]
 [dependencies]
 bincode = "1.3.3"
 jyafn-ext = { path = "../.." }
-nalgebra = "0.33.0"
-ppca = "0.4"
+nalgebra = "0.32.6"
+ppca = { path = "../../../../../workspace/ppca_rs/ppca"}

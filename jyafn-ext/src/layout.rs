@@ -51,8 +51,8 @@ impl From<Struct> for Layout {
 /// ```
 #[macro_export]
 macro_rules! layout {
-    ({$($key:literal : $ty:tt),*}) => {
-        $crate::r#struct!($($key : $ty),*)
+    ({$($key:tt : $ty:tt),*}) => {
+        $crate::Layout::Struct($crate::r#struct!($($key : $ty),*))
     };
     (unit) => {
         $crate::Layout::Unit

@@ -12,7 +12,7 @@ pub use paste::paste;
 /// We need JSON support to zip JSON values around the FFI boundary.
 pub use serde_json;
 
-pub use io::{Input, OutputBuilder};
+pub use io::{Input, OutputBuilder, InputReader};
 pub use layout::{Layout, Struct, ISOFORMAT};
 pub use outcome::Outcome;
 pub use resource::{Method, Resource};

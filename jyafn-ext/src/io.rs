@@ -4,6 +4,7 @@ use byte_slice_cast::*;
 use std::mem::MaybeUninit;
 
 /// A convenience wrapper over the input data pointer, given the information on its size.
+#[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct Input<'a>(&'a [u64]);
 
@@ -29,8 +30,8 @@ impl<'a> Input<'a> {
     }
 
     /// Gets the data at index `idx` as an `i64`.
-    pub fn get_i64(&self, idx: usize) -> u64 {
-        self.0[idx]
+    pub fn get_i64(&self, idx: usize) -> i64 {
+        self.0[idx] as i64
     }
 
     /// Gets the data at index `idx` as a `bool`.
@@ -60,7 +61,99 @@ impl<'a> Input<'a> {
     }
 }
 
+/// A reader over an [`Input`], which may help you in reading chunks of data from the input.
+#[derive(Debug, Clone, Copy)]
+pub struct InputReader<'a> {
+    position: usize,
+    input: Input<'a>,
+}
+
+impl<'a> InputReader<'a> {
+    /// Creates a new reader from a given input, starting at 0.
+    pub fn new(input: Input<'a>) -> Self {
+        Self { position: 0, input }
+    }
+
+    /// Creates a new reader from a given input, starting at a given position.
+    pub fn new_at(position: usize, input: Input<'a>) -> Self {
+        Self { position, input }
+    }
+
+    /// Reads a float, advancing one position.
+    pub fn read_f64(&mut self) -> f64 {
+        let read = self.input.get_f64(self.position);
+        self.position += 1;
+        read
+    }
+
+    /// Reads an usigned integer, advancing one position.
+    pub fn read_u64(&mut self) -> u64 {
+        let read = self.input.get_u64(self.position);
+        self.position += 1;
+        read
+    }
+
+    /// Reads an integer, advancing one position.
+    pub fn read_i64(&mut self) -> i64 {
+        let read = self.input.get_i64(self.position);
+        self.position += 1;
+        read
+    }
+
+    /// Iterates through `n` floats, advancing the reader.
+    pub fn iter_n_f64(&'a mut self, n: usize) -> impl 'a + Iterator<Item = f64> {
+        (0..n).map(|_| self.read_f64())
+    }
+
+    /// Iterates through `n` unsigned integers, advancing the reader.
+    pub fn iter_n_u64(&'a mut self, n: usize) -> impl 'a + Iterator<Item = u64> {
+        (0..n).map(|_| self.read_u64())
+    }
+
+    /// Iterates through `n` integers, advancing the reader.
+    pub fn iter_n_i64(&'a mut self, n: usize) -> impl 'a + Iterator<Item = i64> {
+        (0..n).map(|_| self.read_i64())
+    }
+
+    /// Reads `n` floats, advancing the reader.
+    pub fn read_n_f64(&mut self, n: usize) -> Vec<f64> {
+        (0..n).map(|_| self.read_f64()).collect()
+    }
+
+    /// Reads `n` unsigned integers, advancing the reader.
+    pub fn read_n_u64(&mut self, n: usize) -> Vec<u64> {
+        (0..n).map(|_| self.read_u64()).collect()
+    }
+
+    /// Reads `n` integers, advancing the reader.
+    pub fn read_n_i64(&mut self, n: usize) -> Vec<i64> {
+        (0..n).map(|_| self.read_i64()).collect()
+    }
+
+    /// Reads `n` floats into a slice, advancing the reader.
+    pub fn read_f64_into(&mut self, slice: &mut [f64]) {
+        for i in 0..slice.len() {
+            slice[i] = self.read_f64();
+        }
+    }
+
+    /// Reads `n` unsigned integers into a slice, advancing the reader.
+    pub fn read_u64_into(&mut self, slice: &mut [u64]) {
+        for i in 0..slice.len() {
+            slice[i] = self.read_u64();
+        }
+    }
+
+    /// Reads `n` integers into a slice, advancing the reader.
+    pub fn read_i64_into(&mut self, slice: &mut [i64]) {
+        for i in 0..slice.len() {
+            slice[i] = self.read_i64();
+        }
+    }
+}
+
 /// A convenience wrapper over the output data pointer, given the information on its size.
+#[derive(Debug)]
 pub struct OutputBuilder<'a> {
     position: usize,
     slice: &'a mut [MaybeUninit<u64>],
