@@ -9,6 +9,7 @@ members = [
     "jyafn-ext",
     "jyafn-ext/extensions/dummy",
     "jyafn-ext/extensions/lightgbm",
+    "jyafn-ext/extensions/ppca",
 ]
 default-members = ["cjyafn"]
 

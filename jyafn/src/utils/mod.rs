@@ -1,4 +1,5 @@
 //! Utilities for this crate.
+pub(crate) mod murmur;
 
 use std::ffi::CString;
 

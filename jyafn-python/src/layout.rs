@@ -4,6 +4,13 @@ use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
 use rust::layout::{Decoder, Encode, Layout as RustLayout, Sym, Visitor};
 
+use crate::ToPyErr;
+
+#[pyfunction]
+pub fn symbol_hash(s: &str) -> u64 {
+    rust::layout::symbol_hash(s)
+}
+
 pub struct Obj<'py>(pub Bound<'py, PyAny>);
 
 impl<'py> Encode for Obj<'py> {
@@ -129,10 +136,7 @@ impl<'py> Decoder for PyDecoder<'py> {
             .format(format)
             .to_string()
             .to_object(self.0),
-            RustLayout::Symbol => symbols
-                .get(visitor.pop_int() as usize)
-                .unwrap()
-                .to_object(self.0),
+            RustLayout::Symbol => symbols.get(visitor.pop_uint()).unwrap().to_object(self.0),
             RustLayout::Struct(fields) => {
                 let dict = pyo3::types::PyDict::new_bound(self.0);
 
@@ -193,6 +197,19 @@ impl Layout {
     fn pretty(&self) -> String {
         self.0.pretty()
     }
+
+    #[getter]
+    fn size(&self) -> usize {
+        self.0.size().in_bytes()
+    }
+
+    // fn encode_json(&self, json: &str) -> PyResult<Vec<u8>> {
+    //     let value: serde_json::Value =
+    //         serde_json::from_str(json).map_err(|err| ToPyErr(err.into()))?;
+    //     let encoded = self.0.encode(&value, rust::Symbols).map_err(ToPyErr)?;
+
+    //     Ok(encoded.to_vec())
+    // }
 
     fn is_unit(&self) -> bool {
         self.0 == rust::layout::Layout::Unit

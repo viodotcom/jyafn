@@ -121,7 +121,7 @@ impl Decode for String {
     fn build(layout: &Layout, symbols: &dyn Sym, visitor: &mut Visitor) -> Self {
         match layout {
             Layout::Symbol => {
-                let index = visitor.pop_int() as usize;
+                let index = visitor.pop_uint();
                 let Some(string) = symbols.get(index) else {
                     panic!("Symbol of index {index} not found")
                 };
@@ -223,9 +223,7 @@ impl Decode for serde_json::Value {
                     .to_string()
                     .into()
             }
-            Layout::Symbol => {
-                Self::String(symbols.get(visitor.pop_int() as usize).unwrap().to_string())
-            }
+            Layout::Symbol => Self::String(symbols.get(visitor.pop_uint()).unwrap().to_string()),
             Layout::Struct(fields) => fields
                 .0
                 .iter()

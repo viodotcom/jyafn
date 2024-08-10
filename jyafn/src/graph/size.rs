@@ -16,6 +16,11 @@ impl Size {
     pub const fn in_bytes(self) -> usize {
         self.0
     }
+
+    /// Gets this size represented in _bytes_.
+    pub const fn in_slots(self) -> usize {
+        self.0 / SLOT_SIZE
+    }
 }
 
 impl Mul<Size> for usize {

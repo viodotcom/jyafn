@@ -74,12 +74,12 @@ impl GetSize for FunctionData {
             + self
                 .input
                 .get()
-                .map(|i| i.borrow().as_ref().get_size())
+                .map(|i| i.borrow().buffer().get_size())
                 .unwrap_or(0)
             + self
                 .output
                 .get()
-                .map(|o| o.borrow().as_ref().get_size())
+                .map(|o| o.borrow().buffer().get_size())
                 .unwrap_or(0)
     }
 }

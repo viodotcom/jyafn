@@ -19,37 +19,29 @@ class Graph:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None: ...
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         """Calls this graph as a subgraph of another graph."""
-
     def get_size(self) -> int:
         """Gets the total in-memory size of the current graph"""
-
     def dump(self) -> bytes:
         """Dumps the graph as a binary data format."""
-
     def write(self, path: str) -> None:
         """Writes the graph as binary data to the given file path."""
-
     @staticmethod
     def load(b: bytes) -> Graph:
         """Loads a graph from the supplied binary data."""
-
     def to_json(self) -> str:
         """
         Creates a JSON representation of the graph. This JSON representation does not
         take _mappings_ into account, so it cannot be used to recreate the graph later.
         """
-
     @property
     def input_layout(self) -> Layout:
         """
         Returns the input layout of this graph. This layout is guaranteed to be of the
         "flavor" struct.
         """
-
     @property
     def output_layout(self) -> Layout:
         """Returns the output layout of this graph."""
-
     @property
     def metadata(self) -> dict[str, str]:
         """
@@ -57,20 +49,16 @@ class Graph:
         of the real deal, so mutating the returned dictionary has ho effect on the graph.
         Use `Graph.set_metadata` to add new keys.
         """
-
     def set_metadata(self, key: str, value: str) -> None:
         """
         Sets a metadata key to the given value. Metadata can be anything you find useful.
         Avoid using the `jyafn.` prefix for your keys because JYAFN uses some keys by
         default.
         """
-
     def render(self) -> str:
         """Renders the QBE IR code associated with this graph."""
-
     def render_assembly(self) -> str:
         """Renders the assembly code associated with this graph."""
-
     def compile(self) -> Function:
         """
         Compiles the graph into a JYAFN function.
@@ -87,7 +75,6 @@ class Ref:
         This function always fails, since the truthiness of a value is not determined
         while the graph is being built.
         """
-
     def __add__(self, other: Any) -> Ref: ...
     def __radd__(self, other: Any) -> Ref: ...
     def __sub__(self, other: Any) -> Ref: ...
@@ -122,28 +109,23 @@ class Ref:
         Python's ` ... if ... else ...`). At runtime, it returns `if_true` if `self`
         evaluates to true and `if_false` if `self` evaluates to false.
         """
-
     def to_bool(self) -> Ref:
         """
         Transforms this scalar reference into a boolean. This is basically equivalent to
         testing `self != 0.0`.
         """
-
     def to_float(self) -> Ref:
         """
         Transform this boolean reference into a scalar. This is basically
         `self.choose(1.0, 0.0)`.
         """
-
     def conjugate(self) -> Ref:
         """This is only a noop to make numpy happy. Jyafn has no complex type."""
-
     def sqrt(self) -> Ref: ...
     def exp(self) -> Ref: ...
     def ln(self) -> Ref: ...
     def log(self) -> Ref:
         """Same as `Ref.ln`. Used for compatibility with `numpy`."""
-
     def sin(self) -> Ref: ...
     def cos(self) -> Ref: ...
     def tan(self) -> Ref: ...
@@ -152,13 +134,10 @@ class Ref:
     def atan(self) -> Ref: ...
     def arcsin(self) -> Ref:
         """Same as `Ref.asin`. Used for compatibility with `numpy`."""
-
     def arccos(self) -> Ref:
         """Same as `Ref.acos`. Used for compatibility with `numpy`."""
-
     def arctan(self) -> Ref:
         """Same as `Ref.atan`. Used for compatibility with `numpy`."""
-
     def sinh(self) -> Ref: ...
     def cosh(self) -> Ref: ...
     def tanh(self) -> Ref: ...
@@ -167,46 +146,33 @@ class Ref:
     def atanh(self) -> Ref: ...
     def arcsinh(self) -> Ref:
         """Same as `Ref.asinh`. Used for compatibility with `numpy`."""
-
     def arccosh(self) -> Ref:
         """Same as `Ref.acosh`. Used for compatibility with `numpy`."""
-
     def arctanh(self) -> Ref:
         """Same as `Ref.atanh`. Used for compatibility with `numpy`."""
-
     def timestamp(self) -> Ref:
         """
         Transforms this datetime ref into a scalar, containing the Unix epoch in
         seconds.
         """
-
     def year(self) -> Ref:
         """Returns the years part of this datetime ref."""
-
     def month(self) -> Ref:
         """Returns the months part of this datetime ref."""
-
     def day(self) -> Ref:
         """Returns the days part of this datetime ref."""
-
     def hour(self) -> Ref:
         """Returns the hours part of this datetime ref."""
-
     def minute(self) -> Ref:
         """Returns the minutes part  of this datetime ref."""
-
     def second(self) -> Ref:
         """Returns the seconds part  of this datetime ref."""
-
     def microsecond(self) -> Ref:
         """Returns the microseconds part of this datetime ref."""
-
     def weekday(self) -> Ref:
         """Returns the weekday of this datetime ref."""
-
     def week(self) -> Ref:
         """Returns the week of the year of this datetime ref."""
-
     def dayofyear(self) -> Ref:
         """Returns the day of the year of this datetime ref."""
 
@@ -238,26 +204,21 @@ class Function:
         thing, not associated with Python's `__name__` or `__qualname__`. This field
         exists for identification and documentation purposes.
         """
-
     @property
     def input_size(self) -> int:
         """The size of the input buffer, in bytes."""
-
     @property
     def output_size(self) -> int:
         """The size of the output buffer, in bytes."""
-
     @property
     def input_layout(self) -> Layout:
         """
         Returns the input layout of this function. This layout is guaranteed to be of the
         "flavor" struct.
         """
-
     @property
     def output_layout(self) -> Layout:
         """Returns the output layout of this function."""
-
     @property
     def fn_ptr(self) -> int:
         """The raw function pointer associated with this function."""
@@ -271,24 +232,20 @@ class Function:
         """
         Dumps the graph associated with this function as a binary data format.
         """
-
     def write(self, path: str) -> None:
         """
         Writes the graph associated with this function as binary data to the given file
         path.
         """
-
     @staticmethod
     def load(b: bytes) -> Graph:
         """Loads a graph associated with this function from the supplied binary data."""
-
     def to_json(self) -> str:
         """
         Creates a JSON representation of the graph associated with this function. This
         JSON representation does not take _mappings_ into account, so it cannot be used
         to recreate the graph (or the function) later.
         """
-
     def get_graph(self) -> Graph:
         """
         Returns the underlying graph associated with this function. This is a method and
@@ -296,7 +253,6 @@ class Function:
         of the graph, which is an expensive operation (especially if you have large
         mappings).
         """
-
     @property
     def metadata(self) -> dict[str, str]:
         """
@@ -306,17 +262,14 @@ class Function:
         a copy of the computational graph by using `Function.get_graph` and then use
         `Graph.set_metadata` on that.
         """
-
     def get_size(self) -> int:
         """Gets the total in-memory size of the current graph"""
-
     def eval_raw(self, args: bytes) -> bytes:
         """
         Evaluates the function on a _raw_ buffer of data and returns the resulting buffer
         of _raw_ data. Although this is perfectly safe, it it very error-prone. So, just
         use this if you really, really know what you are doing.
         """
-
     def eval(self, args: dict[str, Any]) -> Any:
         """
         Runs this function on the given pythonized and returns the pythonized result back.
@@ -324,7 +277,6 @@ class Function:
         parameter. Under the hood, this is the function invoked by `__call__`, with some
         cosmetics applied.
         """
-
     def eval_json(self, args: str) -> str:
         """
         Runs this function on serialized JSON input and returns a serialized JSON output
@@ -421,78 +373,63 @@ class Layout:
 
     def to_json(self) -> str:
         """Returns a JSON string representation of this layout."""
-
     @staticmethod
     def from_json(json: str) -> Layout:
         """Creates a layout from a JSON string representation."""
-
     def pretty(self) -> str:
         """
         Returns a prettified representation of this layout. This is an alternative to the
         terser `__str__` method.
         """
-
+    @property
+    def size(self) -> int:
+        """The size of a buffer contained by this layout, in **bytes**."""
     def is_unit(self) -> bool:
         """Whether this layout is of the flavor "unit"."""
-
     def is_scalar(self) -> bool:
         """Whether this layout is of the flavor "scalar"."""
-
     def is_bool(self) -> bool:
         """Whether this layout is of the flavor "bool"."""
-
     def is_datetime(self) -> bool:
         """Whether this layout is of the flavor "datetime"."""
-
     def is_symbol(self) -> bool:
         """Whether this layout is of the flavor "symbol"."""
-
     def is_struct(self) -> bool:
         """Whether this layout is of the flavor "struct"."""
-
     def is_tuple(self) -> bool:
         """Whether this layout is of the flavor "tuple"."""
-
     def struct_keys(self) -> Optional[list[str]]:
         """
         Returns the field names of this struct layout, if it is of flavor "struct", else
         this returns `None`.
         """
-
     @staticmethod
     def unit() -> Layout:
         """Returns a new layout of flavor "unit"."""
-
     @staticmethod
     def scalar() -> Layout:
         """Returns a new layout of flavor "scalar"."""
-
     @staticmethod
     def bool() -> Layout:
         """Returns a new layout of flavor "bool"."""
-
     @staticmethod
     def datetime() -> Layout:
         """Returns a new layout of flavor "datetime"."""
-
     @staticmethod
     def symbol() -> Layout:
         """Returns a new layout of flavor "symbol"."""
-
     @staticmethod
     def list_of(ty: Layout, size: int) -> Layout:
         """
         Returns a new layout of flavor "list" of elements of a given layout with length
         given by `size`.
         """
-
     @staticmethod
     def struct_of(fields: dict[str, Layout]) -> Layout:
         """
         Returns a new layout of flavor "struct", with the fields given by the supplied
         Python dictionary.
         """
-
     @staticmethod
     def tuple_of(fields: tuple[Layout, ...]) -> Layout:
         """
@@ -525,7 +462,6 @@ class LazyMapping:
         that the `item` exists. When running the function, if the key is not found, an
         error will be raised.
         """
-
     def get(self, key: Any, default: Optional[Any] = None) -> Any:
         """
         Accepts a Python value and builds a mapping lookup in the current graph, creating
@@ -604,7 +540,6 @@ class ResourceType:
         Decodes a resource type from a JSON representation. The type of the resource is
         given by the key `type` and each type has its own schema.
         """
-
     def load(self, name: str, data: bytes) -> LazyResource:
         """
         Creates a resource with a given name out of binary data in the current graph. This
@@ -658,22 +593,17 @@ class Extension:
         Lists the loaded extensions as the keys of a dictionary and all the loaded
         versions as the elements of the values.
         """
-
     def __init__(self, name: str, version_req: str = "*") -> None:
         """Loads a new extension of name `name` with the given version requirements."""
-
     @property
     def name(self) -> str:
         """The name of this extension."""
-
     @property
     def version(self) -> str:
         """The version of this extension."""
-
     @property
     def resources(self) -> list[str]:
         """The resources that this extension provides."""
-
     def get(self, resource_name: str) -> ResourceType:
         """
         Gets a resource that this extension declares. Throws an `IndexError` if the

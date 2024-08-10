@@ -1,22 +1,37 @@
+---
+weight: 10
+---
+
 # The JYAFN starter tutorial
 
 Hello and welcome to the JYAFN starter tutorial! Today, we are going to build and test a real JYAFN from scratch, to get you started on how the system works. 
 
 ## Before we start...
 
-Of course, there are always the boring parts before the fun begins. To get started, you need to install JYAFN in Python. For that, there are some routes. Chose the one that works for you. Firstly, you can "clone & make install", like so:
-```sh
-clone git@github.com:FindHotel/jyafn.git
-cd jyafn && make install
-```
-This will give you the latest and greatest JYAFN, but requires you to have _all_ dev dependencies (more boring stuff, for some). If you want convenience, you can use the version in PyPI:
-```sh
-pip install jyafn
-```
+Of course, there are always the boring parts before the fun begins. To get started, you need to install JYAFN in Python. For that, there are some routes. Chose the one that works for you.
+
+=== "Using `pip`"
+    If you want convenience, you can use the version in PyPI:
+    ```sh
+    pip install jyafn
+    ```
+
+=== "From source"
+    Firstly, you can "clone & make install", like so:
+    ```sh
+    git clone git@github.com:VioDotCom/jyafn.git
+    cd jyafn && make install
+    ```
+    This will give you the latest and greatest JYAFN, but requires you to have _all_ dev dependencies (more boring stuff, for some). These are:
+    
+    * Cargo (package manager for Rust)
+    * Maturin (`pip install maturin`)
+    * `gcc` (or another compatible C compliler)
 
 To check that everything is working as expected, open your favorite python interpreter and type
-```python
+```py
 import jyafn as fn
+print(jyafn.__version__)    # optionally see which version you've got
 ```
 If everything goes smoothly, you are golden!
 
@@ -40,7 +55,7 @@ import jyafn as fn
 Under that, we will create a _decorated_ python function with the arguments of our problem (campaign id and date), loke so:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]) -> fn.scalar:
+def predict_revenue(campaign_id: fn.scalar, date: fn.date) -> fn.scalar:
     ...
 ```
 Ok. That might look weird at first, so let's unpack!
@@ -51,7 +66,7 @@ Second, the annotations. You might have annotated your Python function before as
 
 * `fn.scalar`: represents a simple number, like `1` or `3.14`. In JYAFN, there are no _integer_ numbers, only floating-point numbers. So, under the hood, all scalars are floats.
 * `fn.bool`: a boolean value, either `True` or `False`.
-* `fn.datetime` or `fn.datetime["format"]`: a point in time, optionally decoded using a format string (the same format used by Python's `datetime.strptime` function).
+* `fn.datetime`, `fn.datetime[b"format"]` or `fn.date` : a point in time, optionally decoded using a format string (the same format used by Python's `datetime.strptime` function). The format string should be in `bytes`, because Python already has special semantics for strings in type annotations.
 * `fn.symbol`: a string. Actually, a simplified version of a string. The only thing you can do with a symbol is to compare for equality.
 * `fn.struct[{"key": type, ...}]`: a struct. If you know C, this is the equiivalent. In Python, this will work as a dictionary of fixed keys with predetermined value types.
 * `fn.list[type, length]`: a list of a given element type and of given length. The length _can_ be a Python variable, if you are worried that fixed length might be too restrictive. JYAFN does not allow dynamically sized-lists.
@@ -62,7 +77,7 @@ Besides the _argument_ annotations for a JYAFN function, you can also define a r
 Back to the function! Before we get to the actual coding (I promisse we will get there soon), it's a useful exercise to try to _print_ what has been passed to the function, like so:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     print(campaign_id)
 ```
 If you run the above code in Python, you will get the following:
@@ -82,6 +97,8 @@ import pandas as pd
 
 df = pd.read_csv("campaign-pca.csv")
 ```
+!!! note
+    See the `./resources` folder for the sample data used in this tutorial.
 
 And then, we can create a python dictionary associating each campaign id to its components (I know, I know, that is not The Pandas Way™, but bear with me):
 ```python
@@ -96,7 +113,7 @@ pcas = {
 It would be nice if we could just call this dictionary in our function and get the components. Indeed, but JYAFN only works with _structs_, which are defined _a priori_. And sure enough, we get an error if we try to do just that:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     components = pcas[campaign_id]
 ```
 ```
@@ -105,20 +122,29 @@ TypeError: unhashable type: 'builtins.Ref'
 Enter mappings. Mappings are native JYAFN objects that behave like _immutable_ python dictionaries and are purpose built to hold and access a sizable ammount of data, like this PCA feature store for our model. When you use a mapping in a function, that mapping will be incorporated to the function and shipped with it wherever it goes. You can easily create a mapping from an existing dictionary, like so:
 ```python
 n_components = len(next(iter(pcas.values())))
-pca_mapping = fn.mapping("pca", fn.scalar, fn.list[fn.scalar, n_components], pcas)
+pca_mapping = fn.mapping(
+    pcas,
+    name="pca",
+    input_layout=fn.scalar,
+    output_layout=fn.list[fn.scalar, n_components],
+)
 ```
+
+!!! tip
+    The first kw-argument of `fn.mapping`, the name, _can_ be ommited. You will get a non-descriptive automatic name for your mapping. This can be convenient, but keep in mind that it might make debugging information less clear.
+
 Like, JYAFN functions, mappings are also typed. So, you need to provide both key and value annotations.
 
 Accessing mappings works just like with regular dictionaries, no changes needed. So, the below works without a problem:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     components = pca_mapping[campaign_id]
 ```
 Actually, we can do even better. Mappings have a `get` method, also similar to python dictionaries. This lets us avoid the possible key error that might appear if an invalid campaign id is provided:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     components = pca_mapping.get(campaign_id, [0.0] * n_components)
 ```
 
@@ -131,16 +157,18 @@ import numpy as np
 a = np.load("pca_a.npy")
 b = np.load("pca_b.npy")
 ```
-> Note: see the `./resources` folder for the sample data used in this tutorial.
+!!! note
+    See the `./resources` folder for the sample data used in this tutorial.
 
 Now, comes the magic part. Because NumPy can operate on n-dimensional arrays of Python objects, provided they "look like numbers to Python", this works, out of the box:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     components = pca_mapping.get(campaign_id, [0.0] * n_components)
     revenue = a @ np.array(components) + b
 ```
-> Note: the `@` symbol in Python is the _matrix multiplication_ operator added in Python 3.5
+!!! note
+    The `@` symbol in Python is the _matrix multiplication_ operator added in Python 3.5
 
 ### Working with `datetime`s
 
@@ -151,14 +179,16 @@ from datetime import date
 start = date(2024, 1, 1)
 
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     n_days = (date.timestamp() - fn.make_timestamp(start)) // fn.DAY
 ```
 Here, we have an important distinction:
+
 * `datetime` is a JYAFN _type_, similar to the Python `datetime` object.
 * `timestamp` is a _scalar_ (i.e., a number), namely the Unix epoch measured in seconds.
 
 Of course, one can be easily transformed into the other and vice-versa:
+
 * `.timestamp()` and `fn.timestamp()` makes a timestamp out of a `datetime`, just like `datetime.timestamp()`
 * `fn.fromtimestamp()` makes a `datetime` out of a timestamp, just like `datetime.fromtimestamp()`.
 
@@ -170,7 +200,7 @@ Lastly, the `jyafn` module offers utility constants to make time manipulation ea
 So, up to now, putting it all together, this is what we have:
 ```python
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     components = pca_mapping.get(campaign_id, [0.0] * n_components)
     revenue = a @ np.array(components) + b
     n_days = (date.timestamp() - fn.make_timestamp(start)) // fn.DAY
@@ -185,6 +215,7 @@ fn.index(revenue)[n_days]
 Under the hood, this function stores all the elements of `revenue` in the function _stack_ and provides an interface for accessing elements.
 
 Note that this is not the best way to code the function. It would have been better if we have divided the rows of `a` and `b` per `n_days` and put _that_ into a _mapping_ instead, thus calculating only the expected revenue for the specific given date. But that would not have allowed for a demonstration of `fn.index`, would it? However, that shocases the difference using mappings and indexes:
+
 * mappings are read-only and only work with data knwon _a priori_. For example, you cannot have calcuated data put into a mapping. With `fn.index`, you can.
 * `fn.index` copies all the data passed to it to memory. This can be very wasteful for storing large objects, e.g., a matrix. This also means that `fn.index` calls should be minimized. For example, if an index is going to be used more than once, it's best to store it in a variable, instead of calling `fn.index` every time. 
 
@@ -214,7 +245,7 @@ n_components = len(next(iter(pcas.values())))
 pca_mapping = fn.mapping("pca", fn.scalar, fn.list[fn.scalar, n_components], pcas)
 
 @fn.func
-def predict_revenue(campaign_id: fn.scalar, date: fn.datetime["%Y-%m-%d"]):
+def predict_revenue(campaign_id: fn.scalar, date: fn.date):
     """Predicts the revenue of a given marketing campaign for a given date."""
     components = pca_mapping.get(campaign_id, [0.0] * n_components)
     revenue = a.T @ np.array(components) + b
@@ -242,7 +273,7 @@ If you load it in another process, you will get the same function with the same 
 predict_revenue = fn.read_fn("predict-revenue.jyafn")
 ```
 
-That is basically the [whole point](./why-jyafn.md) of JYAFN. 
+That is basically the [whole point](../getting-started/why-jyafn.md) of JYAFN. 
 
 
 ## What's next?
@@ -250,6 +281,10 @@ That is basically the [whole point](./why-jyafn.md) of JYAFN.
 Now that you have a JYAFN which you can send your devs to use in production, the world is your oyster! To get better at JYAFN, you could check out the following next:
 
 * Take a look at the `jyafn` CLI tool. There you will find some nice debugging gadgets for your exported functions, such as
+
+    !!! tip
+        The CLI tool comes automatically installed with the `jyafn` Python package.
+
     * `desc`: describes the JYAFN, showing name, input and output types, documentation and (what is very important) _memory usage_ of your function. You know, devs don't like when you go about gobbling up all the memory in their machines destrying their servers. It's important to know how much _in-memory_ data your function will cost.
     * `run`: runs your function with a given JSON input.
     * `serve`: serves your function as a simple HTTP server (not at all suitable for production use).

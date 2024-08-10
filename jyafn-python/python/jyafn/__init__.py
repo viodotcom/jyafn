@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterable
 from dataclasses import dataclass
 
 from .describe import describe  # re-export
-
+from . import np_dropin
 
 __version__ = fn.__get_version()
 
@@ -49,11 +49,6 @@ class BaseAnnotation(ABC):
         """Extra transformations to the input after its declaration."""
         return input
 
-    @classmethod
-    def transform_output(cls, output: Any) -> Any:
-        """Extra transformations to the output before its insertion in the graph."""
-        return output
-
 
 def make_layout(a: fn.Layout | type[BaseAnnotation] | types.GenericAlias) -> fn.Layout:
     """Gets an object and interprets that object as an `fn.Layout`."""
@@ -70,6 +65,57 @@ def make_layout(a: fn.Layout | type[BaseAnnotation] | types.GenericAlias) -> fn.
                 raise TypeError(f"cannot make layout of a generic of {origin}")
         case _:
             raise TypeError(f"Cannot make layout out of {a}")
+
+
+def py_val_putative_layout(obj: Any) -> fn.Layout:
+    """
+    Creates an `fn.Layout` out of any Python object, making the correct translation
+    between Python and jyafn.
+
+    For, example:
+    ```
+    fn.py_val_putative_layout(1)            # scalar
+    fn.py_val_putative_layout(None)         # unit
+    fn.py_val_putative_layout((True, 1))    # (bool, scalar)
+
+    fn.py_val_putative_layout({"a":1, "b": True}) # struct { a: scalar, b: bool }
+    ```
+    """
+    if isinstance(obj, np.generic) and len(obj.shape) == 0:
+        return py_val_putative_layout(obj.item())
+
+    match obj:
+        case fn.Layout():
+            return obj
+        case fn.Ref():
+            return fn.putative_layout(obj)
+        case None:
+            return fn.Layout.unit()
+        case True | False:
+            return fn.Layout.bool()
+        case int() | float():
+            return fn.Layout.scalar()
+        case pydatetime.datetime():
+            return fn.Layout.datetime()
+        case pydatetime.date():
+            return Layout.datetime("%Y-%m-%dT%H:%M:%S%.f")
+        case str():
+            return fn.Layout.symbol()
+        case _pylist() if len(obj) > 0:
+            return fn.Layout.list_of(putative_layout(obj[0]), len(obj))
+        case _pylist():
+            return fn.Layout.list_of(fn.Layout.scalar(), 0)
+        case tuple():
+            return fn.Layout.tuple_of(tuple(putative_layout(item) for item in obj))
+        case dict():
+            return fn.Layout.struct_of(
+                {key: putative_layout(value) for key, value in obj.items()}
+            )
+        case np.ndarray():
+            return fn.Layout.list_of(py_val_putative_layout(obj[0]), obj.shape[0])
+        case _:
+            print(type(obj))
+            raise TypeError(f"Cannot create putative layout of {obj}")
 
 
 def _input_from_annotation(name: str, a: Any) -> fn.Layout:
@@ -100,18 +146,24 @@ def _ret_from_annotation(ret: Any, a: Any) -> None:
     Gets a "depythonizable" Python object filled with `fn.Ref`s and sets it as the return
     of the current graph, given an optionally annotated output layout.
     """
+
+    match ret:
+        case np.ndarray():
+            # Yes, this also correctly transforms scalars
+            ret = ret.tolist()
+        case _:
+            pass
+
     match a:
         case inspect._empty:
-            layout = fn.putative_layout(ret)
+            layout = py_val_putative_layout(ret)
         case type() if a is type(None):
             ret = None
             layout = unit.make_layout(())
         case type() if issubclass(a, BaseAnnotation):
-            ret = a.transform_output(ret)
             layout = a.make_layout(())
         case types.GenericAlias() if True:
             origin = typing.get_origin(a)
-            ret = origin.transform_output(ret)
             layout = origin.make_layout(typing.get_args(a))
         case _:
             raise Exception(f"Invalid return annotation for jyafn: {a}")
@@ -268,51 +320,6 @@ def __anonymous_name(kind: str) -> str:
     ANONYMOUS_COUNTER[kind] += 1
 
     return name
-
-
-def py_val_putative_layout(obj: Any) -> fn.Layout:
-    """
-    Creates an `fn.Layout` out of any Python object, making the correct translation
-    between Python and jyafn.
-
-    For, example:
-    ```
-    fn.py_val_putative_layout(1)            # scalar
-    fn.py_val_putative_layout(None)         # unit
-    fn.py_val_putative_layout((True, 1))    # (bool, scalar)
-
-    fn.py_val_putative_layout({"a":1, "b": True}) # struct { a: scalar, b: bool }
-    ```
-    """
-    match obj:
-        case fn.Layout():
-            return obj
-        case fn.Ref():
-            return fn.putative_layout(obj)
-        case None:
-            return fn.Layout.unit()
-        case int() | float():
-            return fn.Layout.scalar()
-        case _pybool():
-            return fn.Layout.bool()
-        case pydatetime.datetime():
-            return fn.Layout.datetime()
-        case pydatetime.date():
-            return Layout.datetime("%Y-%m-%dT%H:%M:%S%.f")
-        case str():
-            return fn.Layout.symbol()
-        case _pylist() | np.ndarray() if len(obj) > 0:
-            return fn.Layout.list_of(putative_layout(obj[0]), len(obj))
-        case _pylist():
-            return fn.Layout.list_of(fn.Layout.scalar(), 0)
-        case tuple():
-            return fn.Layout.tuple_of(tuple(putative_layout(item) for item in obj))
-        case dict():
-            return fn.Layout.struct_of(
-                {key: putative_layout(value) for key, value in obj.items()}
-            )
-        case _:
-            raise TypeError(f"Cannot create putative layout of {obj}")
 
 
 def mapping(
@@ -496,18 +503,6 @@ class scalar(BaseAnnotation):
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.scalar()
 
-    @classmethod
-    def transform_output(cls, output: Any) -> Any:
-        """Extra transformations to the output before its insertion in the graph."""
-        if (
-            isinstance(output, np.ndarray)
-            and output.shape == ()
-            and np.prod(output.shape) == 1
-        ):
-            return cls.transform_output(output.item())
-        else:
-            return output
-
 
 class bool(BaseAnnotation):
     """Annotates the `bool` layout."""
@@ -515,18 +510,6 @@ class bool(BaseAnnotation):
     @classmethod
     def make_layout(cls, args: tuple[Any, ...]) -> fn.Layout:
         return fn.Layout.bool()
-
-    @classmethod
-    def transform_output(cls, output: Any) -> Any:
-        """Extra transformations to the output before its insertion in the graph."""
-        if (
-            isinstance(output, np.ndarray)
-            and output.shape == ()
-            and np.prod(output.shape) == 1
-        ):
-            return cls.transform_output(output.item())
-        else:
-            return output
 
 
 class datetime(BaseAnnotation):
@@ -628,48 +611,35 @@ class tensor(BaseAnnotation, np.ndarray):
 
     @classmethod
     def transform_input(cls, input: Any) -> Any:
-        return array(input)  # from np_dropin
-
-    @classmethod
-    def transform_output(cls, output: Any) -> Any:
-        if isinstance(output, np.ndarray):
-            return output.tolist()
-        else:
-            return output
+        return array(input)
 
     def __eq__(self, other: Any) -> "tensor":
-        return equal(self, other)
+        return np_dropin.equal(self, other).view(tensor)
 
     def __ne__(self, other: Any) -> "tensor":
-        return not_equal(self, other)
+        return np_dropin.not_equal(self, other).view(tensor)
 
     def __gt__(self, other: Any) -> "tensor":
-        return greater(self, other)
+        return np_dropin.greater(self, other).view(tensor)
 
     def __ge__(self, other: Any) -> "tensor":
-        return greater_equal(self, other)
+        return np_dropin.greater_equal(self, other).view(tensor)
 
     def __lt__(self, other: Any) -> "tensor":
-        return less(self, other)
+        return np_dropin.less(self, other).view(tensor)
 
     def __le__(self, other: Any) -> "tensor":
-        return less_equal(self, other)
+        return np_dropin.less_equal(self, other).view(tensor)
 
-    @property
-    def max(self):
-        return maximum.reduce
+    __to_float = np.frompyfunc(Ref.to_float, 1, 1)
 
-    @property
-    def min(self):
-        return maximum.reduce
+    def to_float(self) -> "tensor":
+        return tensor.__to_float(self).view(tensor)
 
-    @property
-    def any(self):
-        return logical_or.reduce
+    __to_bool = np.frompyfunc(Ref.to_bool, 1, 1)
 
-    @property
-    def all(self):
-        return logical_and.reduce
+    def to_bool(self) -> "tensor":
+        return tensor.__to_bool(self).view(tensor)
 
     @staticmethod
     def __numpythonize(a):
@@ -683,18 +653,18 @@ class tensor(BaseAnnotation, np.ndarray):
             return a
 
     def __array_function__(self, func, types, args, kwargs):
-        drop_in = DROP_IN.get(func, func)
-        return drop_in(
+        drop_in = np_dropin.DROP_IN.get(func, func)
+        return np_dropin._coerce(drop_in(
             *map(self.__numpythonize, args),
             **{key: self.__numpythonize(val) for key, val in kwargs.items()},
-        )
+        ))
 
     def __array_ufunc__(self, ufunc, method, *args, **kwargs):
-        drop_in = DROP_IN.get(ufunc, ufunc)
-        return getattr(drop_in, method)(
+        drop_in = np_dropin.DROP_IN.get(ufunc, ufunc)
+        return np_dropin._coerce(getattr(drop_in, method)(
             *map(self.__numpythonize, args),
             **{key: self.__numpythonize(val) for key, val in kwargs.items()},
-        )
+        ))
 
 
 class tuple(BaseAnnotation):
@@ -724,6 +694,11 @@ class tuple(BaseAnnotation):
                 raise TypeError(f"Invalid args for tuple annotation: {args}")
 
 
-# This needs to be down here, after everything is said and done, because it overrides
-# even _more_ Python stuff.
-from .np_dropin import *
+def array(a: Any) -> fn.tensor:
+    """
+    Creates an `fn.tensor`. This is similar to `np.array`. Also, `fn.tensor` inherits from
+    `np.ndarray`. Therefore you can use both interchangebly. At the same time, `fn.tensor`
+    performs some convenient overrdes that avoid some surprising behaviors (mostly
+    related to logic operations) that arise when dealing with naïve `np.ndarray`.
+    """
+    return np.array(a).view(fn.tensor)

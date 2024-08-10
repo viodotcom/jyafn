@@ -35,6 +35,7 @@ fn jyafn(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(input, m)?)?;
     m.add_function(wrap_pyfunction!(ret, m)?)?;
     m.add_function(wrap_pyfunction!(assert_, m)?)?;
+    m.add_function(wrap_pyfunction!(layout::symbol_hash, m)?)?;
 
     m.add_class::<layout::Layout>()?;
     m.add_function(wrap_pyfunction!(putative_layout, m)?)?;

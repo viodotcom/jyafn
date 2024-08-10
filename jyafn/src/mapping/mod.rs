@@ -11,8 +11,6 @@
 //! the implementation, this aspect can change in the future, with changes to the
 //! [`Storage`] API in a future version.
 
-mod murmur;
-
 use get_size::GetSize;
 use hashbrown::HashMap;
 use serde_derive::{Deserialize, Serialize};
@@ -22,6 +20,7 @@ use std::sync::Arc;
 use zip::read::ZipFile;
 
 use crate::layout::Layout;
+use crate::utils::murmur;
 use crate::Error;
 #[cfg(doc)]
 use crate::Graph;

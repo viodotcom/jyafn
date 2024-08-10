@@ -10,7 +10,7 @@ mod visitor;
 pub use decode::{Decode, Decoder, ZeroDecoder};
 pub use encode::Encode;
 pub use ref_value::RefValue;
-pub use symbols::{Sym, Symbols};
+pub use symbols::{symbol_hash, Sym, Symbols};
 pub use visitor::Visitor;
 
 pub(crate) use symbols::SymbolsView;
@@ -21,6 +21,7 @@ use std::collections::BTreeSet;
 use std::fmt::{self, Display};
 
 use crate::size::{InSlots, Size, Unit};
+use crate::Error;
 
 use super::{Ref, Type};
 
@@ -311,6 +312,13 @@ impl Layout {
             }
             _ => self == other,
         }
+    }
+
+    pub fn encode<E: Encode, S: Sym>(&self, msg: &E, symbols: &mut S) -> Result<Box<[u8]>, Error> {
+        let mut visitor = Visitor::new(self.size());
+        msg.visit(&self, symbols, &mut visitor)
+            .map_err(|err| Error::EncodeError(Box::new(err)))?;
+        Ok(visitor.into_inner())
     }
 }
 

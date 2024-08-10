@@ -121,6 +121,14 @@ impl Graph {
         &self.output_layout
     }
 
+    pub fn outputs(&self) -> &[Ref] {
+        &self.outputs
+    }
+
+    pub fn inputs(&self) -> &[Type] {
+        &self.inputs
+    }
+
     /// Gets the metadata associated with the graph. These are user- and system- defined
     /// pairs of keys and values.
     pub fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
@@ -243,8 +251,8 @@ impl Graph {
     /// These are not all of the possible symbols that this computation graph may use or
     /// output. For example, inputs might define extra symbols during runtime. Don't
     /// treat this list as exhaustive.
-    pub fn symbols(&self) -> &[String] {
-        self.symbols.as_ref()
+    pub fn symbols(&self) -> &Symbols {
+        &self.symbols
     }
 
     /// Adds a new mapping to the current graph.
@@ -473,7 +481,7 @@ impl Graph {
             .clone();
         let method = resource
             .get_method(method_name)
-            .ok_or_else(|| format!("resource {name} has not method {method_name}"))?;
+            .ok_or_else(|| format!("resource {name} has no method {method_name}"))?;
         let Some(args) = args.output_vec(&Layout::Struct(method.input_layout.clone())) else {
             return Err(Error::BadValue {
                 expected: Layout::Struct(method.input_layout.clone()),

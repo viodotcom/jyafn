@@ -2,6 +2,16 @@
 
 This extension is intended for testing, showcasing and debugging purposes.
 
+!!! success "Get this extension"
+    === "Linux"
+        ```sh
+        jyafn ext get https://github.com/viodotcom/jyafn/releases/latest/download/dummy.so
+        ```
+    === "macOS"
+        ```sh
+        jyafn ext get https://github.com/viodotcom/jyafn/releases/latest/download/dummy.dylib
+        ```
+
 ## The `Dummy` resource
 
 The only resource declared by this extension is the `Dummy` resource. The idea of this resource is to perform a simple operation to showcase how extensions work. The chose operation is the division of a scalar input by a constant. This constant is a simple floating number that is passed at resource creation.

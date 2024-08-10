@@ -56,7 +56,7 @@ pub enum Error {
     #[error("function raised status: {0:?}")]
     StatusRaised(Cow<'static, CStr>),
     #[error("encode error: {0}")]
-    EncodeError(Box<dyn StdError + Send>),
+    EncodeError(Box<dyn StdError + Send + Sync>),
     #[error("wrong layout: expected {expected}, got {got}")]
     WrongLayout {
         expected: layout::Layout,

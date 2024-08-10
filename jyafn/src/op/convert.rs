@@ -73,7 +73,7 @@ impl Op for ToFloat {
     ) {
         func.assign_instr(
             output,
-            Type::Bool.render(),
+            Type::Float.render(),
             qbe::Instr::Ultof(args[0].render()),
         )
     }

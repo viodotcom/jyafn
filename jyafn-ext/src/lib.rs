@@ -216,7 +216,7 @@ macro_rules! resource {
         $crate::paste! {
 
             #[allow(unused)]
-            fn test_is_a_resource() where $ty: $crate::Resource  {}
+            fn [<$ty _test_is_a_resource>]() where $ty: $crate::Resource {}
 
             #[no_mangle]
             pub unsafe extern "C" fn [<$ty _size>](raw: *mut $ty) -> usize {

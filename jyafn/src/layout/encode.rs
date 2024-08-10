@@ -11,7 +11,7 @@ use super::{Layout, Visitor};
 /// A type that can be encoded into a jyafn context.
 pub trait Encode {
     /// The errors that might arise from the encoding procedure.
-    type Err: 'static + StdError + Send;
+    type Err: 'static + StdError + Send + Sync;
     /// Encodes this values into the provided context, given the provided layout.
     fn visit(
         &self,

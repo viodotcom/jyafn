@@ -2,6 +2,17 @@
 
 This extension implements support for `lightgbm` for JYAFN. It exposes a minimal API of the LightGBM C library for evaluating models in runtime.
 
+
+!!! success "Get this extension"
+    === "Linux"
+        ```sh
+        jyafn ext get https://github.com/viodotcom/jyafn/releases/latest/download/ligthgbm.so
+        ```
+    === "macOS"
+        ```sh
+        jyafn ext get https://github.com/viodotcom/jyafn/releases/latest/download/ligthgbm.dylib
+        ```
+
 ## The `Lightgbm` resource
 
 The `Lightgbm` resource exposes a LightGBM boosted tree model. At the moment, it is not the objective of this extension to provide an iterface for training new models. This is best done with the `lightgbm` Python library directly (or through some other means). This resource exposes only the capability of _evaluating_ models.

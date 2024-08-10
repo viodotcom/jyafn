@@ -1,0 +1,16 @@
+[package]
+name = "ppca"
+version = "0.1.0"
+edition = "2021"
+
+
+[lib]
+name = "jyafn_ppca"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+bincode = "1.3.3"
+jyafn-ext = { path = "../.." }
+nalgebra = "0.33.0"
+ppca = "0.4"

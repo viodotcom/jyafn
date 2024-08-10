@@ -6,14 +6,12 @@ import numpy as np
 from functools import wraps
 
 
-def array(a: Any) -> fn.tensor:
-    """
-    Creates an `fn.tensor`. This is similar to `np.array`. Also, `fn.tensor` inherits from
-    `np.ndarray`. Therefore you can use both interchangebly. At the same time, `fn.tensor`
-    performs some convenient overrdes that avoid some surprising behaviors (mostly
-    related to logic operations) that arise when dealing with naïve `np.ndarray`.
-    """
-    return np.array(a).view(fn.tensor)
+def _coerce(a: Any) -> Any:
+    """Forces an `np.ndarray` to become an `fn.tensor`, if it is not."""
+    if isinstance(a, np.ndarray):
+        return a.view(fn.tensor)
+    else:
+        return a
 
 
 def reduction(
@@ -35,22 +33,63 @@ def reduction(
     return _reduction
 
 
+def __make_reduce(u: np.ufunc):
+    """Creates a "reduce" function that follows the numpy convensions."""
+
+    @wraps(u.reduce)
+    def _reduce(
+        a,
+        axis=None,
+        out=None,
+        keepdims=np._NoValue,
+        initial=np._NoValue,
+        where=np._NoValue,
+    ):
+        if keepdims is np._NoValue:
+            keepdims = False
+        if where is np._NoValue:
+            where = True
+        return _coerce(
+            u.reduce(
+                a, axis=axis, out=out, keepdims=keepdims, initial=initial, where=where
+            )
+        )
+
+    return _reduce
+
+
+def __make_accumulate(u: np.ufunc):
+    """Creates an "accumulate" function that follows the numpy convensions."""
+
+    @wraps(u)
+    def _accumulate(a, axis=None, dtype=None, out=None):
+        return u.accumulate(a, axis=axis, dtype=dtype, out=out).view(fn.tensor)
+
+    return _accumulate
+
+
 def transformation(
     identity=None,
 ) -> Callable[[Callable[[fn.Ref], fn.Ref]], np.ufunc]:
     """Creates a numpy ufunc of the kind (x) -> y"""
 
-    def _reduction(f: Callable[[fn.Ref], fn.Ref]) -> np.ufunc:
+    def _make_transformation(f: Callable[[fn.Ref], fn.Ref]) -> np.ufunc:
         @wraps(f)
         def _f(a: fn.Ref) -> fn.Ref:
             return f(fn.make(a))
 
         if identity is None:
-            return np.frompyfunc(_f, 1, 1)
+            u = np.frompyfunc(_f, 1, 1)
         else:
-            return np.frompyfunc(_f, 1, 1, identity=identity)
+            u = np.frompyfunc(_f, 1, 1, identity=identity)
 
-    return _reduction
+        @wraps(f)
+        def _transform(a):
+            return _coerce(u(a))
+
+        return _transform
+
+    return _make_transformation
 
 
 @reduction()
@@ -88,9 +127,15 @@ def minimum(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return (a > b).choose(b, a)
 
 
+min = __make_reduce(minimum)
+
+
 @reduction()
 def maximum(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return (a > b).choose(a, b)
+
+
+max = __make_reduce(maximum)
 
 
 @reduction(identity=True)
@@ -98,9 +143,15 @@ def logical_and(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return a & b
 
 
+all = __make_reduce(logical_and)
+
+
 @reduction(identity=False)
 def logical_or(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return a | b
+
+
+any = __make_reduce(logical_or)
 
 
 @reduction(identity=0.0)
@@ -108,9 +159,17 @@ def add(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return a + b
 
 
+sum = __make_reduce(add)
+cumsum = __make_reduce(add)
+
+
 @reduction(identity=1.0)
 def multiply(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return a * b
+
+
+prod = __make_reduce(multiply)
+cumprod = __make_reduce(multiply)
 
 
 @transformation()
@@ -132,88 +191,93 @@ def __nan_to_num(x: Any, /, nan=0.0) -> fn.Ref:
     return fn.is_nan(x).choose(nan, x)
 
 
-nan_to_num = np.vectorize(__nan_to_num)
-
-
 @reduction(identity=0.0)
-def unanadd(a: fn.Ref, b: fn.Ref) -> fn.Ref:
-    return __nan_to_num(a) + __nan_to_num(b)
+def __nanadd(a: fn.Ref, b: fn.Ref) -> fn.Ref:
+    return a + __nan_to_num(b)
 
 
-nansum = unanadd.reduce
-nancumsum = unanadd.accumulate
+nansum = __make_reduce(__nanadd)
+nancumsum = __make_accumulate(__nanadd)
 
 
 @reduction(identity=1.0)
-def unanmul(a: fn.Ref, b: fn.Ref) -> fn.Ref:
-    return __nan_to_num(a) * __nan_to_num(b)
+def __nanmul(a: fn.Ref, b: fn.Ref) -> fn.Ref:
+    return a * __nan_to_num(b)
 
 
-nanprod = unanmul.reduce
-nancumprod = unanmul.accumulate
+nanprod = __make_reduce(__nanmul)
+nancumprod = __make_accumulate(__nanmul)
 
 
-@reduction(identity=0.0)
-def unnotancount(a: fn.Ref, b: fn.Ref) -> fn.Ref:
-    return (~fn.is_nan(a)).to_float() + (~fn.is_nan(b)).to_float()
-
-
-notnancount = unnotancount.reduce
-
-
-def nanmean(a, axis=None):
-    return nansum(a, axis) / notnancount(a, axis)
-
-
-@reduction()
-def unanmin(a: fn.Ref, b: fn.Ref) -> fn.Ref:
-    return fn.is_nan(a).choose(b, (a > b).choose(a, b))
-
-
-nanmin = unanmin.reduce
-
-
-@reduction()
-def unanmax(a: fn.Ref, b: fn.Ref) -> fn.Ref:
+@reduction(identity=-np.inf)
+def __nanmin(a: fn.Ref, b: fn.Ref) -> fn.Ref:
     return fn.is_nan(a).choose(b, (a > b).choose(b, a))
 
 
-nanmax = unanmax.reduce
+nanmin = __make_reduce(__nanmin)
+
+
+@reduction(identity=np.inf)
+def __nanmax(a: fn.Ref, b: fn.Ref) -> fn.Ref:
+    return fn.is_nan(a).choose(b, (a > b).choose(a, b))
+
+
+nanmax = __make_reduce(__nanmax)
+
+
+def isclose(x, y, rtol=1e-05, atol=1e-08, equal_nan=False):
+    if equal_nan:
+        raise NotImplementedError()
+    return _coerce(less_equal(abs(x - y), atol + rtol * abs(y)))
 
 
 class linalg:
+    def __init__(self, *args, **kwrgs) -> None:
+        """Can't instantiate this class. Invoking __init__ will raise a value error."""
+        raise ValueError("can't instantiate `linalg` class")
+
     @staticmethod
     def inv(a: np.ndarray):
         if a.shape[0] != a.shape[1]:
             raise Exception(f"Matrix of shape {a.shape} is not square")
-        return fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).inv(
-            a=a.tolist()
+        return fn.array(
+            fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).inv(
+                a=a.tolist()
+            )
         )
 
     @staticmethod
     def det(a: np.ndarray):
         if a.shape[0] != a.shape[1]:
             raise Exception(f"Matrix of shape {a.shape} is not square")
-        return fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).det(
-            a=a.tolist()
+        return fn.array(
+            fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).det(
+                a=a.tolist()
+            )
         )
 
     @staticmethod
     def cholesky(a: np.ndarray):
         if a.shape[0] != a.shape[1]:
             raise Exception(f"Matrix of shape {a.shape} is not square")
-        return fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).cholesky(
-            a=a.tolist()
+        return fn.array(
+            fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).cholesky(
+                a=a.tolist()
+            )
         )
 
     @staticmethod
     def solve(a: np.ndarray, b: np.ndarray):
         if a.shape[0] != a.shape[1]:
             raise Exception(f"Matrix of shape {a.shape} is not square")
-        if len(b.shape) != 2 or a.shape[1] != b.shape[0]:
+        if len(b.shape) == 2 and (b.shape[0] == 1 or b.shape[1] == 1):
+            b = b.reshape(-1)
+        if len(b.shape) != 1 or a.shape[1] != b.shape[0]:
             raise Exception(f"Incomptible shapes {a.shape} and {b.shape}")
-        return fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).solve(
-            a=a.tolist(), v=b.tolist()
+        return fn.array(
+            fn.resource(type="SquareMatrix", data=str(a.shape[0]).encode()).solve(
+                a=a.tolist(), v=b.tolist()
+            )
         )
 
 
@@ -226,21 +290,27 @@ DROP_IN: dict[np.ufunc, np.ufunc] = {
     np.less_equal: less_equal,
     np.maximum: maximum,
     np.minimum: minimum,
-    np.max: maximum.reduce,
-    np.min: minimum.reduce,
+    np.max: max,
+    np.min: min,
     np.logical_and: logical_and,
     np.logical_or: logical_or,
-    np.all: logical_and.reduce,
-    np.any: logical_or.reduce,
+    np.all: all,
+    np.any: any,
     np.add: add,
+    np.sum: sum,
+    np.cumsum: cumsum,
     np.multiply: multiply,
+    np.prod: prod,
+    np.cumprod: cumprod,
     np.isnan: isnan,
     np.isfinite: isfinite,
     np.isinf: isinf,
+    np.nan_to_num: np.vectorize(__nan_to_num),
     np.nansum: nansum,
     np.nanprod: nanprod,
     np.nanmax: nanmax,
     np.nanmin: nanmin,
+    np.isclose: isclose,
     np.linalg.inv: linalg.inv,
     np.linalg.det: linalg.det,
     np.linalg.cholesky: linalg.cholesky,
