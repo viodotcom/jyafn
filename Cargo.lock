@@ -1047,16 +1047,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef1b55365d6be515655e092b3268908e3f12fbce4225ccc879bdb5698f9f1253"
 
 [[package]]
-name = "jyafn_ppca"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "jyafn-ext",
- "nalgebra",
- "ppca",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1406,6 +1396,16 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "ppca"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "jyafn-ext",
+ "nalgebra",
+ "ppca 0.5.0",
+]
 
 [[package]]
 name = "ppca"
