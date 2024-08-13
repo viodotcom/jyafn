@@ -4,8 +4,6 @@ use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
 use rust::layout::{Decoder, Encode, Layout as RustLayout, Sym, Visitor};
 
-use crate::ToPyErr;
-
 #[pyfunction]
 pub fn symbol_hash(s: &str) -> u64 {
     rust::layout::symbol_hash(s)

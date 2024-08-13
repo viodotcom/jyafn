@@ -132,22 +132,22 @@ impl<'a> InputReader<'a> {
 
     /// Reads `n` floats into a slice, advancing the reader.
     pub fn read_f64_into(&mut self, slice: &mut [f64]) {
-        for i in 0..slice.len() {
-            slice[i] = self.read_f64();
+        for item in slice {
+            *item = self.read_f64();
         }
     }
 
     /// Reads `n` unsigned integers into a slice, advancing the reader.
     pub fn read_u64_into(&mut self, slice: &mut [u64]) {
-        for i in 0..slice.len() {
-            slice[i] = self.read_u64();
+        for item in slice {
+            *item = self.read_u64();
         }
     }
 
     /// Reads `n` integers into a slice, advancing the reader.
     pub fn read_i64_into(&mut self, slice: &mut [i64]) {
-        for i in 0..slice.len() {
-            slice[i] = self.read_i64();
+        for item in slice {
+            *item = self.read_i64();
         }
     }
 }

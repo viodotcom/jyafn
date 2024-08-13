@@ -316,7 +316,7 @@ impl Layout {
 
     pub fn encode<E: Encode, S: Sym>(&self, msg: &E, symbols: &mut S) -> Result<Box<[u8]>, Error> {
         let mut visitor = Visitor::new(self.size());
-        msg.visit(&self, symbols, &mut visitor)
+        msg.visit(self, symbols, &mut visitor)
             .map_err(|err| Error::EncodeError(Box::new(err)))?;
         Ok(visitor.into_inner())
     }

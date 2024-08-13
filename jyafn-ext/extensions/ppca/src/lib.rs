@@ -103,7 +103,7 @@ impl PPCAModel {
         let mut reader = InputReader::new(input);
         let sample = self.read_sample(&mut reader);
         let extrapolated = self.model.extrapolate_one(&sample);
-        output_builder.copy_from_f64(&extrapolated.data_vector().data.as_vec());
+        output_builder.copy_from_f64(extrapolated.data_vector().data.as_vec());
         Ok(())
     }
 
@@ -113,7 +113,7 @@ impl PPCAModel {
         let mut reader = InputReader::new(input);
         let sample = self.read_sample(&mut reader);
         let inferred = self.read_inferred(&mut reader);
-        output_builder.copy_from_f64(&inferred.extrapolated(&self.model, &sample).data.as_vec());
+        output_builder.copy_from_f64(inferred.extrapolated(&self.model, &sample).data.as_vec());
         Ok(())
     }
     jyafn_ext::method!(extrapolated);
@@ -127,7 +127,7 @@ impl PPCAModel {
         let sample = self.read_sample(&mut reader);
         let inferred = self.read_inferred(&mut reader);
         output_builder.copy_from_f64(
-            &inferred
+            inferred
                 .extrapolated_covariance_diagonal(&self.model, &sample)
                 .data
                 .as_vec(),
@@ -141,7 +141,7 @@ impl PPCAModel {
         let mut reader = InputReader::new(input);
         let sample = self.read_sample(&mut reader);
         let smoothed = self.model.smooth_one(&sample);
-        output_builder.copy_from_f64(&smoothed.data_vector().data.as_vec());
+        output_builder.copy_from_f64(smoothed.data_vector().data.as_vec());
         Ok(())
     }
 
@@ -150,7 +150,7 @@ impl PPCAModel {
     fn smoothed(&self, input: Input, mut output_builder: OutputBuilder) -> Result<(), String> {
         let mut reader = InputReader::new(input);
         let inferred = self.read_inferred(&mut reader);
-        output_builder.copy_from_f64(&inferred.smoothed(&self.model).data.as_vec());
+        output_builder.copy_from_f64(inferred.smoothed(&self.model).data.as_vec());
         Ok(())
     }
 
@@ -164,7 +164,7 @@ impl PPCAModel {
         let mut reader = InputReader::new(input);
         let inferred = self.read_inferred(&mut reader);
         output_builder.copy_from_f64(
-            &inferred
+            inferred
                 .smoothed_covariance_diagonal(&self.model)
                 .data
                 .as_vec(),
@@ -177,8 +177,8 @@ impl PPCAModel {
     fn infer(&self, input: Input, mut output_builder: OutputBuilder) -> Result<(), String> {
         let sample = ppca::MaskedSample::mask_non_finite(input.as_f64_slice().to_owned().into());
         let inferred = self.model.infer_one(&sample);
-        output_builder.copy_from_f64(&inferred.state().data.as_vec());
-        output_builder.copy_from_f64(&inferred.covariance().data.as_vec());
+        output_builder.copy_from_f64(inferred.state().data.as_vec());
+        output_builder.copy_from_f64(inferred.covariance().data.as_vec());
         Ok(())
     }
 
@@ -205,7 +205,7 @@ impl Resource for PPCAMix {
             + self
                 .model
                 .models()
-                .get(0)
+                .first()
                 .map(|m| 1 + size_of_model(m))
                 .unwrap_or_default()
     }
@@ -266,7 +266,7 @@ impl PPCAMix {
     /// Decide on a state size for this mixture model. Mixture models _may_ have
     /// differently sized sub-states. In this case, some methods will not be available.
     fn maybe_state_size(&self) -> Option<usize> {
-        self.model.models().get(0).and_then(|m| {
+        self.model.models().first().and_then(|m| {
             let state_size = m.state_size();
             let all_same = self
                 .model
@@ -321,7 +321,7 @@ impl PPCAMix {
         let mut reader = InputReader::new(input);
         let sample = self.read_sample(&mut reader);
         let extrapolated = self.model.extrapolate_one(&sample);
-        output_builder.copy_from_f64(&extrapolated.data_vector().data.as_vec());
+        output_builder.copy_from_f64(extrapolated.data_vector().data.as_vec());
         Ok(())
     }
 
@@ -360,7 +360,7 @@ impl PPCAMix {
         let mut reader = InputReader::new(input);
         let sample = self.read_sample(&mut reader);
         let smoothed = self.model.smooth_one(&sample);
-        output_builder.copy_from_f64(&smoothed.data_vector().data.as_vec());
+        output_builder.copy_from_f64(smoothed.data_vector().data.as_vec());
         Ok(())
     }
 
@@ -399,14 +399,14 @@ impl PPCAMix {
         let sample = ppca::MaskedSample::mask_non_finite(input.as_f64_slice().to_owned().into());
         let inferred = self.model.infer_one(&sample);
 
-        output_builder.copy_from_f64(&inferred.log_posterior().data.as_vec());
+        output_builder.copy_from_f64(inferred.log_posterior().data.as_vec());
 
         for inferred in inferred.sub_states() {
-            output_builder.copy_from_f64(&inferred.state().data.as_vec());
+            output_builder.copy_from_f64(inferred.state().data.as_vec());
         }
 
         for inferred in inferred.sub_states() {
-            output_builder.copy_from_f64(&inferred.covariance().data.as_vec());
+            output_builder.copy_from_f64(inferred.covariance().data.as_vec());
         }
 
         Ok(())

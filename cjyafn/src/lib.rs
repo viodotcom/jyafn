@@ -767,7 +767,7 @@ pub unsafe extern "C" fn function_call_raw(
     output: *mut u8,
 ) -> Outcome {
     with_unchecked(func, |func: &Function| {
-        match std::panic::catch_unwind(|| {
+        let outcome = std::panic::catch_unwind(|| {
             let input = std::slice::from_raw_parts(input, func.input_size().in_bytes());
             let output = std::slice::from_raw_parts_mut(output, func.output_size().in_bytes());
 
@@ -780,7 +780,8 @@ pub unsafe extern "C" fn function_call_raw(
             }
 
             Outcome::from_result(Result::<(), Error>::Ok(()))
-        }) {
+        });
+        match outcome {
             Ok(status) => status,
             Err(_le_oops) => Outcome::from_result(Result::<(), Error>::Err(
                 "function raw call panicked (see stderr)".to_string().into(),

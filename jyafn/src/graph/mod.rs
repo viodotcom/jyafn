@@ -241,7 +241,7 @@ impl Graph {
 
     /// Adds a new symbol to the graph, returning a reference associated with it.
     pub fn push_symbol(&mut self, name: String) -> Ref {
-        Ref::Const(Type::Symbol, self.symbols.push(name) as u64)
+        Ref::Const(Type::Symbol, self.symbols.push(name))
     }
 
     /// All the symbols defined in this graph.
