@@ -314,15 +314,9 @@ impl Extension {
         unsafe {
             // Safety: we can only pray nobody loads anything funny here. However, it's
             // not my responsibilty what kind of crap you install in your computer.
-            println!("starting to load {path:?}");
-            let library = Library::new(path).inspect_err(|err| println!("oops:{err}"))?;
-            println!("aisndoa");
-            let extension_init: Symbol<ExtensionInit> = library
-                .get(EXTENSION_INIT_SYMBOL)
-                .inspect_err(|err| println!("oops:{err}"))?;
-            println!("init is not null");
+            let library = Library::new(path)?;
+            let extension_init: Symbol<ExtensionInit> = library.get(EXTENSION_INIT_SYMBOL)?;
             let outcome = extension_init();
-            println!("init is not null");
             if outcome.is_null() {
                 return Err(format!("library {path:?} failed to load").into());
             }

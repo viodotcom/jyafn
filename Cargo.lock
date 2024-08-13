@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "cjyafn"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "cbindgen",
  "get-size",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "jyafn"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "bincode",
  "byte-slice-cast",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "jyafn-python"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "get-size",
