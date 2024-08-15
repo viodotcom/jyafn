@@ -5,8 +5,8 @@ use std::fmt::{self, Display};
 
 use crate::{Error, Op};
 
-use super::Graph;
-use super::Type;
+use super::{Builder, Graph};
+use super::{Type, SLOT_SIZE};
 
 /// A reference to a value in a graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GetSize)]
@@ -41,12 +41,93 @@ impl From<bool> for Ref {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Register(pub usize);
+
+impl Register {
+    pub fn render(self) -> qbe::Value {
+        qbe::Value::Temporary(format!("a{}", self.0))
+    }
+}
+
 impl Ref {
-    pub(crate) fn render(self) -> qbe::Value {
+    pub(crate) fn load(self, arg_num: usize, builder: &mut Builder) -> Register {
+        let ty = builder.graph.type_of(self);
+        let arg_reg = Register(arg_num);
+
         match self {
-            Ref::Input(input_id) => qbe::Value::Temporary(format!("i{input_id}")),
-            Ref::Const(_, r#const) => qbe::Value::Const(r#const),
-            Ref::Node(node_id) => qbe::Value::Temporary(format!("n{node_id}")),
+            Ref::Input(input_id) => {
+                let arg_reg = Register(arg_num);
+                let stack_ptr = qbe::Value::Temporary("stkptr".to_owned());
+                builder.func.assign_instr(
+                    stack_ptr.clone(),
+                    qbe::Type::Long,
+                    qbe::Instr::Add(
+                        qbe::Value::Temporary("in".to_owned()),
+                        qbe::Value::Const((SLOT_SIZE.in_bytes() * input_id) as u64),
+                    ),
+                );
+                builder.func.assign_instr(
+                    arg_reg.render(),
+                    ty.render(),
+                    qbe::Instr::Load(ty.render(), stack_ptr),
+                );
+            }
+            Ref::Const(_, r#const) => {
+                builder.func.assign_instr(
+                    arg_reg.render(),
+                    ty.render(),
+                    qbe::Instr::Copy(qbe::Value::Const(r#const)),
+                );
+            }
+            Ref::Node(node_id) => {
+                let stack_ptr = qbe::Value::Temporary("stkptr".to_owned());
+                builder.func.assign_instr(
+                    stack_ptr.clone(),
+                    qbe::Type::Long,
+                    qbe::Instr::Add(
+                        qbe::Value::Temporary("stack".to_owned()),
+                        qbe::Value::Const(
+                            (SLOT_SIZE.in_bytes() * builder.stack_slots[node_id]) as u64,
+                        ),
+                    ),
+                );
+                builder.func.assign_instr(
+                    arg_reg.render(),
+                    ty.render(),
+                    qbe::Instr::Load(ty.render(), stack_ptr),
+                );
+            }
+        }
+
+        arg_reg
+    }
+
+    pub(crate) fn store(self, val: qbe::Value, builder: &mut Builder) {
+        match self {
+            Ref::Input(_) => {
+                panic!("cannot store an input reference")
+            }
+            Ref::Const(_, _) => {
+                panic!("cannot store a const reference")
+            }
+            Ref::Node(node_id) => {
+                let ty = builder.graph.type_of(self);
+                let stack_ptr = qbe::Value::Temporary("stkptr".to_owned());
+                builder.func.assign_instr(
+                    stack_ptr.clone(),
+                    qbe::Type::Long,
+                    qbe::Instr::Add(
+                        qbe::Value::Temporary("stack".to_owned()),
+                        qbe::Value::Const(
+                            (SLOT_SIZE.in_bytes() * builder.stack_slots[node_id]) as u64,
+                        ),
+                    ),
+                );
+                builder
+                    .func
+                    .add_instr(qbe::Instr::Store(ty.render(), stack_ptr, val))
+            }
         }
     }
 

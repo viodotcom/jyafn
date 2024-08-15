@@ -1,6 +1,7 @@
 mod optimize;
 mod qbe_app;
 
+use optimize::stack_slot_assignment;
 use std::{
     io::Write,
     process::{Command, Stdio},
@@ -10,6 +11,14 @@ use tempfile::NamedTempFile;
 use crate::Function;
 
 use super::{Error, Graph, Node, SLOT_SIZE};
+
+#[derive(Debug)]
+pub struct Builder<'a> {
+    pub(crate) func: &'a mut qbe::Function<'static>,
+    pub(crate) namespace: &'a str,
+    pub(crate) stack_slots: &'a [usize],
+    pub(crate) graph: &'a Graph,
+}
 
 impl Graph {
     /// Renders this graph as a QBE module. This fails if the graph contains illegal
@@ -66,21 +75,42 @@ impl Graph {
         ));
         main.add_block("start".to_string());
 
-        for (id, input) in self.inputs.iter().enumerate() {
-            main.assign_instr(
-                qbe::Value::Temporary(format!("i{id}")),
-                input.render(),
-                qbe::Instr::Load(input.render(), qbe::Value::Temporary("in".to_string())),
-            );
-            main.assign_instr(
-                qbe::Value::Temporary("in".to_string()),
-                qbe::Type::Long,
-                qbe::Instr::Add(
-                    qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
-                    qbe::Value::Temporary("in".to_string()),
-                ),
-            );
-        }
+        // for (id, input) in self.inputs.iter().enumerate() {
+        //     main.assign_instr(
+        //         qbe::Value::Temporary(format!("i{id}")),
+        //         input.render(),
+        //         qbe::Instr::Load(input.render(), qbe::Value::Temporary("in".to_string())),
+        //     );
+        //     main.assign_instr(
+        //         qbe::Value::Temporary("in".to_string()),
+        //         qbe::Type::Long,
+        //         qbe::Instr::Add(
+        //             qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
+        //             qbe::Value::Temporary("in".to_string()),
+        //         ),
+        //     );
+        // }
+
+        let stack_slots = stack_slot_assignment(&self.nodes, &self.outputs);
+        let stack_size = stack_slots
+            .iter()
+            .copied()
+            .max()
+            .map(|max| max + 1)
+            .unwrap_or_default();
+        let mut builder = Builder {
+            func: main,
+            namespace,
+            stack_slots: &stack_slots,
+            graph: self,
+        };
+
+        builder.func.assign_instr(
+            qbe::Value::Temporary("stack".to_owned()),
+            qbe::Type::Long,
+            qbe::Instr::Alloc8((SLOT_SIZE.in_bytes() * stack_size) as u64),
+        );
+
         // This is the old naive implementation, kept here in case you need a quick
         // rollback...
         // // Supposes that the nodes were already declared in topological order:
@@ -92,15 +122,16 @@ impl Graph {
         // }
 
         // optimize::Statements::build(&self.nodes).render_into(self, &reachable, main, namespace);
-        optimize::Statements::build(&self.nodes).render_into(self, main, namespace);
+        optimize::Statements::build(&self.nodes).render_into(self, &mut builder);
 
         for output in &self.outputs {
-            main.add_instr(qbe::Instr::Store(
+            let out = output.load(0, &mut builder);
+            builder.func.add_instr(qbe::Instr::Store(
                 self.type_of(*output).render(),
                 qbe::Value::Temporary("out".to_string()),
-                output.render(),
+                out.render(),
             ));
-            main.assign_instr(
+            builder.func.assign_instr(
                 qbe::Value::Temporary("out".to_string()),
                 qbe::Type::Long,
                 qbe::Instr::Add(

@@ -1,7 +1,12 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{graph::SLOT_SIZE, impl_is_eq, impl_op, resource::ResourceMethod, Graph, Ref, Type};
+use crate::{
+    graph::{Builder, SLOT_SIZE},
+    impl_is_eq, impl_op,
+    resource::ResourceMethod,
+    Graph, Ref, Type,
+};
 
 use super::{unique_for, Op};
 
@@ -30,53 +35,46 @@ impl Op for CallResource {
         }
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let resource = &graph.resources[&self.name];
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let resource = &builder.graph.resources[&self.name];
         let method = resource
             .get_method(&self.method)
             .expect("node already annotated");
 
-        let input_ptr = qbe::Value::Temporary(unique_for(output.clone(), "callresource.input"));
-        let output_ptr = qbe::Value::Temporary(unique_for(output.clone(), "callresource.output"));
-        let data_ptr = qbe::Value::Temporary(unique_for(output.clone(), "callresource.data"));
-        let status = qbe::Value::Temporary(unique_for(output.clone(), "callresource.status"));
-        let raise_side = unique_for(output.clone(), "callresource.raise");
-        let end_side = unique_for(output.clone(), "callresource.end");
+        let input_ptr = qbe::Value::Temporary(unique_for(output, "callresource.input"));
+        let output_ptr = qbe::Value::Temporary(unique_for(output, "callresource.output"));
+        let data_ptr = qbe::Value::Temporary(unique_for(output, "callresource.data"));
+        let status = qbe::Value::Temporary(unique_for(output, "callresource.status"));
+        let raise_side = unique_for(output, "callresource.raise");
+        let end_side = unique_for(output, "callresource.end");
 
         let input_size = method.input_layout.slots().len() as u64;
         let output_size = method.output_layout.slots().len() as u64;
-
-        func.assign_instr(
+        builder.func.assign_instr(
             input_ptr.clone(),
             qbe::Type::Long,
             qbe::Instr::Alloc8(input_size * 8),
         );
-        func.assign_instr(
+        builder.func.assign_instr(
             output_ptr.clone(),
             qbe::Type::Long,
             qbe::Instr::Alloc8(output_size * 8),
         );
 
-        func.assign_instr(
+        builder.func.assign_instr(
             data_ptr.clone(),
             qbe::Type::Long,
             qbe::Instr::Copy(input_ptr.clone()),
         );
 
         for &arg in args {
-            func.add_instr(qbe::Instr::Store(
-                graph.type_of(arg).render(),
+            let arg_val = arg.load(0, builder);
+            builder.func.add_instr(qbe::Instr::Store(
+                builder.graph.type_of(arg).render(),
                 data_ptr.clone(),
-                arg.render(),
+                arg_val.render(),
             ));
-            func.assign_instr(
+            builder.func.assign_instr(
                 data_ptr.clone(),
                 qbe::Type::Long,
                 qbe::Instr::Add(
@@ -86,7 +84,7 @@ impl Op for CallResource {
             );
         }
 
-        func.assign_instr(
+        builder.func.assign_instr(
             status.clone(),
             qbe::Type::Long,
             qbe::Instr::Call(
@@ -104,15 +102,15 @@ impl Op for CallResource {
             ),
         );
 
-        func.add_instr(qbe::Instr::Jnz(
+        builder.func.add_instr(qbe::Instr::Jnz(
             status.clone(),
             raise_side.clone(),
             end_side.clone(),
         ));
-        func.add_block(raise_side);
-        super::render_return_allocated_error(func, status);
-        func.add_block(end_side);
-        func.assign_instr(output, qbe::Type::Long, qbe::Instr::Copy(output_ptr));
+        builder.func.add_block(raise_side);
+        super::render_return_allocated_error(builder.func, status);
+        builder.func.add_block(end_side);
+        output.store(output_ptr, builder);
     }
 
     fn get_size(&self) -> usize {
@@ -157,26 +155,21 @@ impl Op for LoadMethodOutput {
         }
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let addr = unique_for(output.clone(), "loadmethodoutput.addr");
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let addr = qbe::Value::Temporary(unique_for(output, "loadmethodoutput.addr"));
+        let val = args[0].load(1, builder);
 
-        func.assign_instr(
-            qbe::Value::Temporary(addr.clone()),
+        builder.func.assign_instr(
+            addr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Add(args[0].render(), qbe::Value::Const((self.slot * 8) as u64)),
+            qbe::Instr::Add(val.render(), qbe::Value::Const((self.slot * 8) as u64)),
         );
-        func.assign_instr(
-            output,
+        builder.func.assign_instr(
+            addr.clone(),
             self.return_type.render(),
-            qbe::Instr::Load(self.return_type.render(), qbe::Value::Temporary(addr)),
+            qbe::Instr::Load(self.return_type.render(), addr.clone()),
         );
+        output.store(addr, builder)
     }
 
     fn must_use(&self) -> bool {

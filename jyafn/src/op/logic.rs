@@ -1,6 +1,8 @@
+use std::{borrow::Cow, ffi::CStr};
+
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_op, Graph, Ref, Type};
+use crate::{graph::Builder, impl_op, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
@@ -19,28 +21,22 @@ impl Op for Assert {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let false_side = unique_for(output.clone(), "assert.if.false");
-        let true_side = unique_for(output.clone(), "assert.if.true");
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let false_side = unique_for(output, "assert.if.false");
+        let true_side = unique_for(output, "assert.if.true");
 
-        func.add_instr(qbe::Instr::Jnz(
-            args[0].render(),
+        let test = args[0].load(0, builder);
+        builder.func.add_instr(qbe::Instr::Jnz(
+            test.render(),
             true_side.clone(),
             false_side.clone(),
         ));
-        func.add_block(false_side);
+        builder.func.add_block(false_side);
         super::render_return_error(
-            func,
-            qbe::Value::Global(format!("{namespace}.error.{}", self.0)),
+            builder.func,
+            qbe::Value::Global(format!("{}.error.{}", builder.namespace, self.0)),
         );
-        func.add_block(true_side);
+        builder.func.add_block(true_side);
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -57,6 +53,14 @@ impl Op for Assert {
 
     fn is_illegal(&self, graph: &Graph, args: &[Ref]) -> bool {
         matches!(args[0].as_bool(), Some(false))
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        if args[0] == 0 {
+            Err(crate::utils::make_safe_c_str(graph.errors()[self.0 as usize].clone()).into())
+        } else {
+            Ok(0)
+        }
     }
 }
 
@@ -75,40 +79,28 @@ impl Op for Choose {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
         let true_side = unique_for(output.clone(), "choose.if.true");
         let false_side = unique_for(output.clone(), "choose.if.false");
         let end_side = unique_for(output.clone(), "choose.if.end");
 
-        func.add_instr(qbe::Instr::Jnz(
-            args[0].render(),
+        let test = args[0].load(0, builder);
+        builder.func.add_instr(qbe::Instr::Jnz(
+            test.render(),
             true_side.clone(),
             false_side.clone(),
         ));
 
-        func.add_block(true_side);
-        func.assign_instr(
-            output.clone(),
-            Type::Float.render(),
-            qbe::Instr::Copy(args[1].render()),
-        );
-        func.add_instr(qbe::Instr::Jmp(end_side.clone()));
+        builder.func.add_block(true_side);
+        let loaded = args[1].load(0, builder);
+        output.store(loaded.render(), builder);
+        builder.func.add_instr(qbe::Instr::Jmp(end_side.clone()));
 
-        func.add_block(false_side);
-        func.assign_instr(
-            output,
-            Type::Float.render(),
-            qbe::Instr::Copy(args[2].render()),
-        );
+        builder.func.add_block(false_side);
+        let loaded = args[2].load(0, builder);
+        output.store(loaded.render(), builder);
 
-        func.add_block(end_side);
+        builder.func.add_block(end_side);
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -125,6 +117,10 @@ impl Op for Choose {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(if args[0] != 0 { args[1] } else { args[2] })
     }
 }
 
@@ -143,19 +139,14 @@ impl Op for Not {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Bool.render(),
-            qbe::Instr::Xor(args[0].render(), qbe::Value::Const(1)),
-        )
+            qbe::Instr::Xor(x.render(), qbe::Value::Const(1)),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -168,6 +159,9 @@ impl Op for Not {
         }
 
         None
+    }
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok((args[0] == 0) as u64)
     }
 }
 
@@ -186,19 +180,15 @@ impl Op for And {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
-            Type::Bool.render(),
-            qbe::Instr::And(args[0].render(), args[1].render()),
-        )
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        let y = args[1].load(1, builder);
+        builder.func.assign_instr(
+            x.render(),
+            Type::Float.render(),
+            qbe::Instr::And(x.render(), y.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -207,6 +197,10 @@ impl Op for And {
         } else {
             None
         }
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok((args[0] != 0 && args[1] != 0) as u64)
     }
 }
 
@@ -225,19 +219,15 @@ impl Op for Or {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
-            Type::Bool.render(),
-            qbe::Instr::Or(args[0].render(), args[1].render()),
-        )
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        let y = args[1].load(1, builder);
+        builder.func.assign_instr(
+            x.render(),
+            Type::Float.render(),
+            qbe::Instr::Or(x.render(), y.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -246,5 +236,9 @@ impl Op for Or {
         } else {
             None
         }
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok((args[0] != 0 || args[1] != 0) as u64)
     }
 }

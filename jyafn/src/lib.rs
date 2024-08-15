@@ -21,7 +21,8 @@ mod graph;
 pub use dataset::Dataset;
 pub use function::{FnError, Function, FunctionData, RawFn};
 pub use graph::size;
-pub use graph::{Graph, IndexedList, Node, Ref, Type};
+// pub use graph::{Graph, IndexedList, Node, Ref, Type};
+pub use graph::{Graph, Node, Ref, Type};
 pub use op::Op;
 pub use r#const::Const;
 

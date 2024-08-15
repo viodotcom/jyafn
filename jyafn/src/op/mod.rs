@@ -7,7 +7,7 @@ mod arithmetic;
 mod call;
 mod compare;
 mod convert;
-mod list;
+// mod list;
 mod logic;
 mod mapping;
 mod resource;
@@ -18,7 +18,7 @@ pub use compare::*;
 pub use convert::*;
 pub use logic::*;
 
-pub(crate) use list::*;
+// pub(crate) use list::*;
 pub(crate) use mapping::*;
 pub(crate) use resource::*;
 
@@ -26,8 +26,11 @@ use downcast_rs::{impl_downcast, Downcast};
 use dyn_clone::DynClone;
 #[cfg(doc)]
 use get_size::GetSize;
-use std::fmt::Debug;
+use std::ffi::CStr;
 use std::panic::RefUnwindSafe;
+use std::{borrow::Cow, fmt::Debug};
+
+use crate::graph::Builder;
 
 use super::{FnError, Graph, Ref, Type};
 
@@ -39,14 +42,7 @@ pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcas
     fn annotate(&mut self, self_id: usize, graph: &Graph, args: &[Type]) -> Option<Type>;
 
     /// Renders the QBE code for this operation into a given function builder.
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    );
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder);
 
     /// Checks if this operation is equal to another operation.
     fn is_eq(&self, other: &dyn Op) -> bool;
@@ -59,6 +55,13 @@ pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcas
     /// returns `None`.
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
         None
+    }
+
+    /// Evaluates the operation, here and now.
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        return Err(CStr::from_bytes_with_nul(b"op eval not implemented\0")
+            .unwrap()
+            .into());
     }
 
     /// Whether this operation can be optimized away or not. If the method returns `true`,
@@ -130,12 +133,12 @@ macro_rules! impl_op {
 }
 
 /// Generates an unique name for a QBE temporary, with the given prefix.
-fn unique_for(v: qbe::Value, prefix: &str) -> String {
-    let qbe::Value::Temporary(name) = v else {
-        panic!("Can only get unique names for temporaries; got {v}")
+fn unique_for(v: Ref, prefix: &str) -> String {
+    let Ref::Node(id) = v else {
+        panic!("Can only get unique names for nodes; got {v}")
     };
 
-    format!("{prefix}_{name}")
+    format!("{prefix}_n{id}")
 }
 
 /// Renders the call to create an [`FnError`] out of a static C-Style string in jyafn code.

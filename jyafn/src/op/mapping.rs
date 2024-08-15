@@ -2,7 +2,7 @@ use byte_slice_cast::AsByteSlice;
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_is_eq, Graph, Ref, Type};
+use crate::{graph::Builder, impl_is_eq, Graph, Ref, Type};
 
 use super::{unique_for, Op};
 
@@ -31,24 +31,27 @@ impl Op for CallMapping {
         None
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output.clone(),
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let out_reg = qbe::Value::Temporary(format!("returned"));
+        let call_args = args
+            .iter()
+            .enumerate()
+            .map(|(i, &r)| {
+                (
+                    builder.graph.type_of(r).render(),
+                    r.load(i, builder).render(),
+                )
+            })
+            .collect();
+        builder.func.assign_instr(
+            out_reg.clone(),
             Type::Ptr { origin: usize::MAX }.render(),
             qbe::Instr::Call(
-                qbe::Value::Global(format!("{namespace}.mapping.{}", self.name)),
-                args.iter()
-                    .map(|&r| (graph.type_of(r).render(), r.render()))
-                    .collect(),
+                qbe::Value::Global(format!("{}.mapping.{}", builder.namespace, self.name)),
+                call_args,
             ),
         );
+        output.store(out_reg, builder)
     }
 
     fn get_size(&self) -> usize {
@@ -111,42 +114,37 @@ impl Op for LoadMappingValue {
         slots.get(self.slot).copied()
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let ty = graph.mappings[&self.mapping].value_layout().slots()[self.slot];
-        let addr = unique_for(output.clone(), "loadmapping.addr");
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let ty = builder.graph.mappings[&self.mapping].value_layout().slots()[self.slot];
+        let addr = qbe::Value::Temporary(unique_for(output, "loadmapping.addr"));
+        let false_side = unique_for(output, "loadmapping.found.false");
+        let true_side = unique_for(output, "loadmapping.found.true");
 
-        let false_side = unique_for(output.clone(), "loadmapping.found.false");
-        let true_side = unique_for(output.clone(), "loadmapping.found.true");
+        let key = args[0].load(0, builder);
 
-        func.add_instr(qbe::Instr::Jnz(
-            args[0].render(),
+        builder.func.add_instr(qbe::Instr::Jnz(
+            key.render(),
             true_side.clone(),
             false_side.clone(),
         ));
-        func.add_block(false_side);
+        builder.func.add_block(false_side);
         super::render_return_error(
-            func,
-            qbe::Value::Global(format!("{namespace}.error.{}", self.error_code)),
+            builder.func,
+            qbe::Value::Global(format!("{}.error.{}", builder.namespace, self.error_code)),
         );
-        func.add_block(true_side);
+        builder.func.add_block(true_side);
 
-        func.assign_instr(
-            qbe::Value::Temporary(addr.clone()),
+        builder.func.assign_instr(
+            addr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Add(args[0].render(), qbe::Value::Const((self.slot * 8) as u64)),
+            qbe::Instr::Add(key.render(), qbe::Value::Const((self.slot * 8) as u64)),
         );
-        func.assign_instr(
-            output,
+        builder.func.assign_instr(
+            addr.clone(),
             ty.render(),
-            qbe::Instr::Load(ty.render(), qbe::Value::Temporary(addr)),
+            qbe::Instr::Load(ty.render(), addr.clone()),
         );
+        output.store(addr, builder)
     }
 
     fn get_size(&self) -> usize {
@@ -198,48 +196,44 @@ impl Op for LoadOrDefaultMappingValue {
         }
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let ty = graph.mappings[&self.mapping].value_layout().slots()[self.slot];
-        let addr = unique_for(output.clone(), "loadmappingdefault.addr");
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let ty = builder.graph.mappings[&self.mapping].value_layout().slots()[self.slot];
+        let addr = qbe::Value::Temporary(unique_for(output, "loadmappingdefault.addr"));
+        let false_side = unique_for(output, "loadmappingdefault.found.false");
+        let true_side = unique_for(output, "loadmappingdefault.found.true");
+        let end_if = unique_for(output, "loadmappingdefault.found.end");
 
-        let false_side = unique_for(output.clone(), "loadmappingdefault.found.false");
-        let true_side = unique_for(output.clone(), "loadmappingdefault.found.true");
-        let end_if = unique_for(output.clone(), "loadmappingdefault.found.end");
+        let key = args[0].load(0, builder);
 
-        func.add_instr(qbe::Instr::Jnz(
-            args[0].render(),
+        builder.func.add_instr(qbe::Instr::Jnz(
+            key.render(),
             true_side.clone(),
             false_side.clone(),
         ));
 
-        func.add_block(false_side);
-        func.assign_instr(
-            output.clone(),
+        builder.func.add_block(false_side);
+        let default = args[1].load(1, builder);
+        builder.func.assign_instr(
+            addr.clone(),
             ty.render(),
-            qbe::Instr::Copy(args[1].render()),
+            qbe::Instr::Copy(default.render()),
         );
-        func.add_instr(qbe::Instr::Jmp(end_if.clone()));
+        builder.func.add_instr(qbe::Instr::Jmp(end_if.clone()));
 
-        func.add_block(true_side);
-        func.assign_instr(
-            qbe::Value::Temporary(addr.clone()),
+        builder.func.add_block(true_side);
+        builder.func.assign_instr(
+            addr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Add(args[0].render(), qbe::Value::Const((self.slot * 8) as u64)),
+            qbe::Instr::Add(key.render(), qbe::Value::Const((self.slot * 8) as u64)),
         );
-        func.assign_instr(
-            output,
+        builder.func.assign_instr(
+            addr.clone(),
             ty.render(),
-            qbe::Instr::Load(ty.render(), qbe::Value::Temporary(addr)),
+            qbe::Instr::Load(ty.render(), addr.clone()),
         );
+        output.store(addr, builder);
 
-        func.add_block(end_if);
+        builder.func.add_block(end_if);
     }
 
     fn get_size(&self) -> usize {

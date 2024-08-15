@@ -1,8 +1,10 @@
+use std::{borrow::Cow, ffi::CStr};
+
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_op, Graph, Ref, Type};
+use crate::{graph::Builder, impl_op, Graph, Ref, Type};
 
-use super::{unique_for, Op};
+use super::Op;
 
 /// Implements `a + b`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -19,19 +21,15 @@ impl Op for Add {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        let y = args[1].load(1, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Float.render(),
-            qbe::Instr::Add(args[0].render(), args[1].render()),
-        )
+            qbe::Instr::Add(x.render(), y.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -48,6 +46,13 @@ impl Op for Add {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            (f64::from_ne_bytes(args[0].to_ne_bytes()) + f64::from_ne_bytes(args[1].to_ne_bytes()))
+                .to_ne_bytes(),
+        ))
     }
 }
 
@@ -66,19 +71,15 @@ impl Op for Sub {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        let y = args[1].load(1, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Float.render(),
-            qbe::Instr::Sub(args[0].render(), args[1].render()),
-        )
+            qbe::Instr::Sub(x.render(), y.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -91,6 +92,13 @@ impl Op for Sub {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            (f64::from_ne_bytes(args[0].to_ne_bytes()) - f64::from_ne_bytes(args[1].to_ne_bytes()))
+                .to_ne_bytes(),
+        ))
     }
 }
 
@@ -109,19 +117,15 @@ impl Op for Mul {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        let y = args[1].load(1, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Float.render(),
-            qbe::Instr::Mul(args[0].render(), args[1].render()),
-        )
+            qbe::Instr::Mul(x.render(), y.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -138,6 +142,13 @@ impl Op for Mul {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            (f64::from_ne_bytes(args[0].to_ne_bytes()) * f64::from_ne_bytes(args[1].to_ne_bytes()))
+                .to_ne_bytes(),
+        ))
     }
 }
 
@@ -156,19 +167,15 @@ impl Op for Div {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        let y = args[1].load(1, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Float.render(),
-            qbe::Instr::Div(args[0].render(), args[1].render()),
-        )
+            qbe::Instr::Div(x.render(), y.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -181,6 +188,13 @@ impl Op for Div {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            (f64::from_ne_bytes(args[0].to_ne_bytes()) / f64::from_ne_bytes(args[1].to_ne_bytes()))
+                .to_ne_bytes(),
+        ))
     }
 }
 
@@ -199,16 +213,9 @@ impl Op for Rem {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
         // `rem` does not work for floats in QBE. So, we need to resort to pfuncs!
-        super::call::Call("rem".to_string()).render_into(graph, output, args, func, namespace)
+        super::call::Call("rem".to_string()).render_into(output, args, builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -217,6 +224,13 @@ impl Op for Rem {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            (f64::from_ne_bytes(args[0].to_ne_bytes()) % f64::from_ne_bytes(args[1].to_ne_bytes()))
+                .to_ne_bytes(),
+        ))
     }
 }
 
@@ -235,19 +249,14 @@ impl Op for Neg {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Float.render(),
-            qbe::Instr::Neg(args[0].render()),
-        )
+            qbe::Instr::Neg(x.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -256,6 +265,12 @@ impl Op for Neg {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            (-f64::from_ne_bytes(args[0].to_ne_bytes())).to_ne_bytes(),
+        ))
     }
 }
 
@@ -274,52 +289,9 @@ impl Op for Abs {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let test_temp = qbe::Value::Temporary(unique_for(output.clone(), "abs.test"));
-        func.assign_instr(
-            test_temp.clone(),
-            qbe::Type::Byte,
-            qbe::Instr::Cmp(
-                Type::Float.render(),
-                qbe::Cmp::Ge,
-                args[0].render(),
-                qbe::Value::Const(0),
-            ),
-        );
-
-        let true_side = unique_for(output.clone(), "abs.if.true");
-        let false_side = unique_for(output.clone(), "abs.if.false");
-        let end_side = unique_for(output.clone(), "abs.if.end");
-
-        func.add_instr(qbe::Instr::Jnz(
-            test_temp,
-            true_side.clone(),
-            false_side.clone(),
-        ));
-
-        func.add_block(true_side);
-        func.assign_instr(
-            output.clone(),
-            Type::Float.render(),
-            qbe::Instr::Copy(args[0].render()),
-        );
-        func.add_instr(qbe::Instr::Jmp(end_side.clone()));
-
-        func.add_block(false_side);
-        func.assign_instr(
-            output,
-            Type::Float.render(),
-            qbe::Instr::Neg(args[0].render()),
-        );
-
-        func.add_block(end_side);
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        // `best to use pfuncs!
+        super::call::Call("abs".to_string()).render_into(output, args, builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -328,5 +300,13 @@ impl Op for Abs {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            f64::from_ne_bytes(args[0].to_ne_bytes())
+                .abs()
+                .to_ne_bytes(),
+        ))
     }
 }

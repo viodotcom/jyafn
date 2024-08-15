@@ -1,7 +1,10 @@
 use get_size::GetSize;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{graph::SLOT_SIZE, impl_is_eq, impl_op, pfunc, Graph, Ref, Type};
+use crate::{
+    graph::{Builder, Register, SLOT_SIZE},
+    impl_is_eq, impl_op, pfunc, Graph, Ref, Type,
+};
 
 use super::{unique_for, Op};
 
@@ -22,28 +25,22 @@ impl Op for Call {
         }
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
         let pfunc = pfunc::get(&self.0).expect("pfunc existence already checked");
-        func.assign_instr(
-            output,
+        let pfunc_args = pfunc
+            .signature()
+            .iter()
+            .zip(args)
+            .enumerate()
+            .map(|(i, (ty, arg))| (ty.render(), arg.load(i, builder).render()))
+            .collect();
+        let out_reg = Register(0);
+        builder.func.assign_instr(
+            out_reg.render(),
             pfunc.returns().render(),
-            qbe::Instr::Call(
-                qbe::Value::Const(pfunc.location() as u64),
-                pfunc
-                    .signature()
-                    .iter()
-                    .zip(args)
-                    .map(|(ty, arg)| (ty.render(), arg.render()))
-                    .collect(),
-            ),
-        )
+            qbe::Instr::Call(qbe::Value::Const(pfunc.location() as u64), pfunc_args),
+        );
+        output.store(out_reg.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -78,52 +75,51 @@ impl Op for CallGraph {
         }
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let subgraph = &graph.subgraphs[self.0];
-        let input_ptr = qbe::Value::Temporary(unique_for(output.clone(), "callgraph.input"));
-        let output_ptr = qbe::Value::Temporary(unique_for(output.clone(), "callgraph.output"));
-        let data_ptr = qbe::Value::Temporary(unique_for(output.clone(), "callgraph.data"));
-        let status = qbe::Value::Temporary(unique_for(output.clone(), "callgraph.status"));
-        let raise_side = unique_for(output.clone(), "callgraph.raise");
-        let end_side = unique_for(output.clone(), "callgraph.end");
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let subgraph = &builder.graph.subgraphs[self.0];
+        let input_ptr = qbe::Value::Temporary(unique_for(output, "callgraph.input"));
+        let output_ptr = qbe::Value::Temporary(unique_for(output, "callgraph.output"));
+        let data_ptr = qbe::Value::Temporary(unique_for(output, "callgraph.data"));
+        let status = qbe::Value::Temporary(unique_for(output, "callgraph.status"));
+        let raise_side = unique_for(output, "callgraph.raise");
+        let end_side = unique_for(output, "callgraph.end");
 
-        func.assign_instr(
+        builder.func.assign_instr(
             input_ptr.clone(),
             qbe::Type::Long,
             qbe::Instr::Alloc8(
-                graph.subgraphs[self.0]
+                builder.graph.subgraphs[self.0]
                     .inputs
                     .iter()
                     .map(|ty| SLOT_SIZE.in_bytes())
                     .sum::<usize>() as u64,
             ),
         );
-        func.assign_instr(
+        builder.func.assign_instr(
             output_ptr.clone(),
             qbe::Type::Long,
-            qbe::Instr::Alloc8(graph.subgraphs[self.0].output_layout.size().in_bytes() as u64),
+            qbe::Instr::Alloc8(
+                builder.graph.subgraphs[self.0]
+                    .output_layout
+                    .size()
+                    .in_bytes() as u64,
+            ),
         );
 
-        func.assign_instr(
+        builder.func.assign_instr(
             data_ptr.clone(),
             qbe::Type::Long,
             qbe::Instr::Copy(input_ptr.clone()),
         );
 
         for &arg in args {
-            func.add_instr(qbe::Instr::Store(
-                graph.type_of(arg).render(),
+            let arg_reg = arg.load(0, builder);
+            builder.func.add_instr(qbe::Instr::Store(
+                builder.graph.type_of(arg).render(),
                 data_ptr.clone(),
-                arg.render(),
+                arg_reg.render(),
             ));
-            func.assign_instr(
+            builder.func.assign_instr(
                 data_ptr.clone(),
                 qbe::Type::Long,
                 qbe::Instr::Add(
@@ -133,11 +129,11 @@ impl Op for CallGraph {
             );
         }
 
-        func.assign_instr(
+        builder.func.assign_instr(
             status.clone(),
             qbe::Type::Long,
             qbe::Instr::Call(
-                qbe::Value::Global(format!("{namespace}.graph.{}", self.0)),
+                qbe::Value::Global(format!("{}.graph.{}", builder.namespace, self.0)),
                 vec![
                     (qbe::Type::Long, input_ptr),
                     (qbe::Type::Long, output_ptr.clone()),
@@ -145,15 +141,15 @@ impl Op for CallGraph {
             ),
         );
 
-        func.add_instr(qbe::Instr::Jnz(
+        builder.func.add_instr(qbe::Instr::Jnz(
             status.clone(),
             raise_side.clone(),
             end_side.clone(),
         ));
-        func.add_block(raise_side);
-        super::render_return_error(func, status);
-        func.add_block(end_side);
-        func.assign_instr(output, qbe::Type::Long, qbe::Instr::Copy(output_ptr));
+        builder.func.add_block(raise_side);
+        super::render_return_error(builder.func, status);
+        builder.func.add_block(end_side);
+        output.store(output_ptr, builder);
     }
 }
 
@@ -186,27 +182,20 @@ impl Op for LoadSubgraphOutput {
         slots.get(self.slot).copied()
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let ty = graph.subgraphs[self.subgraph].output_layout.slots()[self.slot];
-        let addr = unique_for(output.clone(), "loadsubgraphoutput.addr");
-
-        func.assign_instr(
-            qbe::Value::Temporary(addr.clone()),
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let ty = builder.graph.subgraphs[self.subgraph].output_layout.slots()[self.slot];
+        let arg_reg = args[0].load(0, builder);
+        builder.func.assign_instr(
+            arg_reg.render(),
             qbe::Type::Long,
-            qbe::Instr::Add(args[0].render(), qbe::Value::Const((self.slot * 8) as u64)),
+            qbe::Instr::Add(arg_reg.render(), qbe::Value::Const((self.slot * 8) as u64)),
         );
-        func.assign_instr(
-            output,
+        builder.func.assign_instr(
+            arg_reg.render(),
             ty.render(),
-            qbe::Instr::Load(ty.render(), qbe::Value::Temporary(addr)),
+            qbe::Instr::Load(ty.render(), arg_reg.render()),
         );
+        output.store(arg_reg.render(), builder);
     }
 
     fn must_use(&self) -> bool {

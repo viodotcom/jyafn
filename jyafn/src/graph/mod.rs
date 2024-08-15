@@ -6,7 +6,8 @@ mod r#type;
 
 pub mod size;
 
-pub use node::{Node, Ref};
+pub use compile::Builder;
+pub use node::{Node, Ref, Register};
 pub use r#type::{Type, SLOT_SIZE};
 
 use get_size::GetSize;
@@ -15,10 +16,13 @@ use std::{
     cmp::PartialEq,
     collections::HashMap,
     error::Error as StdError,
+    ffi::CString,
     fmt::Debug,
     pin::Pin,
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 use super::{
@@ -576,58 +580,96 @@ impl Graph {
             })?)
     }
 
-    /// Creates a new indexed list in the graph.
-    pub fn indexed_list(&mut self, list: Vec<Ref>) -> Result<IndexedList, Error> {
-        let element = list
-            .first()
-            .map(|&f| self.type_of(f))
-            .unwrap_or(Type::Float);
-        let n_elements = list.len();
-        let list = self.insert(
-            op::List {
-                element,
-                n_elements,
-            },
-            list,
-        )?;
-        let error = self.push_error("Index out of bounds".to_string());
+    // /// Creates a new indexed list in the graph.
+    // pub fn indexed_list(&mut self, list: Vec<Ref>) -> Result<IndexedList, Error> {
+    //     let element = list
+    //         .first()
+    //         .map(|&f| self.type_of(f))
+    //         .unwrap_or(Type::Float);
+    //     let n_elements = list.len();
+    //     let list = self.insert(
+    //         op::List {
+    //             element,
+    //             n_elements,
+    //         },
+    //         list,
+    //     )?;
+    //     let error = self.push_error("Index out of bounds".to_string());
 
-        Ok(IndexedList {
-            list,
-            element,
-            n_elements,
-            error,
-        })
+    //     Ok(IndexedList {
+    //         list,
+    //         element,
+    //         n_elements,
+    //         error,
+    //     })
+    // }
+
+    pub fn interpret(&self, input: &[u64], output: &mut [u64]) -> Result<(), Error> {
+        let mut arg_buf = vec![];
+        let mut results = vec![];
+
+        for node in &self.nodes {
+            for &arg in &node.args {
+                match arg {
+                    Ref::Const(_, c) => arg_buf.push(c),
+                    Ref::Input(id) => arg_buf.push(input[id]),
+                    Ref::Node(id) => arg_buf.push(results[id]),
+                }
+            }
+
+            match node.op.eval(self, &arg_buf) {
+                Ok(result) => results.push(result),
+                Err(err) => {
+                    return Err(Error::StatusRaised(
+                        CString::new(err.into_owned())
+                            .expect("cannot contain nul character")
+                            .into(),
+                    ))
+                }
+            }
+
+            arg_buf.clear();
+        }
+
+        for (&r#ref, out) in self.outputs.iter().zip(output) {
+            *out = match r#ref {
+                Ref::Const(_, c) => c,
+                Ref::Input(id) => input[id],
+                Ref::Node(id) => results[id],
+            };
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Clone)]
-pub struct IndexedList {
-    list: Ref,
-    element: Type,
-    n_elements: usize,
-    error: usize,
-}
+// #[derive(Clone)]
+// pub struct IndexedList {
+//     list: Ref,
+//     element: Type,
+//     n_elements: usize,
+//     error: usize,
+// }
 
-impl IndexedList {
-    pub fn get(&self, graph: &mut Graph, idx: Ref) -> Result<Ref, Error> {
-        graph.insert(
-            op::Index {
-                element: self.element,
-                n_elements: self.n_elements,
-                error: self.error,
-            },
-            vec![self.list, idx],
-        )
-    }
+// impl IndexedList {
+//     pub fn get(&self, graph: &mut Graph, idx: Ref) -> Result<Ref, Error> {
+//         graph.insert(
+//             op::Index {
+//                 element: self.element,
+//                 n_elements: self.n_elements,
+//                 error: self.error,
+//             },
+//             vec![self.list, idx],
+//         )
+//     }
 
-    pub fn index_of(&self, graph: &mut Graph, value: Ref) -> Result<Ref, Error> {
-        graph.insert(
-            op::IndexOf {
-                element: self.element,
-                n_elements: self.n_elements,
-            },
-            vec![self.list, value],
-        )
-    }
-}
+//     pub fn index_of(&self, graph: &mut Graph, value: Ref) -> Result<Ref, Error> {
+//         graph.insert(
+//             op::IndexOf {
+//                 element: self.element,
+//                 n_elements: self.n_elements,
+//             },
+//             vec![self.list, value],
+//         )
+//     }
+// }

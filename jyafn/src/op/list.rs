@@ -1,6 +1,9 @@
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{graph::SLOT_SIZE, impl_op, Graph, Ref, Type};
+use crate::{
+    graph::{Builder, SLOT_SIZE},
+    impl_op, Graph, Ref, Type,
+};
 
 use super::{unique_for, Op};
 
@@ -22,33 +25,26 @@ impl Op for List {
         }
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let data_ptr = qbe::Value::Temporary(unique_for(output.clone(), "list.data_ptr"));
-        func.assign_instr(
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let data_ptr = qbe::Value::Temporary(unique_for(output, "list.data_ptr"));
+        builder.func.assign_instr(
             output.clone(),
             qbe::Type::Long,
             qbe::Instr::Alloc8((self.n_elements * SLOT_SIZE).in_bytes() as u64),
         );
-        func.assign_instr(
+        builder.func.assign_instr(
             data_ptr.clone(),
             qbe::Type::Long,
             qbe::Instr::Copy(output.clone()),
         );
 
         for arg in args {
-            func.add_instr(qbe::Instr::Store(
+            builder.func.add_instr(qbe::Instr::Store(
                 self.element.render(),
                 data_ptr.clone(),
                 arg.render(),
             ));
-            func.assign_instr(
+            builder.func.assign_instr(
                 data_ptr.clone(),
                 qbe::Type::Long,
                 qbe::Instr::Add(
@@ -88,25 +84,18 @@ impl Op for Index {
         Some(self.element)
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        let displacement = qbe::Value::Temporary(unique_for(output.clone(), "index.displacement"));
-        let test_bounds = qbe::Value::Temporary(unique_for(output.clone(), "index.test_bounds"));
-        let out_of_bounds = unique_for(output.clone(), "index.out_of_bounds");
-        let in_bounds = unique_for(output.clone(), "index.in_bounds");
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let displacement = qbe::Value::Temporary(unique_for(output, "index.displacement"));
+        let test_bounds = qbe::Value::Temporary(unique_for(output, "index.test_bounds"));
+        let out_of_bounds = unique_for(output, "index.out_of_bounds");
+        let in_bounds = unique_for(output, "index.in_bounds");
 
-        func.assign_instr(
+        builder.func.assign_instr(
             displacement.clone(),
             qbe::Type::Long,
             qbe::Instr::Dtoui(args[1].render()),
         );
-        func.assign_instr(
+        builder.func.assign_instr(
             test_bounds.clone(),
             qbe::Type::Long,
             qbe::Instr::Cmp(
@@ -116,20 +105,20 @@ impl Op for Index {
                 qbe::Value::Const(self.n_elements as u64),
             ),
         );
-        func.add_instr(qbe::Instr::Jnz(
+        builder.func.add_instr(qbe::Instr::Jnz(
             test_bounds,
             out_of_bounds.clone(),
             in_bounds.clone(),
         ));
 
-        func.add_block(out_of_bounds);
+        builder.func.add_block(out_of_bounds);
         super::render_return_error(
-            func,
+            builder.func,
             qbe::Value::Global(format!("{namespace}.error.{}", self.error)),
         );
 
-        func.add_block(in_bounds);
-        func.assign_instr(
+        builder.func.add_block(in_bounds);
+        builder.func.assign_instr(
             displacement.clone(),
             qbe::Type::Long,
             qbe::Instr::Mul(
@@ -137,12 +126,12 @@ impl Op for Index {
                 qbe::Value::Const(SLOT_SIZE.in_bytes() as u64),
             ),
         );
-        func.assign_instr(
+        builder.func.assign_instr(
             displacement.clone(),
             qbe::Type::Long,
             qbe::Instr::Add(displacement.clone(), args[0].render()),
         );
-        func.assign_instr(
+        builder.func.assign_instr(
             output,
             self.element.render(),
             qbe::Instr::Load(self.element.render(), displacement),
@@ -177,18 +166,11 @@ impl Op for IndexOf {
         Some(Type::Float)
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
         let displacement =
-            qbe::Value::Temporary(unique_for(output.clone(), "indexof.displacement"));
-        let end_if = unique_for(output.clone(), "indexof.if.end");
-        func.assign_instr(
+            qbe::Value::Temporary(unique_for(output, "indexof.displacement"));
+        let end_if = unique_for(output, "indexof.if.end");
+        builder.func.assign_instr(
             displacement.clone(),
             qbe::Type::Long,
             qbe::Instr::Copy(args[0].render()),
@@ -196,19 +178,19 @@ impl Op for IndexOf {
 
         for i in 0..self.n_elements {
             let element =
-                qbe::Value::Temporary(unique_for(output.clone(), &format!("indexof.element{i}")));
+                qbe::Value::Temporary(unique_for(output, &format!("indexof.element{i}")));
             let test =
-                qbe::Value::Temporary(unique_for(output.clone(), &format!("indexof.test{i}")));
-            let found = unique_for(output.clone(), "indexof.if.found");
-            let next_if = unique_for(output.clone(), "indexof.if.next");
+                qbe::Value::Temporary(unique_for(output, &format!("indexof.test{i}")));
+            let found = unique_for(output, "indexof.if.found");
+            let next_if = unique_for(output, "indexof.if.next");
 
             // Compare:
-            func.assign_instr(
+            builder.func.assign_instr(
                 element.clone(),
                 self.element.render(),
                 qbe::Instr::Load(self.element.render(), displacement.clone()),
             );
-            func.assign_instr(
+            builder.func.assign_instr(
                 test.clone(),
                 qbe::Type::Long,
                 qbe::Instr::Cmp(
@@ -218,20 +200,22 @@ impl Op for IndexOf {
                     args[1].render(),
                 ),
             );
-            func.add_instr(qbe::Instr::Jnz(test, found.clone(), next_if.clone()));
+            builder
+                .func
+                .add_instr(qbe::Instr::Jnz(test, found.clone(), next_if.clone()));
 
             // If equal:
-            func.add_block(found);
-            func.assign_instr(
+            builder.func.add_block(found);
+            builder.func.assign_instr(
                 output.clone(),
                 Type::Float.render(),
                 qbe::Instr::Copy(Ref::from(i as f64).render()),
             );
-            func.add_instr(qbe::Instr::Jmp(end_if.clone()));
+            builder.func.add_instr(qbe::Instr::Jmp(end_if.clone()));
 
             // If different:
-            func.add_block(next_if);
-            func.assign_instr(
+            builder.func.add_block(next_if);
+            builder.func.assign_instr(
                 displacement.clone(),
                 qbe::Type::Long,
                 qbe::Instr::Add(
@@ -241,11 +225,11 @@ impl Op for IndexOf {
             );
         }
 
-        func.assign_instr(
+        builder.func.assign_instr(
             output.clone(),
             Type::Float.render(),
             qbe::Instr::Copy(Ref::from(-1.0).render()),
         );
-        func.add_block(end_if);
+        builder.func.add_block(end_if);
     }
 }

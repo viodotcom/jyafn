@@ -1,6 +1,8 @@
+use std::{borrow::Cow, ffi::CStr};
+
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{impl_op, Graph, Ref, Type};
+use crate::{graph::Builder, impl_op, Graph, Ref, Type};
 
 use super::Op;
 
@@ -19,24 +21,19 @@ impl Op for ToBool {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Bool.render(),
             qbe::Instr::Cmp(
                 Type::Float.render(),
                 qbe::Cmp::Ne,
-                args[0].render(),
+                x.render(),
                 qbe::Value::Const(0),
             ),
-        )
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -45,6 +42,10 @@ impl Op for ToBool {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok((f64::from_ne_bytes(args[0].to_ne_bytes()) != 0.0) as u64)
     }
 }
 
@@ -63,19 +64,14 @@ impl Op for ToFloat {
         })
     }
 
-    fn render_into(
-        &self,
-        graph: &Graph,
-        output: qbe::Value,
-        args: &[Ref],
-        func: &mut qbe::Function,
-        namespace: &str,
-    ) {
-        func.assign_instr(
-            output,
+    fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        let x = args[0].load(0, builder);
+        builder.func.assign_instr(
+            x.render(),
             Type::Float.render(),
-            qbe::Instr::Ultof(args[0].render()),
-        )
+            qbe::Instr::Ultof(x.render()),
+        );
+        output.store(x.render(), builder)
     }
 
     fn const_eval(&self, graph: &Graph, args: &[Ref]) -> Option<Ref> {
@@ -84,5 +80,11 @@ impl Op for ToFloat {
         }
 
         None
+    }
+
+    fn eval(&self, graph: &Graph, args: &[u64]) -> Result<u64, Cow<'static, CStr>> {
+        Ok(u64::from_ne_bytes(
+            ((args[0] != 0) as u64 as f64).to_ne_bytes(),
+        ))
     }
 }

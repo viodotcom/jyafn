@@ -4,6 +4,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{Graph, Node, Ref};
 
+use super::Builder;
+
 /// Even though QBE can make a good job of finding unused data, sometimes it cannot
 /// optimize everything out. One example are pfuncs. Since, fot QBE, the call might as
 /// well result in something somewhere being mutated, it never optimizes a call away. We,
@@ -311,18 +313,12 @@ impl Statements {
     }
 
     /// Render the resulting nested structure into the provided QBE function builder.
-    pub fn render_into(&self, graph: &Graph, func: &mut qbe::Function, namespace: &str) {
+    pub fn render_into(&self, graph: &Graph, builder: &mut Builder) {
         for statement in &self.0 {
             match statement {
                 &StatementOrConditional::Statement(node_id) => {
                     let node = &graph.nodes[node_id];
-                    node.op.render_into(
-                        graph,
-                        Ref::Node(node_id).render(),
-                        &node.args,
-                        func,
-                        namespace,
-                    )
+                    node.op.render_into(Ref::Node(node_id), &node.args, builder)
                 }
                 StatementOrConditional::Conditional {
                     node_id,
@@ -330,38 +326,72 @@ impl Statements {
                     true_side,
                     false_side,
                 } => {
-                    let output = Ref::Node(*node_id).render();
+                    let output = Ref::Node(*node_id);
                     let node = &graph.nodes[*node_id];
+                    let cond = condition.load(0, builder);
                     let true_label = format!("if.true_n{node_id}");
                     let false_label = format!("if.false_n{node_id}");
                     let end_label = format!("if.end_n{node_id}");
 
-                    func.add_instr(qbe::Instr::Jnz(
-                        condition.render(),
+                    builder.func.add_instr(qbe::Instr::Jnz(
+                        cond.render(),
                         true_label.clone(),
                         false_label.clone(),
                     ));
 
-                    func.add_block(true_label);
-                    true_side.render_into(graph, func, namespace);
-                    func.assign_instr(
-                        output.clone(),
-                        node.ty.render(),
-                        qbe::Instr::Copy(node.args[1].render()),
-                    );
-                    func.add_instr(qbe::Instr::Jmp(end_label.clone()));
+                    builder.func.add_block(true_label);
+                    true_side.render_into(graph, builder);
+                    let loaded = node.args[1].load(0, builder);
+                    output.store(loaded.render(), builder);
+                    builder.func.add_instr(qbe::Instr::Jmp(end_label.clone()));
 
-                    func.add_block(false_label);
-                    false_side.render_into(graph, func, namespace);
-                    func.assign_instr(
-                        output,
-                        node.ty.render(),
-                        qbe::Instr::Copy(node.args[2].render()),
-                    );
+                    builder.func.add_block(false_label);
+                    false_side.render_into(graph, builder);
+                    let loaded = node.args[2].load(0, builder);
+                    output.store(loaded.render(), builder);
 
-                    func.add_block(end_label);
+                    builder.func.add_block(end_label);
                 }
             }
         }
     }
+}
+
+pub fn stack_slot_assignment(nodes: &[Node], outputs: &[Ref]) -> Vec<usize> {
+    let mut last: Vec<usize> = (0..nodes.len()).map(|id| id + 1).collect();
+
+    // Outputs must live "forever"
+    for &output in outputs {
+        if let Ref::Node(id) = output {
+            last[id] = nodes.len();
+        }
+    }
+
+    // Find the latest time a value is needed.
+    for (id, node) in nodes.iter().enumerate() {
+        for &arg in &node.args {
+            if let Ref::Node(dep) = arg {
+                last[dep] = usize::max(last[dep], id);
+            }
+        }
+    }
+
+    // Find how many nodes should be "freed" after the current node.
+    let mut last_count = vec![0; nodes.len()];
+    for last_id in last {
+        // last_id can be a node "at infinity", so check!
+        if last_id < nodes.len() {
+            last_count[last_id] += 1;
+        }
+    }
+
+    let mut stack_slot = -1;
+
+    last_count
+        .into_iter()
+        .map(|count| {
+            stack_slot += 1 - count as isize;
+            stack_slot as usize
+        })
+        .collect()
 }
