@@ -44,6 +44,11 @@ pub trait Op: 'static + DynClone + Debug + Send + Sync + RefUnwindSafe + Downcas
     /// Renders the QBE code for this operation into a given function builder.
     fn render_into(&self, output: Ref, args: &[Ref], builder: &mut Builder);
 
+    /// Renders the QBE code for this operation into a given function builder.
+    fn render_into_asm(&self, output: Ref, args: &[Ref], builder: &mut Builder) {
+        unimplemented!()
+    }
+
     /// Checks if this operation is equal to another operation.
     fn is_eq(&self, other: &dyn Op) -> bool;
 

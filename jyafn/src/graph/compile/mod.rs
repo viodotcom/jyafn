@@ -1,6 +1,7 @@
 mod optimize;
 mod qbe_app;
 
+use dynasmrt::dynasm;
 use optimize::stack_slot_assignment;
 use std::{
     io::Write,
@@ -15,6 +16,14 @@ use super::{Error, Graph, Node, SLOT_SIZE};
 #[derive(Debug)]
 pub struct Builder<'a> {
     pub(crate) func: &'a mut qbe::Function<'static>,
+    pub(crate) namespace: &'a str,
+    pub(crate) stack_slots: &'a [usize],
+    pub(crate) graph: &'a Graph,
+}
+
+#[derive(Debug)]
+pub struct AsmBuilder<'a> {
+    pub(crate) func: dynasmrt::aarch64::Assembler,
     pub(crate) namespace: &'a str,
     pub(crate) stack_slots: &'a [usize],
     pub(crate) graph: &'a Graph,
@@ -60,6 +69,27 @@ impl Graph {
         }
 
         Ok(())
+    }
+
+    fn do_render_asm(&self, module: &mut dynasmrt::aarch64::Assembler, namespace: &str) {
+        let func = dynasmrt::aarch64::Assembler::new().unwrap();
+        let stack_slots = stack_slot_assignment(&self.nodes, &self.outputs);
+        let stack_size = stack_slots
+            .iter()
+            .copied()
+            .max()
+            .map(|max| max + 1)
+            .unwrap_or_default();
+        let mut builder = AsmBuilder {
+            func,
+            namespace,
+            stack_slots: &stack_slots,
+            graph: self,
+        };
+
+        dynasm! {
+            &mut builder.func
+        };
     }
 
     fn do_render(&self, module: &mut qbe::Module<'static>, namespace: &str) {

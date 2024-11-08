@@ -12,16 +12,18 @@ def a_py_fun(a, b):
     return 2.0 * a + b + 1.0
 
 
-@fn.func
-def a_fun(a: fn.scalar, b: fn.scalar) -> fn.scalar:
-    for _ in range(200):
-        a += 1
-        b += a
-    return b
+print(a_fun.get_graph().render_assembly())
+
+# @fn.func
+# def a_fun(a: fn.scalar, b: fn.scalar) -> fn.scalar:
+#     for _ in range(200):
+#         a += 1
+#         b += a
+#     return b
 
 
-def a_py_fun(a, b):
-    for _ in range(200):
-        a += 1
-        b += a
-    return b
+# def a_py_fun(a, b):
+#     for _ in range(200):
+#         a += 1
+#         b += a
+#     return b
